@@ -24,13 +24,26 @@ function base64UrlDecode(value: string) {
 
 async function sessionSecret() {
   const secret = process.env.CENTRAL_FRETE_SESSION_SECRET?.trim();
-  if (!secret) throw new Error("CENTRAL_FRETE_SESSION_SECRET não configurado.");
+  if (!secret || secret.length < 32) {
+    throw new Error("CENTRAL_FRETE_SESSION_SECRET deve ter pelo menos 32 caracteres.");
+  }
   return secret;
 }
 
 async function derivePassword(password: string, salt: Uint8Array) {
-  const keyMaterial = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
-  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations: 120_000 }, keyMaterial, 256);
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"],
+  );
+  const saltBuffer = salt.slice().buffer as ArrayBuffer;
+  const bits = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", hash: "SHA-256", salt: saltBuffer, iterations: 120_000 },
+    keyMaterial,
+    256,
+  );
   return new Uint8Array(bits);
 }
 
@@ -42,8 +55,16 @@ function constantTimeEqual(left: Uint8Array, right: Uint8Array) {
 }
 
 async function signature(payload: string) {
-  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(await sessionSecret()), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  return base64UrlEncode(new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload))));
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(await sessionSecret()),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  return base64UrlEncode(
+    new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload))),
+  );
 }
 
 export function isLocalRequest(request: Request) {
@@ -53,13 +74,17 @@ export function isLocalRequest(request: Request) {
 
 export async function createPasswordCredential(passwordValue: unknown) {
   const password = String(passwordValue ?? "");
-  if (password.length < 6) throw new Error("A senha deve ter pelo menos 6 caracteres.");
+  if (password.length < 8) throw new Error("A senha deve ter pelo menos 8 caracteres.");
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const hash = await derivePassword(password, salt);
   return { passwordSalt: base64UrlEncode(salt), passwordHash: base64UrlEncode(hash) };
 }
 
-export async function verifyPassword(passwordValue: unknown, passwordSalt: string | null, passwordHash: string | null) {
+export async function verifyPassword(
+  passwordValue: unknown,
+  passwordSalt: string | null,
+  passwordHash: string | null,
+) {
   if (!passwordSalt || !passwordHash) return false;
   try {
     const supplied = await derivePassword(String(passwordValue ?? ""), base64UrlDecode(passwordSalt));
@@ -69,8 +94,19 @@ export async function verifyPassword(passwordValue: unknown, passwordSalt: strin
   }
 }
 
-export async function createUserSessionToken(user: { id: string; email: string; username: string; name: string }): Promise<string> {
-  const session: UserSession = { userId: user.id, email: user.email, username: user.username, name: user.name, expiresAt: Date.now() + 12 * 60 * 60 * 1000 };
+export async function createUserSessionToken(user: {
+  id: string;
+  email: string;
+  username: string;
+  name: string;
+}): Promise<string> {
+  const session: UserSession = {
+    userId: user.id,
+    email: user.email,
+    username: user.username,
+    name: user.name,
+    expiresAt: Date.now() + 12 * 60 * 60 * 1000,
+  };
   const payload = base64UrlEncode(JSON.stringify(session));
   return `${payload}.${await signature(payload)}`;
 }
@@ -90,10 +126,18 @@ export async function verifyLocalSession(request: Request) {
   const [payload, suppliedSignature, extra] = token.split(".");
   if (!payload || !suppliedSignature || extra) return null;
   const expectedSignature = await signature(payload);
-  if (!constantTimeEqual(new TextEncoder().encode(suppliedSignature), new TextEncoder().encode(expectedSignature))) return null;
+  if (
+    !constantTimeEqual(
+      new TextEncoder().encode(suppliedSignature),
+      new TextEncoder().encode(expectedSignature),
+    )
+  ) return null;
   try {
     const session = JSON.parse(new TextDecoder().decode(base64UrlDecode(payload))) as UserSession;
-    if (!session.userId || !session.email || !session.username || !session.name || !Number.isFinite(session.expiresAt) || session.expiresAt <= Date.now()) return null;
+    if (
+      !session.userId || !session.email || !session.username || !session.name ||
+      !Number.isFinite(session.expiresAt) || session.expiresAt <= Date.now()
+    ) return null;
     return session;
   } catch {
     return null;
