@@ -1,0 +1,30 @@
+name: Validar Central Frete
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      - name: Instalar Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci --include=dev
+
+      - name: Executar testes de regressão
+        run: npm test
+
+      - name: Verificar build de produção
+        run: npm run build
