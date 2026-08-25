@@ -26,5 +26,8 @@ jobs:
       - name: Executar testes de regressão
         run: npm test
 
+      - name: Validar tipos TypeScript
+        run: npm exec -- tsc --noEmit
+
       - name: Verificar build de produção
         run: npm run build

@@ -77,7 +77,7 @@ export function ClientFormModal({
         district: data.bairro || current.district,
         city: data.localidade || current.city,
         state: data.uf || current.state,
-        complement: current.complement || data.complement || "",
+        complement: current.complement || data.complemento || "",
       }));
       setCepMessage("Endereço preenchido pelo CEP. Confira o número e o complemento.");
     } catch (lookupError) {
