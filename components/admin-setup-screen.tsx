@@ -40,6 +40,7 @@ export function AdminSetupScreen() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          setupToken: form.get("setupToken"),
           name: form.get("name"),
           username: form.get("username"),
           password: form.get("password"),
@@ -93,8 +94,11 @@ export function AdminSetupScreen() {
         <span className="login-logo" role="img" aria-label="Central Express" />
         <span className="eyebrow">Primeiro acesso</span>
         <h1>Configurar administrador</h1>
-        <p>Crie o primeiro administrador. Você escolherá o usuário e a senha que serão usados no login.</p>
+        <p>Informe o token configurado no Render e crie o primeiro administrador.</p>
         <form className="form-stack" onSubmit={submit}>
+          <Field label="Token de configuração">
+            <input name="setupToken" type="password" autoComplete="off" required minLength={24} />
+          </Field>
           <Field label="Nome">
             <input name="name" autoComplete="name" autoFocus required />
           </Field>
@@ -102,10 +106,10 @@ export function AdminSetupScreen() {
             <input name="username" autoComplete="username" required minLength={3} maxLength={40} />
           </Field>
           <Field label="Senha">
-            <input name="password" type="password" autoComplete="new-password" required minLength={6} />
+            <input name="password" type="password" autoComplete="new-password" required minLength={8} />
           </Field>
           <Field label="Confirmar senha">
-            <input name="passwordConfirmation" type="password" autoComplete="new-password" required minLength={6} />
+            <input name="passwordConfirmation" type="password" autoComplete="new-password" required minLength={8} />
           </Field>
           {error && <p className="form-error" role="alert">{error}</p>}
           <button className="button primary" disabled={saving}>
