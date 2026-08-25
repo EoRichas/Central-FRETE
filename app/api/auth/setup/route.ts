@@ -10,6 +10,23 @@ function normalizeUsername(value: unknown) {
   return username;
 }
 
+function setupToken() {
+  const token = process.env.CENTRAL_FRETE_SETUP_TOKEN?.trim();
+  if (!token || token.length < 24) {
+    throw new ApiError(503, "Configuração inicial indisponível. Defina CENTRAL_FRETE_SETUP_TOKEN no servidor.");
+  }
+  return token;
+}
+
+function constantTimeEqual(left: string, right: string) {
+  const a = new TextEncoder().encode(left);
+  const b = new TextEncoder().encode(right);
+  if (a.length !== b.length) return false;
+  let difference = 0;
+  for (let index = 0; index < a.length; index += 1) difference |= a[index] ^ b[index];
+  return difference === 0;
+}
+
 export async function GET() {
   try {
     const count = await queryFirst<{ total: number }>(`select count(*)::integer as total from users`);
@@ -24,12 +41,17 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const payload = asObject(await request.json());
+    const suppliedToken = String(payload.setupToken ?? "");
+    if (!constantTimeEqual(suppliedToken, setupToken())) {
+      throw new ApiError(403, "Token de configuração inválido.");
+    }
+
     const count = await queryFirst<{ total: number }>(`select count(*)::integer as total from users`);
     if (Number(count?.total ?? 0) !== 0) {
       throw new ApiError(409, "O administrador inicial já foi cadastrado.");
     }
 
-    const payload = asObject(await request.json());
     const username = normalizeUsername(payload.username);
     const name = requiredUpper(payload.name, "Nome");
     const password = String(payload.password ?? "");
@@ -77,9 +99,6 @@ export async function POST(request: Request) {
 
     return Response.json({ created: true, username }, { status: 201 });
   } catch (error) {
-    if (error instanceof Error && error.message.includes("UNIQUE constraint")) {
-      return Response.json({ error: "Usuário já cadastrado." }, { status: 409 });
-    }
     return jsonError(error);
   }
 }
