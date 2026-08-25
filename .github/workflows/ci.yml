@@ -2,6 +2,10 @@ name: Validar Central Frete
 
 on:
   push:
+    branches:
+      - main
+      - "fix/**"
+  pull_request:
     branches: [main]
   workflow_dispatch:
 
