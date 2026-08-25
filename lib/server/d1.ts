@@ -35,10 +35,7 @@ const statementData = new WeakMap<D1PreparedStatement, { query: string; params: 
 function databaseUrl() {
   const url = process.env.DATABASE_URL?.trim();
   if (!url) {
-    throw new ApiError(
-      503,
-      "Banco de dados indisponível. Configure DATABASE_URL com a conexão Session Pooler do Supabase.",
-    );
+    throw new ApiError(503, "Banco de dados indisponível.");
   }
   return url;
 }
@@ -75,10 +72,10 @@ function databaseError(error: unknown, query: string): ApiError {
   if (code === "23505") return new ApiError(409, "Já existe um registro com os dados informados.");
   if (code === "23503") return new ApiError(409, "O registro possui vínculos e não pode ser alterado dessa forma.");
   if (code === "42P01") {
-    return new ApiError(503, "As tabelas ainda não foram criadas. Execute npm run migrate antes de iniciar o sistema.");
+    return new ApiError(503, "Banco de dados ainda não inicializado.");
   }
 
-  return new ApiError(503, `Falha ao acessar o banco de dados: ${message}`);
+  return new ApiError(503, "Falha ao acessar o banco de dados.");
 }
 
 async function execute<T>(sql: string, params: unknown[] = []): Promise<QueryResult<T>> {
@@ -139,10 +136,7 @@ function supabaseConfig() {
   const url = process.env.SUPABASE_URL?.trim();
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   if (!url || !key) {
-    throw new ApiError(
-      503,
-      "Armazenamento indisponível. Configure SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY.",
-    );
+    throw new ApiError(503, "Armazenamento indisponível.");
   }
   return { url: url.replace(/\/$/, ""), key };
 }
@@ -177,7 +171,7 @@ class SupabaseStorageBucket {
   ) {
     const { key } = supabaseConfig();
     const response = await fetch(storageUrl(path), {
-      method: "DELETE",
+      method: "POST",
       headers: {
         Authorization: `Bearer ${key}`,
         apikey: key,
@@ -187,8 +181,11 @@ class SupabaseStorageBucket {
       body,
     });
     if (!response.ok) {
-      const message = await response.text();
-      throw new ApiError(503, `Falha ao salvar comprovante no Supabase Storage: ${message}`);
+      console.error("central_frete_storage_put_error", {
+        status: response.status,
+        body: await response.text(),
+      });
+      throw new ApiError(503, "Falha ao salvar arquivo no Supabase Storage.");
     }
   }
 
@@ -200,7 +197,7 @@ class SupabaseStorageBucket {
     });
     if (response.status === 404) return null;
     if (!response.ok || !response.body) {
-      throw new ApiError(503, "Falha ao ler comprovante no Supabase Storage.");
+      throw new ApiError(503, "Falha ao ler arquivo no Supabase Storage.");
     }
     return new SupabaseStorageObject(response.body, response.headers.get("content-type"));
   }
@@ -208,12 +205,16 @@ class SupabaseStorageBucket {
   async delete(path: string) {
     const { url, key } = supabaseConfig();
     const response = await fetch(`${url}/storage/v1/object/${encodeURIComponent(STORAGE_BUCKET)}`, {
-      method: "POST",
+      method: "DELETE",
       headers: { Authorization: `Bearer ${key}`, apikey: key, "Content-Type": "application/json" },
       body: JSON.stringify({ prefixes: [path] }),
     });
     if (!response.ok && response.status !== 404) {
-      throw new ApiError(503, "Falha ao remover comprovante do Supabase Storage.");
+      console.error("central_frete_storage_delete_error", {
+        status: response.status,
+        body: await response.text(),
+      });
+      throw new ApiError(503, "Falha ao remover arquivo do Supabase Storage.");
     }
   }
 }
