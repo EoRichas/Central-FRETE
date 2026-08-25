@@ -13,6 +13,8 @@ services:
         sync: false
       - key: CENTRAL_FRETE_SESSION_SECRET
         generateValue: true
+      - key: CENTRAL_FRETE_SETUP_TOKEN
+        sync: false
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
