@@ -315,6 +315,19 @@ CREATE INDEX IF NOT EXISTS sale_attachments_sale_idx
 CREATE INDEX IF NOT EXISTS sale_attachments_uploaded_by_idx
   ON public.sale_attachments (uploaded_by);
 
+CREATE TABLE IF NOT EXISTS public.editable_tool_documents (
+  document_key text NOT NULL,
+  owner_key text NOT NULL,
+  payload jsonb NOT NULL CHECK (jsonb_typeof(payload) = 'object'),
+  updated_by text REFERENCES public.users (id) ON DELETE SET NULL,
+  created_at text NOT NULL DEFAULT (to_char(timezone('UTC', now()), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')),
+  updated_at text NOT NULL DEFAULT (to_char(timezone('UTC', now()), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')),
+  PRIMARY KEY (document_key, owner_key)
+);
+
+CREATE INDEX IF NOT EXISTS editable_tool_documents_updated_by_idx
+  ON public.editable_tool_documents (updated_by);
+
 -- Somente o servidor usa a conexão PostgreSQL privilegiada. Nenhuma tabela
 -- operacional deve ficar acessível pelas chaves anon/authenticated da API.
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
@@ -332,6 +345,7 @@ ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.seller_commission_statuses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.seller_payment_profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sale_attachments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.editable_tool_documents ENABLE ROW LEVEL SECURITY;
 
 REVOKE ALL ON TABLE
   public.users,
@@ -348,7 +362,8 @@ REVOKE ALL ON TABLE
   public.audit_logs,
   public.seller_commission_statuses,
   public.seller_payment_profiles,
-  public.sale_attachments
+  public.sale_attachments,
+  public.editable_tool_documents
 FROM anon, authenticated;
 
 COMMIT;

@@ -2,7 +2,6 @@ import { authorize } from "@/lib/server/auth";
 import {
   COST_CATEGORIES,
   isIcmsCostCategory,
-  isOperationPaymentCategory,
   isEditableOperationCostCategory,
   normalizeCostCategory,
   OPERATIONAL_STATUSES,

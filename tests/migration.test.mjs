@@ -20,9 +20,10 @@ const applicationTables = [
   "seller_commission_statuses",
   "seller_payment_profiles",
   "sale_attachments",
+  "editable_tool_documents",
 ];
 
-test("cria as 15 tabelas PostgreSQL de forma idempotente e protegida", () => {
+test("cria as 16 tabelas PostgreSQL de forma idempotente e protegida", () => {
   for (const table of applicationTables) {
     assert.match(migration, new RegExp(`CREATE TABLE IF NOT EXISTS public\\.${table} \\(`, "i"));
     assert.match(migration, new RegExp(`ALTER TABLE public\\.${table} ENABLE ROW LEVEL SECURITY`, "i"));
