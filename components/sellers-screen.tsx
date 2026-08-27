@@ -6,7 +6,7 @@ import type {
   SellerCommissionRecord,
   SellerCommissionStatus,
 } from "@/lib/contracts";
-import { competencyLabel, formatDate, formatMoney } from "@/lib/format";
+import { competencyLabel, formatDate, formatMoney, formatPercent } from "@/lib/format";
 import {
   EmptyState,
   ErrorState,
@@ -124,8 +124,8 @@ export function SellersScreen({
     <>
       <PageHeader
         eyebrow="Gestão comercial"
-        title="Vendedores(a)"
-        description="Acompanhe o total vendido e a comissão fixa de 7% de cada vendedor."
+        title="Comissões"
+        description="Acompanhe as vendas e a comissão calculada pelo percentual definido em cada venda."
         actions={
           <label className="compact-filter">
             <span>Competência</span>
@@ -159,7 +159,7 @@ export function SellersScreen({
             <article className="kpi-card accent">
               <span>Comissão total dos vendedores</span>
               <strong>{formatMoney(totals.commission)}</strong>
-              <small>7% sobre as vendas exibidas</small>
+              <small>Somatório dos percentuais cadastrados nas vendas</small>
             </article>
           </section>
           <section className="panel table-panel">
@@ -172,7 +172,8 @@ export function SellersScreen({
                     <th>Data</th>
                     <th>Cliente</th>
                     <th>Valor da venda</th>
-                    <th>Comissão 7%</th>
+                    <th>Percentual</th>
+                    <th>Comissão</th>
                     <th>PIX</th>
                     <th>Situação</th>
                     <th>Data do pagamento</th>
@@ -187,7 +188,8 @@ export function SellersScreen({
                       <td data-label="Data">{item.saleDate ? formatDate(item.saleDate) : "—"}</td>
                       <td data-label="Cliente">{item.clientName ?? "—"}</td>
                       <td data-label="Valor da venda"><strong>{formatMoney(item.totalSalesCents)}</strong></td>
-                      <td data-label="Comissão 7%"><strong>{formatMoney(item.commissionCents)}</strong></td>
+                      <td data-label="Percentual"><strong>{formatPercent(item.commissionBasisPoints)}</strong></td>
+                      <td data-label="Comissão"><strong>{formatMoney(item.commissionCents)}</strong></td>
                       <td data-label="PIX">{item.pixDetails ?? "—"}</td>
                       <td data-label="Situação"><StatusBadge status={item.status} /></td>
                       <td data-label="Data do pagamento">

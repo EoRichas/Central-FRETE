@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { SellersScreen } from "@/components/sellers-screen";
 
-export const metadata: Metadata = { title: "Vendedores(a)" };
+export const metadata: Metadata = { title: "Comissões" };
 
 export default async function SellersPage({
   searchParams,

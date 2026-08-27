@@ -7,7 +7,7 @@ import type { CurrentUser, Role } from "@/lib/contracts";
 import { Icons } from "@/components/icons";
 
 function roleLabel(role: Role) {
-  return role === "GERENCIA" ? "OPERACIONAL" : role;
+  return role === "GERENCIA" ? "PERFIL LEGADO" : role;
 }
 
 const navigation: Array<{
@@ -21,8 +21,10 @@ const navigation: Array<{
   { href: "/clientes", label: "Clientes", icon: Icons.users, roles: ["ADMIN", "GERENCIA"] },
   { href: "/prestadores", label: "Prestadores", icon: Icons.briefcase, roles: ["ADMIN", "GERENCIA"] },
   { href: "/financeiro", label: "Financeiro", icon: Icons.wallet, roles: ["ADMIN", "GERENCIA", "FINANCEIRO"] },
-  { href: "/vendedores", label: "Vendedores(a)", icon: Icons.users, roles: ["ADMIN", "GERENCIA", "VENDEDOR", "FINANCEIRO"] },
+  { href: "/vendedores", label: "Comissões", icon: Icons.users, roles: ["ADMIN", "GERENCIA", "VENDEDOR", "FINANCEIRO"] },
   { href: "/relatorios", label: "Relatórios", icon: Icons.chart, roles: ["ADMIN", "GERENCIA", "FINANCEIRO"] },
+  { href: "/calculadora", label: "Calculadora", icon: Icons.calculator, roles: ["ADMIN", "GERENCIA", "VENDEDOR", "FINANCEIRO"] },
+  { href: "/preco-vaga", label: "Preço Vaga", icon: Icons.tag, roles: ["ADMIN", "GERENCIA", "VENDEDOR", "FINANCEIRO"] },
   { href: "/configuracoes", label: "Configurações", icon: Icons.settings, roles: ["ADMIN"] },
 ];
 
@@ -44,7 +46,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [userLoaded, setUserLoaded] = useState(false);
 
   useEffect(() => {
-    setUserLoaded(false);
     fetch("/api/me", { cache: "no-store" })
       .then((response) => {
         if (response.status === 401 || response.status === 403) {

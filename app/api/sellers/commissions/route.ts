@@ -2,10 +2,7 @@ import type {
   SellerCommissionRecord,
   SellerCommissionStatus,
 } from "@/lib/contracts";
-import {
-  SELLER_COMMISSION_BASIS_POINTS,
-  sellerCommissionCents,
-} from "@/lib/domain/commissions";
+import { commissionCents } from "@/lib/domain/finance";
 import { authorize } from "@/lib/server/auth";
 import {
   ApiError,
@@ -32,6 +29,7 @@ type CommissionAggregateRow = {
   sellerName: string;
   salesCount: number;
   totalSalesCents: number;
+  commissionBasisPoints: number;
   status: SellerCommissionStatus | null;
   paidAt: string | null;
   paidByName: string | null;
@@ -107,8 +105,11 @@ function toCommissionRecord(
     competency,
     salesCount: Number(row.salesCount),
     totalSalesCents,
-    commissionBasisPoints: SELLER_COMMISSION_BASIS_POINTS,
-    commissionCents: sellerCommissionCents(totalSalesCents),
+    commissionBasisPoints: Number(row.commissionBasisPoints),
+    commissionCents: commissionCents(
+      totalSalesCents,
+      Number(row.commissionBasisPoints),
+    ),
     status: row.status ?? "EM_ABERTO",
     paidAt: row.paidAt,
     paidByName: row.paidByName,
@@ -134,6 +135,7 @@ export async function GET(request: Request) {
         `select s.id as saleId, s.sale_number as saleNumber, s.sale_date as saleDate,
           c.legal_name as clientName, s.seller_id as sellerId, upper(s.seller_name) as sellerName,
           1 as salesCount, s.freight_amount_cents as totalSalesCents,
+          s.commission_basis_points as commissionBasisPoints,
           cs.status, cs.paid_at as paidAt, u.name as paidByName
          from freight_sales s
          left join clients c on c.id = s.client_id
@@ -141,7 +143,7 @@ export async function GET(request: Request) {
            on cs.seller_name = upper(s.seller_name) and cs.competency = ?
          left join users u on u.id = cs.paid_by
          where s.competency = ? ${sellerScope}
-         order by upper(s.seller_name), s.sale_date desc, cast(s.sale_number as integer) desc`,
+         order by s.sale_date, s.sale_number`,
         params,
       ),
       queryAll<SellerUserRow>(
@@ -161,15 +163,22 @@ export async function GET(request: Request) {
     const sellerProfilesByName = new Map(
       sellerProfiles.map((item) => [item.sellerName.toUpperCase(), item]),
     );
-    const commissions = rows.map((row) =>
-      toCommissionRecord(
-        row,
-        competency,
-        sellerUsersById,
-        sellerUsersByName,
-        sellerProfilesByName,
-      ),
-    );
+    const commissions = rows
+      .map((row) =>
+        toCommissionRecord(
+          row,
+          competency,
+          sellerUsersById,
+          sellerUsersByName,
+          sellerProfilesByName,
+        ),
+      )
+      .sort((left, right) =>
+        (left.saleNumber ?? "").localeCompare(right.saleNumber ?? "", "pt-BR", {
+          numeric: true,
+          sensitivity: "base",
+        }),
+      );
     return Response.json({ competency, commissions });
   } catch (error) {
     return jsonError(error);

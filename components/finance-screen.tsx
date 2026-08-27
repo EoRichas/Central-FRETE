@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { SaleRecord } from "@/lib/contracts";
 import { costCategoryLabel } from "@/lib/domain/operations";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatDate, formatMoney, formatPercent } from "@/lib/format";
 import { Icons } from "@/components/icons";
 import {
   EmptyState,
@@ -27,9 +27,10 @@ export function FinanceScreen() {
         (acc, sale) => {
           acc.freight += sale.freightAmountCents;
           acc.costs += sale.financial.transportCostCents;
+          acc.commissions += sale.financial.commissionCents;
           return acc;
         },
-        { freight: 0, costs: 0 },
+        { freight: 0, costs: 0, commissions: 0 },
       ),
     [sales],
   );
@@ -66,10 +67,14 @@ export function FinanceScreen() {
       )}
       {sales.length > 0 && (
         <>
-          <section className="receivable-summary large finance-two-metrics">
+          <section className="receivable-summary large finance-three-metrics">
             <div>
               <span>Valor total dos fretes</span>
               <strong>{formatMoney(totals.freight)}</strong>
+            </div>
+            <div>
+              <span>Comissões dos vendedores</span>
+              <strong>{formatMoney(totals.commissions)}</strong>
             </div>
             <div>
               <span>Custo total das vendas</span>
@@ -83,21 +88,22 @@ export function FinanceScreen() {
                   <tr>
                     <th>Venda</th>
                     <th>Data</th>
+                    <th>Vendedor(a)</th>
                     <th>Rota</th>
                     <th>Valor do frete</th>
+                    <th>Comissão</th>
                     <th>Custos da venda</th>
                     <th></th>
                   </tr>
                 </thead>
                 <tbody>
                   {sales.map((sale) => {
-                    const details = [
-                      `COMISSÃO ${formatMoney(sale.financial.commissionCents)}`,
-                      ...sale.costs.map(
+                    const details = sale.costs
+                      .map(
                         (cost) =>
                           `${costCategoryLabel(cost.category)} ${formatMoney(cost.amountCents)}`,
-                      ),
-                    ].join(" · ");
+                      )
+                      .join(" · ") || "SEM OUTRAS DESPESAS";
                     return (
                       <tr key={sale.id}>
                         <td data-label="Venda">
@@ -105,8 +111,13 @@ export function FinanceScreen() {
                           <small>{sale.clientName ?? "CLIENTE NÃO INFORMADO"}</small>
                         </td>
                         <td data-label="Data">{formatDate(sale.saleDate)}</td>
+                        <td data-label="Vendedor(a)"><strong>{sale.sellerName}</strong></td>
                         <td data-label="Rota">{sale.origin} → {sale.destination}</td>
                         <td data-label="Valor do frete"><strong>{formatMoney(sale.freightAmountCents)}</strong></td>
+                        <td data-label="Comissão">
+                          <strong>{formatMoney(sale.financial.commissionCents)}</strong>
+                          <small>{formatPercent(sale.commissionBasisPoints)} DA VENDA</small>
+                        </td>
                         <td data-label="Custos da venda">
                           <strong>{formatMoney(sale.financial.transportCostCents)}</strong>
                           <small title={details}>{details}</small>

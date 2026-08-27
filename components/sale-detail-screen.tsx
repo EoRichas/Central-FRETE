@@ -11,7 +11,6 @@ import type {
 import {
   costCategoryLabel,
   isEditableOperationCostCategory,
-  isIcmsCostCategory,
   isOperationPaymentCategory,
   isPaymentControlCostCategory,
 } from "@/lib/domain/operations";
@@ -49,32 +48,6 @@ function formatFileSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1).replace(".", ",")} MB`;
-}
-
-function consolidateIcmsCosts(costs: CostRecord[]) {
-  const consolidated: CostRecord[] = [];
-  let icmsIndex = -1;
-
-  for (const cost of costs) {
-    if (!isIcmsCostCategory(cost.category)) {
-      consolidated.push(cost);
-      continue;
-    }
-    if (icmsIndex === -1) {
-      icmsIndex = consolidated.length;
-      consolidated.push({ ...cost, category: "ICMS", description: "ICMS" });
-      continue;
-    }
-    const current = consolidated[icmsIndex];
-    consolidated[icmsIndex] = {
-      ...current,
-      amountCents: current.amountCents + cost.amountCents,
-      confirmed: current.confirmed && cost.confirmed,
-      occurredOn: current.occurredOn ?? cost.occurredOn,
-    };
-  }
-
-  return consolidated;
 }
 
 export function SaleDetailScreen({ id }: { id: string }) {

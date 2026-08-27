@@ -60,7 +60,7 @@ Health Check Path: /api/health
 ```
 
 Configure as variáveis de ambiente antes do primeiro deploy. Na inicialização,
-o servidor valida o Session Pooler, cria ou atualiza as 15 tabelas, prepara o
+o servidor valida o Session Pooler, cria ou atualiza as 16 tabelas, prepara o
 bucket privado de comprovantes e inicia o Next.js na porta do Render.
 
 ## Primeiro acesso
@@ -71,7 +71,9 @@ recebe o perfil `ADMIN`; não existe administrador padrão nem senha global.
 
 As senhas são armazenadas como hash PBKDF2 com salt individual. A variável
 `CENTRAL_FRETE_PASSWORD` não é utilizada. Depois do primeiro cadastro, o ADMIN
-pode cadastrar usuários `ADMIN`, `GERENCIA`, `VENDEDOR` e `FINANCEIRO`.
+pode cadastrar usuários `ADMIN`, `VENDEDOR` e `FINANCEIRO`. Contas antigas com
+o perfil `GERENCIA` continuam funcionando até que o acesso seja atualizado ou
+excluído pelo administrador.
 
 ## Desenvolvimento
 

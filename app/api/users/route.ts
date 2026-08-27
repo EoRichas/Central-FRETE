@@ -4,7 +4,7 @@ import { ApiError, getD1, jsonError, queryAll } from "@/lib/server/d1";
 import { createPasswordCredential } from "@/lib/server/local-session";
 import { asObject, enumValue, requiredUpper } from "@/lib/server/validation";
 
-const ROLES = ["ADMIN", "GERENCIA", "VENDEDOR", "FINANCEIRO"] as const;
+const ASSIGNABLE_ROLES = ["ADMIN", "VENDEDOR", "FINANCEIRO"] as const;
 
 function usernameValue(value: unknown) {
   const username = String(value ?? "").trim().toLowerCase();
@@ -51,7 +51,7 @@ export async function POST(request: Request) {
     const actor = await authorize(request, ["ADMIN"]);
     const payload = asObject(await request.json());
     const name = requiredUpper(payload.name, "Nome");
-    const role = enumValue(payload.role, "Perfil", ROLES);
+    const role = enumValue(payload.role, "Perfil", ASSIGNABLE_ROLES);
     const username = usernameValue(payload.username);
     let credential: Awaited<ReturnType<typeof createPasswordCredential>>;
     try {

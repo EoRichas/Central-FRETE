@@ -27,9 +27,14 @@ function fallbackUsername(user: UserRow) {
   return user.username ?? user.email.split("@")[0]?.toLowerCase() ?? "";
 }
 
+function profileLabel(role: Role) {
+  return role === "GERENCIA" ? "PERFIL REMOVIDO" : role;
+}
+
 export function SettingsScreen() {
   const usersApi = useApi<{ users: UserRow[] }>("/api/users");
   const [savingUser, setSavingUser] = useState(false);
+  const [deletingUser, setDeletingUser] = useState<string | null>(null);
   const [editingUser, setEditingUser] = useState<UserRow | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -88,6 +93,29 @@ export function SettingsScreen() {
     }
   }
 
+  async function deleteUser(user: UserRow) {
+    const confirmed = window.confirm(
+      `Excluir definitivamente o acesso de ${user.name}? O histórico das vendas será preservado, mas esse login deixará de existir.`,
+    );
+    if (!confirmed) return;
+    setDeletingUser(user.id);
+    setError(null);
+    setMessage(null);
+    try {
+      await apiMutation(`/api/users/${user.id}`, { method: "DELETE" });
+      usersApi.refresh();
+      setMessage("Acesso excluído com sucesso.");
+    } catch (userError) {
+      setError(
+        userError instanceof Error
+          ? userError.message
+          : "Erro ao excluir o acesso.",
+      );
+    } finally {
+      setDeletingUser(null);
+    }
+  }
+
   return (
     <>
       <PageHeader
@@ -113,12 +141,11 @@ export function SettingsScreen() {
           <Field label="Perfil">
             <select name="role" defaultValue="VENDEDOR">
               <option value="ADMIN">Admin</option>
-              <option value="GERENCIA">Operacional</option>
               <option value="VENDEDOR">Vendedor</option>
               <option value="FINANCEIRO">Financeiro</option>
             </select>
           </Field>
-          <Field label="PIX do vendedor" hint="Opcional; usado na aba Vendedores(a).">
+          <Field label="PIX do vendedor" hint="Opcional; usado na aba Comissões.">
             <input name="pixDetails" placeholder="Chave ou dados PIX" />
           </Field>
           <button className="button secondary" disabled={savingUser}>
@@ -149,12 +176,12 @@ export function SettingsScreen() {
                     <td data-label="Nome"><strong>{user.name}</strong></td>
                     <td data-label="Usuário">{user.username ?? "NÃO DEFINIDO"}</td>
                     <td data-label="E-mail">{user.email}</td>
-                    <td data-label="Perfil">{user.role}</td>
+                    <td data-label="Perfil">{profileLabel(user.role)}</td>
                     <td data-label="Login">
                       <StatusBadge status={user.hasPassword ? "CONFIGURADO" : "SEM SENHA"} />
                     </td>
                     <td data-label="Situação"><StatusBadge status={user.active ? "ATIVO" : "INATIVO"} /></td>
-                    <td data-label="Ações">
+                    <td data-label="Ações"><div className="table-actions">
                       <button
                         type="button"
                         className="button secondary compact-button"
@@ -165,7 +192,15 @@ export function SettingsScreen() {
                       >
                         Editar acesso
                       </button>
-                    </td>
+                      <button
+                        type="button"
+                        className="button danger compact-button"
+                        disabled={deletingUser === user.id}
+                        onClick={() => deleteUser(user)}
+                      >
+                        {deletingUser === user.id ? "Excluindo…" : "Excluir acesso"}
+                      </button>
+                    </div></td>
                   </tr>
                 ))}
               </tbody>
@@ -196,9 +231,15 @@ export function SettingsScreen() {
               <input name="email" type="email" defaultValue={editingUser.email} required />
             </Field>
             <Field label="Perfil">
-              <select name="role" defaultValue={editingUser.role}>
+              <select
+                name="role"
+                defaultValue={editingUser.role === "GERENCIA" ? "" : editingUser.role}
+                required
+              >
+                {editingUser.role === "GERENCIA" && (
+                  <option value="" disabled>Selecione um novo perfil</option>
+                )}
                 <option value="ADMIN">Admin</option>
-                <option value="GERENCIA">Operacional</option>
                 <option value="VENDEDOR">Vendedor</option>
                 <option value="FINANCEIRO">Financeiro</option>
               </select>

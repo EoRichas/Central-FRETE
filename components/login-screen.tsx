@@ -8,11 +8,13 @@ export function LoginScreen() {
   const [checkingSetup, setCheckingSetup] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [setupDone, setSetupDone] = useState(false);
+  const [setupDone] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("setup") === "done",
+  );
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    setSetupDone(params.get("setup") === "done");
     fetch("/api/auth/setup", { cache: "no-store" })
       .then(async (response) => {
         const payload = (await response.json()) as { setupRequired?: boolean; error?: string };

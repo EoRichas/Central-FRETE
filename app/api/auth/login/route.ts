@@ -1,4 +1,4 @@
-import { ApiError, getD1, jsonError, queryFirst } from "@/lib/server/d1";
+import { ApiError, jsonError, queryFirst } from "@/lib/server/d1";
 import {
   createUserSessionToken,
   isLocalRequest,

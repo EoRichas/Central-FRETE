@@ -4,7 +4,7 @@ import { ApiError, getD1, jsonError, queryFirst } from "@/lib/server/d1";
 import { createPasswordCredential } from "@/lib/server/local-session";
 import { asObject, enumValue, lower, requiredUpper } from "@/lib/server/validation";
 
-const ROLES = ["ADMIN", "GERENCIA", "VENDEDOR", "FINANCEIRO"] as const;
+const ASSIGNABLE_ROLES = ["ADMIN", "VENDEDOR", "FINANCEIRO"] as const;
 type RouteContext = { params: Promise<{ id: string }> };
 
 function usernameValue(value: unknown) {
@@ -48,7 +48,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     if (!email || !email.includes("@")) throw new ApiError(400, "E-mail inválido.");
     const username = usernameValue(payload.username);
     const name = requiredUpper(payload.name, "Nome");
-    const role = enumValue(payload.role, "Perfil", ROLES);
+    const role = enumValue(payload.role, "Perfil", ASSIGNABLE_ROLES);
     const active = activeValue(payload.active);
     const pixDetails = String(payload.pixDetails ?? "").trim() || null;
 
@@ -135,6 +135,59 @@ export async function PATCH(request: Request, context: RouteContext) {
         { status: 409 },
       );
     }
+    return jsonError(error);
+  }
+}
+
+export async function DELETE(request: Request, context: RouteContext) {
+  try {
+    const actor = await authorize(request, ["ADMIN"]);
+    const { id } = await context.params;
+    if (id === actor.id) {
+      throw new ApiError(400, "O administrador logado não pode excluir o próprio acesso.");
+    }
+    const previous = await queryFirst<{
+      id: string;
+      email: string;
+      username: string | null;
+      name: string;
+      role: Role;
+      active: number;
+      pixDetails: string | null;
+    }>(
+      `select id, email, username, name, role, active, pix_details as pixDetails
+       from users where id = ?`,
+      [id],
+    );
+    if (!previous) throw new ApiError(404, "Usuário não encontrado.");
+
+    const db = await getD1();
+    await db.batch([
+      db
+        .prepare(
+          `insert into audit_logs (
+            id, entity_type, entity_id, action, actor_user_id, actor_email,
+            previous_value, request_id
+          ) values (?, 'USER', ?, 'ACCESS_DELETED', ?, ?, ?, ?)`,
+        )
+        .bind(
+          crypto.randomUUID(),
+          id,
+          actor.id,
+          actor.email,
+          JSON.stringify({ ...previous, active: Boolean(previous.active) }),
+          request.headers.get("x-request-id") ?? crypto.randomUUID(),
+        ),
+      db
+        .prepare(
+          `delete from editable_tool_documents
+           where document_key = 'CALCULATOR' and owner_key = ?`,
+        )
+        .bind(id),
+      db.prepare("delete from users where id = ?").bind(id),
+    ]);
+    return Response.json({ id, deleted: true });
+  } catch (error) {
     return jsonError(error);
   }
 }

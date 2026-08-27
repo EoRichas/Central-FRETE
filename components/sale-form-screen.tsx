@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type {
   ClientAddressRecord,
   ClientRecord,
@@ -148,11 +148,10 @@ export function SaleFormScreen({ initialSale }: { initialSale?: SaleRecord }) {
     (client) => client.id === clientId,
   );
 
-  useEffect(() => {
-    if (!editing && meApi.data?.user.role === "VENDEDOR") {
-      setSellerName(meApi.data.user.name);
-    }
-  }, [editing, meApi.data]);
+  const sellerNameValue =
+    !editing && meApi.data?.user.role === "VENDEDOR"
+      ? meApi.data.user.name
+      : sellerName;
 
   const preview = useMemo(() => {
     try {
@@ -358,7 +357,7 @@ export function SaleFormScreen({ initialSale }: { initialSale?: SaleRecord }) {
             <div className="form-grid four operation-identification-grid">
               <Field label="Número da venda"><input name="saleNumber" defaultValue={initialSale?.saleNumber ?? ""} required /></Field>
               <Field label="Data da venda"><input name="saleDate" type="date" defaultValue={initialSale?.saleDate ?? today} required /></Field>
-              <Field label="Vendedor"><input name="sellerName" value={sellerName} onChange={(event) => setSellerName(event.target.value)} readOnly={meApi.data?.user.role === "VENDEDOR"} required /></Field>
+              <Field label="Vendedor"><input name="sellerName" value={sellerNameValue} onChange={(event) => setSellerName(event.target.value)} readOnly={meApi.data?.user.role === "VENDEDOR"} required /></Field>
               <Field label="Status operacional"><select name="operationalStatus" defaultValue={initialSale?.operationalStatus ?? "CONFIRMAR"}>{OPERATIONAL_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></Field>
               <Field label="Veículo"><input name="vehicle" defaultValue={initialSale?.vehicle ?? ""} /></Field>
               <Field label="Placa"><input name="plate" maxLength={8} defaultValue={initialSale?.plate ?? ""} /></Field>
