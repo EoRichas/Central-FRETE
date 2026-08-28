@@ -60,7 +60,7 @@ Health Check Path: /api/health
 ```
 
 Configure as variáveis de ambiente antes do primeiro deploy. Na inicialização,
-o servidor valida o Session Pooler, cria ou atualiza as 16 tabelas, prepara o
+o servidor valida o Session Pooler, cria ou atualiza as 15 tabelas, prepara o
 bucket privado de comprovantes e inicia o Next.js na porta do Render.
 
 ## Primeiro acesso

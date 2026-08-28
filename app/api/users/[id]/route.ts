@@ -178,12 +178,6 @@ export async function DELETE(request: Request, context: RouteContext) {
           JSON.stringify({ ...previous, active: Boolean(previous.active) }),
           request.headers.get("x-request-id") ?? crypto.randomUUID(),
         ),
-      db
-        .prepare(
-          `delete from editable_tool_documents
-           where document_key = 'CALCULATOR' and owner_key = ?`,
-        )
-        .bind(id),
       db.prepare("delete from users where id = ?").bind(id),
     ]);
     return Response.json({ id, deleted: true });

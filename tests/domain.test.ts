@@ -1,18 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { operationalCommissionCents, sellerCommissionCents } from "../lib/domain/commissions.ts";
-import {
-  calculateCalculator,
-  defaultCalculatorDocument,
-  normalizeCalculatorDocument,
-} from "../lib/domain/calculator.ts";
 import { calculateSaleFinancials, commissionCents } from "../lib/domain/finance.ts";
 import { calculateDestinationArrivalDate, normalizeCostCategory } from "../lib/domain/operations.ts";
 import { roleCan } from "../lib/domain/permissions.ts";
-import {
-  defaultVacancyPriceDocument,
-  normalizeVacancyPriceDocument,
-} from "../lib/domain/vacancy-prices.ts";
 import {
   createPasswordCredential,
   createUserSessionToken,
@@ -44,74 +35,6 @@ test("mantém os percentuais de comissão do vendedor e da operação", () => {
   assert.equal(commissionCents(10_000, 700), 700);
   assert.equal(sellerCommissionCents(100_000), 7_000);
   assert.equal(operationalCommissionCents(100_000), 3_000);
-});
-
-test("reproduz os totais da calculadora enviada", () => {
-  const document = defaultCalculatorDocument();
-  document.fipeCents = 100_000;
-  document.icmsBaseCents = 50_000;
-  const line = (id: string) => document.lines.find((item) => item.id === id)!;
-  line("insurance").observationBasisPoints = 100;
-  line("slot-1").valueCents = 100_000;
-  line("central-margin").valueCents = 20_000;
-  line("icms").observationBasisPoints = 1_000;
-  line("seller-commission").observationBasisPoints = 1_000;
-  line("invoice").observationBasisPoints = 500;
-  const result = calculateCalculator(document);
-
-  assert.equal(result.lineValues.insurance, 500);
-  assert.equal(result.lineValues.icms, 5_000);
-  assert.equal(result.lineValues["seller-commission"], 13_944);
-  assert.equal(result.lineValues.invoice, 6_972);
-  assert.equal(result.subtotalCents, 125_500);
-  assert.equal(result.operationCostCents, 105_500);
-  assert.equal(result.totalCents, 139_444);
-  assert.equal(result.invoiceTotalCents, 146_416);
-  assert.equal(result.netReceivableCents, 20_000);
-});
-
-test("normaliza a calculadora sem permitir alterar as fórmulas estruturais", () => {
-  const document = normalizeCalculatorDocument({
-    collaboratorName: " teste ",
-    lines: [
-      {
-        id: "insurance",
-        code: "9999",
-        valueCents: 999_999,
-        observationBasisPoints: 10,
-      },
-    ],
-  });
-
-  assert.equal(document.collaboratorName, "TESTE");
-  assert.equal(document.lines.find((line) => line.id === "insurance")?.code, "9999");
-  assert.equal(document.lines.find((line) => line.id === "insurance")?.valueCents, 0);
-  assert.equal(document.lines.length, 11);
-});
-
-test("normaliza a configuração privada do preço por vaga", () => {
-  const empty = defaultVacancyPriceDocument();
-  const normalized = normalizeVacancyPriceDocument({
-    fipeCents: 5_000_000,
-    rows: [
-      {
-        id: "rota-teste",
-        destination: " cidade teste ",
-        centralMarginCents: 25_000,
-        insuranceBasisPoints: 12,
-        outgoing: { baseHatchCents: 100_000, baseSuvCents: 110_000, hatchCents: 150_000, suvCents: 160_000 },
-        returning: { baseHatchCents: 80_000, baseSuvCents: 90_000, hatchCents: 130_000, suvCents: 140_000 },
-        deadline: "5",
-        served: true,
-      },
-    ],
-  });
-
-  assert.equal(empty.rows.length, 0);
-  assert.equal(normalized.fipeCents, 5_000_000);
-  assert.equal(normalized.rows.length, 1);
-  assert.equal(normalized.rows[0]?.destination, "CIDADE TESTE");
-  assert.equal(normalized.rows[0]?.returning.suvCents, 140_000);
 });
 
 test("preserva o cálculo de prazo e a normalização de ICMS", () => {
