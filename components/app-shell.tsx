@@ -23,8 +23,6 @@ const navigation: Array<{
   { href: "/financeiro", label: "Financeiro", icon: Icons.wallet, roles: ["ADMIN", "GERENCIA", "FINANCEIRO"] },
   { href: "/vendedores", label: "Comissões", icon: Icons.users, roles: ["ADMIN", "GERENCIA", "VENDEDOR", "FINANCEIRO"] },
   { href: "/relatorios", label: "Relatórios", icon: Icons.chart, roles: ["ADMIN", "GERENCIA", "FINANCEIRO"] },
-  { href: "/calculadora", label: "Calculadora", icon: Icons.calculator, roles: ["ADMIN", "GERENCIA", "VENDEDOR", "FINANCEIRO"] },
-  { href: "/preco-vaga", label: "Preço Vaga", icon: Icons.tag, roles: ["ADMIN", "GERENCIA", "VENDEDOR", "FINANCEIRO"] },
   { href: "/configuracoes", label: "Configurações", icon: Icons.settings, roles: ["ADMIN"] },
 ];
 
