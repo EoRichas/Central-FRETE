@@ -584,12 +584,171 @@ td > small { max-width: 270px; margin-top: 2px; overflow: hidden; color: var(--m
   margin-top: 8px;
 }
 
+/* Frota: operação logística, custos por veículo e encaixes de retorno */
+.fleet-stack, .fleet-assets-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.fleet-tabs {
+  width: fit-content;
+  max-width: 100%;
+  padding: 4px;
+  display: flex;
+  gap: 3px;
+  overflow-x: auto;
+  background: #e7eef2;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+}
+.fleet-tabs button {
+  min-height: 36px;
+  padding: 0 14px;
+  color: var(--ink-soft);
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 760;
+  white-space: nowrap;
+}
+.fleet-tabs button:hover { color: var(--navy); }
+.fleet-tabs button.active {
+  color: white;
+  background: var(--navy-2);
+  box-shadow: 0 2px 7px rgb(11 38 56 / 18%);
+}
+.fleet-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.fleet-kpis .kpi-card.accent { grid-column: auto; }
+.fleet-opportunity-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+}
+.fleet-opportunity-card {
+  min-height: 112px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.fleet-opportunity-icon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  color: var(--orange);
+  background: var(--orange-soft);
+  border-radius: 12px;
+}
+.fleet-opportunity-icon.used { color: var(--green); background: var(--green-soft); }
+.fleet-opportunity-card > div { min-width: 0; display: flex; flex-direction: column; }
+.fleet-opportunity-card > div > span { color: var(--ink-soft); font-size: 10px; font-weight: 760; text-transform: uppercase; }
+.fleet-opportunity-card > div > strong { color: var(--navy); font-size: 28px; line-height: 1.15; }
+.fleet-opportunity-card > div > small { color: var(--muted); font-size: 10px; }
+.fleet-panel-header {
+  margin: 0 !important;
+  padding: 19px 21px;
+  align-items: center !important;
+  border-bottom: 1px solid var(--line);
+}
+.fleet-panel-header .text-button { color: var(--teal); }
+.fleet-table { min-width: 1420px; }
+.fleet-table td:nth-child(2), .fleet-table td:nth-child(4) { min-width: 190px; }
+.fleet-table td:nth-child(7) { min-width: 255px; }
+.fleet-match-badge {
+  width: fit-content;
+  display: inline-flex;
+  padding: 5px 8px;
+  color: var(--ink-soft);
+  background: #edf2f5;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 820;
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+.fleet-match-badge.opportunity { color: #8a5007; background: var(--yellow-soft); }
+.fleet-filter-panel {
+  grid-template-columns: minmax(260px, 1.5fr) minmax(170px, .65fr) minmax(150px, .55fr) auto;
+}
+.fleet-unit-field { display: flex; align-items: stretch; }
+.fleet-unit-field > input {
+  min-width: 0;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.fleet-unit-field > span {
+  min-width: 52px;
+  padding: 0 10px;
+  display: grid;
+  place-items: center;
+  color: var(--ink-soft);
+  background: #eef3f6;
+  border: 1px solid var(--line-strong);
+  border-left: 0;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.fleet-check-field {
+  min-height: 42px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  align-self: end;
+  color: var(--ink-soft);
+  background: #f7fafb;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 700;
+}
+.fleet-check-field input { width: 16px; min-height: 16px; margin: 0; }
+.fleet-form-preview {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  overflow: hidden;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.fleet-form-preview > div {
+  min-height: 74px;
+  padding: 13px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background: #f7fafb;
+}
+.fleet-form-preview span { color: var(--muted); font-size: 9px; font-weight: 760; text-transform: uppercase; }
+.fleet-form-preview strong { margin-top: 4px; color: var(--navy); font-size: 15px; font-variant-numeric: tabular-nums; }
+.fleet-settings-panel { width: min(100%, 920px); }
+.fleet-settings-actions { padding-top: 4px; display: flex; justify-content: flex-end; }
+.fleet-update-note { margin: 0; color: var(--muted); font-size: 10px; }
+.status-sem_previsao { color: var(--muted); background: #edf2f5; }
+.status-coleta_agendada, .status-em_rota { color: #166180; background: var(--blue-soft); }
+.status-no_patio, .status-aguardando_carga { color: var(--yellow); background: var(--yellow-soft); }
+.status-faturado, .status-entregue { color: var(--green); background: var(--green-soft); }
+.status-coleta_frustrada { color: var(--red); background: var(--red-soft); }
+
 @media (max-width: 1020px) {
   .inline-user-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fleet-kpis, .fleet-form-preview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fleet-filter-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 700px) {
   .inline-user-form { grid-template-columns: 1fr; }
   .cep-lookup-field { grid-template-columns: 1fr; }
   .table-actions { justify-content: flex-start; }
+  .fleet-tabs { width: 100%; }
+  .fleet-opportunity-grid, .fleet-kpis, .fleet-form-preview, .fleet-filter-panel { grid-template-columns: 1fr; }
+  .fleet-opportunity-card { padding: 16px; }
+  .fleet-panel-header { padding: 16px 17px; align-items: stretch !important; flex-direction: column; }
+  .fleet-panel-header .button { width: 100%; }
+  .fleet-check-field { align-self: stretch; }
 }

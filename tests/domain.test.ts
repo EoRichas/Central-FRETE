@@ -2,6 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { operationalCommissionCents, sellerCommissionCents } from "../lib/domain/commissions.ts";
 import { calculateSaleFinancials, commissionCents } from "../lib/domain/finance.ts";
+import {
+  averageVehicleCostPerKmCents,
+  calculateFleetFreightMetrics,
+  hasPossibleFleetMatch,
+  summarizeFleet,
+} from "../lib/domain/fleet.ts";
 import { calculateDestinationArrivalDate, normalizeCostCategory } from "../lib/domain/operations.ts";
 import { roleCan } from "../lib/domain/permissions.ts";
 import {
@@ -35,6 +41,104 @@ test("mantém os percentuais de comissão do vendedor e da operação", () => {
   assert.equal(commissionCents(10_000, 700), 700);
   assert.equal(sellerCommissionCents(100_000), 7_000);
   assert.equal(operationalCommissionCents(100_000), 3_000);
+});
+
+test("calcula combustível, custo fixo e margem da frota", () => {
+  const vehicleRate = averageVehicleCostPerKmCents([
+    { distanceMeters: 4_948_000, monthlyCostCents: 617_413 },
+    { distanceMeters: 3_193_000, monthlyCostCents: 617_413 },
+    { distanceMeters: 4_698_000, monthlyCostCents: 809_110 },
+  ]);
+  assert.ok(vehicleRate);
+  assert.equal(Math.round(vehicleRate), 163);
+
+  const metrics = calculateFleetFreightMetrics(
+    {
+      distanceMeters: 51_100,
+      freightAmountCents: 33_000,
+      tollCents: 570,
+      driverCommissionCents: 1_000,
+    },
+    {
+      fuelPriceCents: 738,
+      averageConsumptionMilliKmPerLiter: 3_200,
+      fallbackFixedCostPerKmCents: 45,
+    },
+    vehicleRate,
+  );
+
+  assert.equal(metrics.fuelCostCents, 11_785);
+  assert.equal(metrics.fixedCostCents, 8_353);
+  assert.equal(metrics.totalCostCents, 21_708);
+  assert.equal(metrics.netRevenueCents, 11_292);
+  assert.equal(metrics.marginBasisPoints, 3_422);
+});
+
+test("usa custo fixo padrão quando o veículo não possui histórico", () => {
+  const metrics = calculateFleetFreightMetrics(
+    {
+      distanceMeters: 10_000,
+      freightAmountCents: 10_000,
+      tollCents: 0,
+      driverCommissionCents: 0,
+    },
+    {
+      fuelPriceCents: 700,
+      averageConsumptionMilliKmPerLiter: 3_500,
+      fallbackFixedCostPerKmCents: 50,
+    },
+    null,
+  );
+  assert.equal(metrics.fixedCostCents, 500);
+});
+
+test("identifica encaixe de retorno dentro da janela operacional", () => {
+  const freights = [
+    {
+      id: "ida",
+      origin: "São Bernardo do Campo / SP",
+      destination: "Taboão da Serra / SP",
+      pickupDate: "2026-07-17",
+      deliveryDate: "2026-07-17",
+    },
+    {
+      id: "volta",
+      origin: "  TABOÃO DA SERRA / SP ",
+      destination: "São Bernardo do Campo / SP",
+      pickupDate: "2026-07-19",
+      deliveryDate: "2026-07-19",
+    },
+  ];
+
+  assert.equal(hasPossibleFleetMatch(freights[0], freights, 3), true);
+  assert.equal(hasPossibleFleetMatch(freights[0], freights, 1), false);
+});
+
+test("resume a frota ponderando a margem pelo faturamento", () => {
+  const summary = summarizeFleet([
+    {
+      freightAmountCents: 10_000,
+      totalCostCents: 4_000,
+      returnUsed: true,
+      possibleMatch: false,
+    },
+    {
+      freightAmountCents: 30_000,
+      totalCostCents: 21_000,
+      returnUsed: false,
+      possibleMatch: true,
+    },
+  ] as never);
+
+  assert.deepEqual(summary, {
+    freightCount: 2,
+    possibleMatchCount: 1,
+    returnUsedCount: 1,
+    revenueCents: 40_000,
+    totalCostCents: 25_000,
+    netRevenueCents: 15_000,
+    averageMarginBasisPoints: 3_750,
+  });
 });
 
 test("preserva o cálculo de prazo e a normalização de ICMS", () => {

@@ -5,9 +5,14 @@ import { readRuntimeConfig } from "./runtime-config.mjs";
 
 export async function migrateDatabase(configuration) {
   const config = configuration ?? readRuntimeConfig(process.env, { requireSessionSecret: false });
-  const migration = await readFile(
-    new URL("../database/001_central_frete_postgres.sql", import.meta.url),
-    "utf8",
+  const migrationFiles = [
+    "001_central_frete_postgres.sql",
+    "002_fleet.sql",
+  ];
+  const migrations = await Promise.all(
+    migrationFiles.map((file) =>
+      readFile(new URL(`../database/${file}`, import.meta.url), "utf8"),
+    ),
   );
   const sql = postgres(config.databaseUrl, {
     max: 1,
@@ -19,7 +24,7 @@ export async function migrateDatabase(configuration) {
 
   try {
     console.info(`Preparando as tabelas do Central Frete em ${config.databaseHost}.`);
-    await sql.unsafe(migration);
+    for (const migration of migrations) await sql.unsafe(migration);
     console.info("Estrutura PostgreSQL criada ou atualizada com sucesso.");
   } finally {
     await sql.end({ timeout: 5 });
