@@ -1,8 +1,8 @@
 # Central Frete
 
 Sistema interno para gerenciar vendas de frete, clientes, prestadores, custos,
-comissões, recebimentos e comprovantes. O servidor utiliza Next.js 16, React 19,
-PostgreSQL e Supabase Storage.
+comissões, recebimentos, comprovantes e a operação da frota. O servidor utiliza
+Next.js 16, React 19, PostgreSQL e Supabase Storage.
 
 ## Projeto Supabase
 
@@ -10,8 +10,8 @@ Crie o projeto `Central-FRETE` na organização `Central` e selecione a região
 **South America (São Paulo)**, identificada por **`sa-east-1`**.
 
 As tabelas são criadas automaticamente na primeira inicialização do servidor.
-O arquivo `database/001_central_frete_postgres.sql` pode ser executado novamente
-sem apagar registros. Todas as tabelas operacionais possuem Row Level Security.
+Os arquivos em `database/` podem ser executados novamente sem apagar registros.
+Todas as tabelas operacionais possuem Row Level Security.
 
 ## Variáveis de ambiente
 
@@ -60,7 +60,7 @@ Health Check Path: /api/health
 ```
 
 Configure as variáveis de ambiente antes do primeiro deploy. Na inicialização,
-o servidor valida o Session Pooler, cria ou atualiza as 15 tabelas, prepara o
+o servidor valida o Session Pooler, cria ou atualiza as 20 tabelas, prepara o
 bucket privado de comprovantes e inicia o Next.js na porta do Render.
 
 ## Primeiro acesso

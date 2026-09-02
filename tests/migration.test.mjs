@@ -4,6 +4,7 @@ import test from "node:test";
 
 const root = new URL("../", import.meta.url);
 const migration = await readFile(new URL("database/001_central_frete_postgres.sql", root), "utf8");
+const fleetMigration = await readFile(new URL("database/002_fleet.sql", root), "utf8");
 const applicationTables = [
   "users",
   "clients",
@@ -77,4 +78,31 @@ test("não publica registros reais de vendedores, placas ou valores operacionais
   assert.match(embeddedImport, /providers:\s*\[\]/);
   assert.match(embeddedImport, /sales:\s*\[\]/);
   assert.doesNotMatch(embeddedImport, /plate:\s*"[A-Z]{3}[0-9][A-Z0-9][0-9]{2}"/);
+});
+
+test("cria as tabelas privadas do módulo Frota em migração separada", () => {
+  const fleetTables = [
+    "fleet_settings",
+    "fleet_vehicles",
+    "fleet_drivers",
+    "fleet_vehicle_costs",
+    "fleet_freights",
+  ];
+
+  for (const table of fleetTables) {
+    assert.match(
+      fleetMigration,
+      new RegExp(`CREATE TABLE IF NOT EXISTS public\\.${table} \\(`, "i"),
+    );
+    assert.match(
+      fleetMigration,
+      new RegExp(`ALTER TABLE public\\.${table} ENABLE ROW LEVEL SECURITY`, "i"),
+    );
+  }
+
+  assert.match(fleetMigration, /REVOKE ALL ON TABLE[\s\S]+FROM anon, authenticated;/);
+  assert.doesNotMatch(
+    fleetMigration,
+    /INSERT INTO public\.fleet_(vehicles|drivers|vehicle_costs|freights)/i,
+  );
 });

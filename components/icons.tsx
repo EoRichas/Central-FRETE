@@ -13,6 +13,7 @@ function IconBase({ children, ...props }: IconProps) {
 export const Icons = {
   home: (props: IconProps) => <IconBase {...props}><path d="m3 11 9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/></IconBase>,
   truck: (props: IconProps) => <IconBase {...props}><path d="M3 6h11v11H3z"/><path d="M14 10h4l3 3v4h-7z"/><circle cx="7" cy="18" r="2"/><circle cx="18" cy="18" r="2"/></IconBase>,
+  fleet: (props: IconProps) => <IconBase {...props}><path d="M4 6h11v9H4z"/><path d="M15 9h3l3 3v3h-6z"/><circle cx="7" cy="17" r="2"/><circle cx="18" cy="17" r="2"/><path d="M7 3h9"/></IconBase>,
   users: (props: IconProps) => <IconBase {...props}><circle cx="9" cy="8" r="3"/><path d="M3 20c0-4 2-7 6-7s6 3 6 7"/><path d="M16 5a3 3 0 0 1 0 6"/><path d="M17 13c3 0 4 3 4 7"/></IconBase>,
   briefcase: (props: IconProps) => <IconBase {...props}><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V4h8v3M3 12h18M10 12v2h4v-2"/></IconBase>,
   wallet: (props: IconProps) => <IconBase {...props}><path d="M4 6h15a2 2 0 0 1 2 2v11H4a2 2 0 0 1-2-2V6a3 3 0 0 1 3-3h13"/><path d="M16 11h5v4h-5a2 2 0 0 1 0-4z"/></IconBase>,
