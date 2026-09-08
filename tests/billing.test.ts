@@ -3,6 +3,7 @@ import test from "node:test";
 import { billingCalendar, licenseState, shiftMonth, canUseBillingPath } from "../lib/domain/billing.ts";
 import { validCpf } from "../lib/domain/identity.ts";
 import { billingAmountCents } from "../lib/server/billing-config.ts";
+import { planMatchesBillingMode, type MpPlan } from "../lib/server/mercado-pago.ts";
 import { licensePdf } from "../lib/server/license-pdf.ts";
 
 test("modo de teste cobra R$ 1,00 e produção preserva R$ 149,99", () => {
@@ -15,6 +16,50 @@ test("modo de teste cobra R$ 1,00 e produção preserva R$ 149,99", () => {
  } finally {
   if (previous === undefined) delete process.env.MERCADO_PAGO_MODE;
   else process.env.MERCADO_PAGO_MODE = previous;
+ }
+});
+
+test("plano de teste aceita R$ 1 sem dia fixo e produção continua exigindo dia 05", () => {
+ const previousMode = process.env.MERCADO_PAGO_MODE;
+ const previousCollector = process.env.MERCADO_PAGO_COLLECTOR_ID;
+ process.env.MERCADO_PAGO_COLLECTOR_ID = "123";
+ const base: MpPlan = {
+  id: "plan-test",
+  collector_id: 123,
+  status: "active",
+  init_point: "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=plan-test",
+  auto_recurring: {
+   frequency: 1,
+   frequency_type: "months",
+   transaction_amount: 1,
+   currency_id: "BRL",
+   billing_day: null,
+   billing_day_proportional: false,
+   free_trial: null,
+  },
+ };
+ try {
+  process.env.MERCADO_PAGO_MODE = "test";
+  assert.equal(planMatchesBillingMode(base), true);
+  assert.equal(planMatchesBillingMode({ ...base, auto_recurring: { ...base.auto_recurring, billing_day: 5 } }), false);
+  assert.equal(planMatchesBillingMode({ ...base, auto_recurring: { ...base.auto_recurring, free_trial: { frequency: 7, frequency_type: "days" } } }), false);
+
+  process.env.MERCADO_PAGO_MODE = "production";
+  const productionPlan: MpPlan = {
+   ...base,
+   auto_recurring: {
+    ...base.auto_recurring,
+    transaction_amount: 149.99,
+    billing_day: 5,
+   },
+  };
+  assert.equal(planMatchesBillingMode(productionPlan), true);
+  assert.equal(planMatchesBillingMode({ ...productionPlan, auto_recurring: { ...productionPlan.auto_recurring, billing_day: null } }), false);
+ } finally {
+  if (previousMode === undefined) delete process.env.MERCADO_PAGO_MODE;
+  else process.env.MERCADO_PAGO_MODE = previousMode;
+  if (previousCollector === undefined) delete process.env.MERCADO_PAGO_COLLECTOR_ID;
+  else process.env.MERCADO_PAGO_COLLECTOR_ID = previousCollector;
  }
 });
 

@@ -65,10 +65,37 @@ export type MpPlan = {
     frequency_type: string;
     transaction_amount: number;
     currency_id: string;
-    billing_day?: number;
-    billing_day_proportional?: boolean;
+    billing_day?: number | null;
+    billing_day_proportional?: boolean | null;
+    free_trial?: {
+      frequency: number;
+      frequency_type: string;
+    } | null;
   };
 };
+
+export function planMatchesBillingMode(plan: MpPlan) {
+  const auto = plan.auto_recurring;
+  const testMode = process.env.MERCADO_PAGO_MODE === "test";
+  const expectedAmount = billingAmountCents();
+  const common =
+    String(plan.collector_id) === process.env.MERCADO_PAGO_COLLECTOR_ID &&
+    plan.status === "active" &&
+    auto.currency_id === "BRL" &&
+    Math.round(Number(auto.transaction_amount) * 100) === expectedAmount &&
+    auto.frequency === 1 &&
+    auto.frequency_type === "months" &&
+    auto.billing_day_proportional !== true;
+
+  if (!common) return false;
+
+  if (testMode) {
+    const hasFreeTrial = Boolean(auto.free_trial && Number(auto.free_trial.frequency) > 0);
+    return auto.billing_day == null && !hasFreeTrial;
+  }
+
+  return auto.billing_day === 5;
+}
 
 export async function verifiedPlan() {
   const id = process.env.MERCADO_PAGO_PLAN_ID;
@@ -76,25 +103,18 @@ export async function verifiedPlan() {
     throw new ApiError(503, "Plano de assinatura ainda não validado.");
   }
   const plan = await mercadoPago<MpPlan>(`/preapproval_plan/${id}`);
-  const auto = plan.auto_recurring;
   const expectedAmount = billingAmountCents();
-  if (
-    String(plan.collector_id) !== process.env.MERCADO_PAGO_COLLECTOR_ID ||
-    plan.status !== "active" ||
-    auto.currency_id !== "BRL" ||
-    Math.round(Number(auto.transaction_amount) * 100) !== expectedAmount ||
-    auto.frequency !== 1 ||
-    auto.frequency_type !== "months" ||
-    auto.billing_day !== 5 ||
-    auto.billing_day_proportional === true
-  ) {
+  const testMode = process.env.MERCADO_PAGO_MODE === "test";
+  if (!planMatchesBillingMode(plan)) {
     const formatted = (expectedAmount / 100).toLocaleString("pt-BR", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
     throw new ApiError(
       409,
-      `O plano deve ser mensal, R$ ${formatted}, dia 05, sem rateio proporcional e da conta recebedora configurada.`,
+      testMode
+        ? `O plano de teste deve ser mensal, R$ ${formatted}, sem dia fixo, sem teste grátis e da conta recebedora configurada.`
+        : `O plano deve ser mensal, R$ ${formatted}, dia 05, sem rateio proporcional e da conta recebedora configurada.`,
     );
   }
   const url = new URL(plan.init_point);
