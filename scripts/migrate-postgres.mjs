@@ -9,6 +9,7 @@ export async function migrateDatabase(configuration) {
     "001_central_frete_postgres.sql",
     "002_fleet.sql",
     "003_fleet_billing.sql",
+    "004_operational_role.sql",
   ];
   const migrations = await Promise.all(
     migrationFiles.map((file) =>
