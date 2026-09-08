@@ -1,6 +1,6 @@
 import { authorize } from "@/lib/server/auth";
 import { billingCalendar, licenseState } from "@/lib/domain/billing";
-import { appUrl, billingConfig, billingEnabled } from "@/lib/server/billing-config";
+import { appUrl, billingAmountCents, billingConfig, billingEnabled } from "@/lib/server/billing-config";
 import { ensurePeriod, periods } from "@/lib/server/billing";
 import { mercadoPago, verifiedPlan } from "@/lib/server/mercado-pago";
 import { ApiError, getD1, jsonError } from "@/lib/server/d1";
@@ -32,8 +32,6 @@ export async function POST(request: Request) {
    return Response.json({ url: plan.init_point, mode });
   }
 
-  // O Pix mensal é uma cobrança avulsa da competência. Se já existir uma
-  // assinatura recorrente vinculada, o Pix é bloqueado para evitar cobrança dupla.
   if (process.env.MERCADO_PAGO_SUBSCRIPTION_ID) throw new ApiError(409, "Existe uma assinatura recorrente vinculada. O Pix mensal fica indisponível para evitar cobrança duplicada.");
 
   const competency = state.nextUnpaid;
@@ -43,11 +41,12 @@ export async function POST(request: Request) {
   if (period.paid) return Response.json({ url: `${appUrl()}/certificado`, mode });
   if (period.checkoutUrl) return Response.json({ url: period.checkoutUrl, mode });
 
+  const amountCents = billingAmountCents();
   const result = await mercadoPago<{ id: string; init_point: string; sandbox_init_point?: string }>("/checkout/preferences", {
    method: "POST",
    headers: {"X-Idempotency-Key": period.externalReference},
    body: JSON.stringify({
-    items: [{ id: competency, title: `Licença Central Frete — ${competency}`, quantity: 1, currency_id: "BRL", unit_price: 149.99 }],
+    items: [{ id: competency, title: `Licença Central Frete — ${competency}`, quantity: 1, currency_id: "BRL", unit_price: amountCents / 100 }],
     external_reference: period.externalReference,
     notification_url: `${appUrl()}/api/billing/webhook`,
     back_urls: {success: `${appUrl()}/certificado`, pending: `${appUrl()}/certificado`, failure: `${appUrl()}/certificado`},
