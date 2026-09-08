@@ -165,9 +165,10 @@ export function parseFleetDriverPayload(payload: Record<string, unknown>) {
   const name = boundedRequiredUpper(payload.name, "Nome completo", 120);
   if (!name.includes(" ")) throw new ApiError(400, "Informe o nome completo do motorista.");
   return {
-    cpf, phone,
+    cpf,
+    phone,
     address: boundedRequiredUpper(payload.address, "Endereço", 300),
-    vehicleId: payload.vehicleId ? entityId(payload.vehicleId, "Veículo") : null,
+    vehicleId: null,
     name: boundedRequiredUpper(payload.name, "Nome do motorista", 120),
     active: "active" in payload
       ? booleanValue(payload.active, "Situação do motorista")
@@ -199,7 +200,7 @@ export function parseFleetVehicleCostPayload(payload: Record<string, unknown>) {
 }
 
 function optionalCep(value: unknown) {
- const cep = String(value ?? "").replace(/\D/g, "");
- if (cep && !/^\d{8}$/.test(cep)) throw new ApiError(400, "CEP deve possuir 8 dígitos.");
- return cep || null;
+  const cep = String(value ?? "").replace(/\D/g, "");
+  if (cep && !/^\d{8}$/.test(cep)) throw new ApiError(400, "CEP deve possuir 8 dígitos.");
+  return cep || null;
 }
