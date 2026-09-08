@@ -20,7 +20,7 @@ const navigation: Array<{
   { href: "/vendas", label: "Vendas / Fretes", icon: Icons.truck, roles: ["ADMIN", "GERENCIA", "VENDEDOR", "FINANCEIRO"] },
   { href: "/clientes", label: "Clientes", icon: Icons.users, roles: ["ADMIN", "GERENCIA"] },
   { href: "/prestadores", label: "Prestadores", icon: Icons.briefcase, roles: ["ADMIN", "GERENCIA"] },
-  { href: "/frota", label: "Frota", icon: Icons.fleet, roles: ["ADMIN", "GERENCIA", "FINANCEIRO"] },
+  { href: "/frota", label: "Frota", icon: Icons.fleet, roles: ["ADMIN", "GERENCIA", "FINANCEIRO", "OPERACIONAL"] },
   { href: "/financeiro", label: "Financeiro", icon: Icons.wallet, roles: ["ADMIN", "GERENCIA", "FINANCEIRO"] },
   { href: "/vendedores", label: "Comissões", icon: Icons.users, roles: ["ADMIN", "GERENCIA", "VENDEDOR", "FINANCEIRO"] },
   { href: "/relatorios", label: "Relatórios", icon: Icons.chart, roles: ["ADMIN", "GERENCIA", "FINANCEIRO"] },
@@ -84,12 +84,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   )?.label ?? "Central Express";
   const canCreateSale = !license.blocked && (user?.role === "ADMIN" || user?.role === "VENDEDOR");
   const allowed = !user || canAccessPath(pathname, user.role);
+  const brandHref = user?.role === "OPERACIONAL" ? "/frota" : "/inicio";
 
   return (
     <div className={`app-frame ${collapsed ? "sidebar-collapsed" : ""}`}>
       <aside className={`sidebar ${mobileOpen ? "mobile-open" : ""}`}>
         <div className="brand-row">
-          <Link href="/inicio" className="brand" aria-label="Central Express — Início"><span className="brand-logo" aria-hidden="true" /><span className="brand-copy"><strong>Central Express</strong><small>Frete</small></span></Link>
+          <Link href={brandHref} className="brand" aria-label="Central Express — Início"><span className="brand-logo" aria-hidden="true" /><span className="brand-copy"><strong>Central Express</strong><small>Frete</small></span></Link>
           <button className="sidebar-close" onClick={() => setMobileOpen(false)} aria-label="Fechar menu"><Icons.close /></button>
         </div>
         <nav className="main-nav" aria-label="Navegação principal">
@@ -111,7 +112,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <section className="panel">
               <span className="eyebrow">Acesso restrito</span>
               <h2>Seu perfil não permite abrir esta tela.</h2>
-              <p>Vendedores podem consultar suas próprias vendas e comissões, mas não podem editar uma venda depois de salva.</p>
+              <p>Este perfil possui acesso somente às áreas autorizadas pelo administrador.</p>
             </section>
           ) : children}
         </main>

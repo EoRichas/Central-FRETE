@@ -3,7 +3,7 @@ import { ApiError, jsonError } from "@/lib/server/d1";
 import { asObject, requiredString } from "@/lib/server/validation";
 export async function GET(request: Request) {
  try {
-  await authorize(request, ["ADMIN", "GERENCIA", "FINANCEIRO"]);
+  await authorize(request, ["ADMIN", "GERENCIA", "FINANCEIRO", "OPERACIONAL"]);
   const cep = (new URL(request.url).searchParams.get("cep") ?? "").replace(/\D/g, "");
   if (!/^\d{8}$/.test(cep)) throw new ApiError(400, "Informe um CEP de 8 dígitos.");
   const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`, { signal: AbortSignal.timeout(8000) });
@@ -15,7 +15,7 @@ export async function GET(request: Request) {
 }
 export async function POST(request: Request) {
  try {
-  await authorize(request, ["ADMIN", "GERENCIA"]);
+  await authorize(request, ["ADMIN", "GERENCIA", "OPERACIONAL"]);
   const data = asObject(await request.json());
   const origin = requiredString(data.origin, "Origem");
   const destination = requiredString(data.destination, "Destino");

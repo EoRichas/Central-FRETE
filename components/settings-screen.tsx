@@ -143,6 +143,7 @@ export function SettingsScreen() {
               <option value="ADMIN">Admin</option>
               <option value="VENDEDOR">Vendedor</option>
               <option value="FINANCEIRO">Financeiro</option>
+              <option value="OPERACIONAL">Operacional</option>
             </select>
           </Field>
           <Field label="PIX do vendedor" hint="Opcional; usado na aba Comissões.">
@@ -242,6 +243,7 @@ export function SettingsScreen() {
                 <option value="ADMIN">Admin</option>
                 <option value="VENDEDOR">Vendedor</option>
                 <option value="FINANCEIRO">Financeiro</option>
+                <option value="OPERACIONAL">Operacional</option>
               </select>
             </Field>
             <Field label="Situação">

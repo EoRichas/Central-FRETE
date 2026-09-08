@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiMutation } from "@/components/use-api";
 import { Field } from "@/components/ui";
+import type { Role } from "@/lib/contracts";
 
 export function LoginScreen() {
   const [checkingSetup, setCheckingSetup] = useState(true);
@@ -36,7 +37,7 @@ export function LoginScreen() {
     setError(null);
     const form = new FormData(event.currentTarget);
     try {
-      await apiMutation("/api/auth/login", {
+      const result = await apiMutation<{ authenticated: boolean; role: Role }>("/api/auth/login", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -46,7 +47,11 @@ export function LoginScreen() {
       });
       const returnTo = new URLSearchParams(window.location.search).get("return_to");
       window.location.assign(
-        returnTo?.startsWith("/") && !returnTo.startsWith("//") ? returnTo : "/inicio",
+        returnTo?.startsWith("/") && !returnTo.startsWith("//")
+          ? returnTo
+          : result.role === "OPERACIONAL"
+            ? "/frota"
+            : "/inicio",
       );
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Erro ao entrar.");

@@ -10,6 +10,7 @@ import type {
 } from "@/lib/domain/fleet";
 import {
   DEFAULT_FLEET_PARAMETERS,
+  allocateOfficeMonthlyCostByDistance,
   averageVehicleCostPerKmCents,
   calculateFleetFreightMetrics,
   hasPossibleFleetMatch,
@@ -89,7 +90,12 @@ async function loadParameters(): Promise<FleetParameters> {
   return row ?? { ...DEFAULT_FLEET_PARAMETERS };
 }
 
-export async function loadFleetData(canManage: boolean, canManagePayments = false): Promise<FleetData> {
+export async function loadFleetData(
+  canManage: boolean,
+  canManagePayments = false,
+  canEditFreights = canManage,
+  freightOnly = false,
+): Promise<FleetData> {
   const [parameters, vehicleRows, driverRows, costRows, freightRows] =
     await Promise.all([
       loadParameters(),
@@ -164,11 +170,16 @@ export async function loadFleetData(canManage: boolean, canManagePayments = fals
     pickupDate: row.pickupDate,
     deliveryDate: row.deliveryDate,
   }));
+  const allocatedOfficeCosts = allocateOfficeMonthlyCostByDistance(
+    freightRows,
+    parameters.officeMonthlyCostCents,
+  );
   const freights: FleetFreight[] = freightRows.map((row) => {
     const metrics = calculateFleetFreightMetrics(
       row,
       parameters,
       row.vehicleId ? (vehicleRates.get(row.vehicleId) ?? null) : null,
+      allocatedOfficeCosts[row.id] ?? 0,
     );
     return {
       ...row,
@@ -189,6 +200,8 @@ export async function loadFleetData(canManage: boolean, canManagePayments = fals
     freights,
     summary: summarizeFleet(freights),
     canManage,
+    canEditFreights,
     canManagePayments,
+    freightOnly,
   };
 }

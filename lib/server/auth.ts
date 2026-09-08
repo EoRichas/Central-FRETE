@@ -6,7 +6,7 @@ import { verifyLocalSession } from "@/lib/server/local-session";
 import { billingStatus } from "@/lib/server/billing";
 import { canUseBillingPath } from "@/lib/domain/billing";
 
-const ALLOWED_ROLES: Role[] = ["ADMIN", "GERENCIA", "VENDEDOR", "FINANCEIRO"];
+const ALLOWED_ROLES: Role[] = ["ADMIN", "GERENCIA", "VENDEDOR", "FINANCEIRO", "OPERACIONAL"];
 
 type UserRow = {
   id: string;
