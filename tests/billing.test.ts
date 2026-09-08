@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { billingCalendar, licenseState, shiftMonth, canUseBillingPath } from "../lib/domain/billing.ts";
+import { billingCalendar, licenseState, shiftMonth, canUseBillingPath, subscriptionPaymentCompetency } from "../lib/domain/billing.ts";
 import { validCpf } from "../lib/domain/identity.ts";
 import { billingAmountCents } from "../lib/server/billing-config.ts";
 import { planMatchesBillingMode, type MpPlan } from "../lib/server/mercado-pago.ts";
@@ -61,6 +61,11 @@ test("plano de teste aceita R$ 1 sem dia fixo e produção continua exigindo dia
   if (previousCollector === undefined) delete process.env.MERCADO_PAGO_COLLECTOR_ID;
   else process.env.MERCADO_PAGO_COLLECTOR_ID = previousCollector;
  }
+});
+
+test("assinatura imediata de teste quita a próxima competência, não o mês corrente", () => {
+ assert.equal(subscriptionPaymentCompetency("2026-09", "2026-10", true), "2026-10");
+ assert.equal(subscriptionPaymentCompetency("2026-10", "2026-10", false), "2026-10");
 });
 
 test("alerta cinco dias antes respeita mês curto e ano bissexto", () => {

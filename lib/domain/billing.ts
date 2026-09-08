@@ -40,6 +40,9 @@ export function licenseState(first: string, paid: string[], now = new Date()) {
  else if (calendar.daysUntilDue <= 5 && calendar.dueCompetency >= first) alert = calendar.daysUntilDue === 0 ? "Sua licença vence hoje." : calendar.daysUntilDue === 1 ? "Sua licença vence amanhã." : `Faltam ${calendar.daysUntilDue} dias para o vencimento da licença.`;
  return { ...calendar, overdue, blocked: overdue.length > 0, nextUnpaid, upcomingPaid, alert };
 }
+export function subscriptionPaymentCompetency(debitCompetency: string, nextUnpaid: string, testMode: boolean) {
+ return testMode ? nextUnpaid : debitCompetency;
+}
 export function canUseBillingPath(path: string) {
  return path === "/api/me" || path === "/api/billing" || path.startsWith("/api/billing/");
 }
