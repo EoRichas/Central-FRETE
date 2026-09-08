@@ -4,7 +4,7 @@ import { ApiError, getD1, jsonError, queryFirst } from "@/lib/server/d1";
 import { createPasswordCredential } from "@/lib/server/local-session";
 import { asObject, enumValue, lower, requiredUpper } from "@/lib/server/validation";
 
-const ASSIGNABLE_ROLES = ["ADMIN", "VENDEDOR", "FINANCEIRO"] as const;
+const ASSIGNABLE_ROLES = ["ADMIN", "VENDEDOR", "FINANCEIRO", "OPERACIONAL"] as const;
 type RouteContext = { params: Promise<{ id: string }> };
 
 function usernameValue(value: unknown) {
