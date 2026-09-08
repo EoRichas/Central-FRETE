@@ -5,7 +5,7 @@ import type {
   SaleFinancialResult,
 } from "@/lib/domain/finance";
 
-export type Role = "ADMIN" | "GERENCIA" | "VENDEDOR" | "FINANCEIRO";
+export type Role = "ADMIN" | "GERENCIA" | "VENDEDOR" | "FINANCEIRO" | "OPERACIONAL";
 
 export type CurrentUser = {
   id: string;
