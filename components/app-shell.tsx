@@ -82,7 +82,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const currentLabel = navigation.find(
     (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
   )?.label ?? "Central Express";
-  const canCreateSale = !license.blocked && (user?.role === "ADMIN" || user?.role === "VENDEDOR");
   const allowed = !user || canAccessPath(pathname, user.role);
   const brandHref = user?.role === "OPERACIONAL" ? "/frota" : "/inicio";
 
@@ -105,7 +104,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
       {mobileOpen && <button className="sidebar-backdrop" onClick={() => setMobileOpen(false)} aria-label="Fechar menu" />}
       <div className="app-main">
-        <header className="topbar"><button className="mobile-menu" onClick={() => setMobileOpen(true)} aria-label="Abrir menu"><Icons.menu /></button><div><span className="topbar-eyebrow">Central Express</span><strong>{currentLabel}</strong></div>{canCreateSale && <Link className="topbar-action" href="/vendas/nova"><Icons.plus /> Nova venda</Link>}</header>
+        <header className="topbar"><button className="mobile-menu" onClick={() => setMobileOpen(true)} aria-label="Abrir menu"><Icons.menu /></button><div><span className="topbar-eyebrow">Central Express</span><strong>{currentLabel}</strong></div></header>
         <main className="page-content">
           {license.alert && user?.role === "ADMIN" && <div className="license-alert" role="status">{license.alert} <Link href="/certificado">Ver mensalidade</Link></div>}
           {!userLoaded ? <p>Carregando sessão…</p> : !user ? <section className="panel"><p>Não foi possível verificar sua sessão. Atualize a página.</p></section> : license.blocked && pathname !== "/certificado" ? <section className="panel billing-card"><h2>Acesso suspenso</h2><p>A licença mensal está pendente. Seus dados estão preservados.</p>{["ADMIN", "FINANCEIRO"].includes(user.role) ? <Link className="button primary" href="/certificado">Regularizar pagamento</Link> : <p>Solicite a regularização ao Administrador ou Financeiro.</p>}</section> : !allowed ? (
