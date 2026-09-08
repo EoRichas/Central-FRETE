@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
-import { billingCalendar, competenciesBetween, licenseState, shiftMonth, saoPauloDate, validCompetency } from "@/lib/domain/billing";
+import { billingCalendar, competenciesBetween, licenseState, shiftMonth, saoPauloDate, subscriptionPaymentCompetency, validCompetency } from "@/lib/domain/billing";
 import { ApiError, getD1, queryAll, queryFirst } from "@/lib/server/d1";
-import { billingAmountCents, billingConfig, billingEnabled } from "@/lib/server/billing-config";
+import { billingAmountCents, billingConfig, billingEnabled, billingTestMode } from "@/lib/server/billing-config";
 import { mercadoPago, type MpPayment } from "@/lib/server/mercado-pago";
 export type BillingPeriod = { competency: string; licenseKey: string; externalReference: string; checkoutUrl: string | null; paid: boolean; approvedAt: string | null };
 export async function periods(): Promise<BillingPeriod[]> {
@@ -65,13 +65,23 @@ export async function reconcilePayment(id: string, subscriptionCompetency?: stri
 export async function reconcileSubscriptionPayment(id: string) {
  if (!/^\d+$/.test(id)) throw new ApiError(400, "Identificador inválido.");
  const invoice = await mercadoPago<{ preapproval_id: string; debit_date: string; payment?: { id: number } }>(`/authorized_payments/${id}`);
- if (!process.env.MERCADO_PAGO_SUBSCRIPTION_ID || invoice.preapproval_id !== process.env.MERCADO_PAGO_SUBSCRIPTION_ID) return { ignored: true };
+ const testMode = billingTestMode();
+ const configuredSubscriptionId = process.env.MERCADO_PAGO_SUBSCRIPTION_ID;
+ if (!testMode && (!configuredSubscriptionId || invoice.preapproval_id !== configuredSubscriptionId)) return { ignored: true };
  const subscription = await mercadoPago<{ preapproval_plan_id: string; payer_email: string }>(`/preapproval/${encodeURIComponent(invoice.preapproval_id)}`);
- if (subscription.preapproval_plan_id !== process.env.MERCADO_PAGO_PLAN_ID || !process.env.BILLING_PAYER_EMAIL || subscription.payer_email.toLowerCase() !== process.env.BILLING_PAYER_EMAIL.toLowerCase()) throw new ApiError(400, "Assinatura não corresponde à empresa.");
+ if (subscription.preapproval_plan_id !== process.env.MERCADO_PAGO_PLAN_ID) throw new ApiError(400, "Assinatura não corresponde ao plano configurado.");
+ if (!testMode) {
+  if (!process.env.BILLING_PAYER_EMAIL || subscription.payer_email.toLowerCase() !== process.env.BILLING_PAYER_EMAIL.toLowerCase()) throw new ApiError(400, "Assinatura não corresponde à empresa.");
+ }
  if (!invoice.payment?.id) return { pending: true };
  const debitDate = new Date(invoice.debit_date);
  if (Number.isNaN(debitDate.getTime())) throw new ApiError(400, "Data da cobrança inválida.");
- return reconcilePayment(String(invoice.payment.id), saoPauloDate(debitDate).slice(0,7));
+ const config = billingConfig();
+ const rows = await periods();
+ const state = licenseState(config.firstCompetency, rows.filter(p => p.paid).map(p => p.competency));
+ const debitCompetency = saoPauloDate(debitDate).slice(0,7);
+ const competency = subscriptionPaymentCompetency(debitCompetency, state.nextUnpaid, testMode);
+ return reconcilePayment(String(invoice.payment.id), competency);
 }
 export async function runBillingMaintenance() {
  const config = billingConfig();
