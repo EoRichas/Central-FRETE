@@ -3,6 +3,7 @@ import test from "node:test";
 import { operationalCommissionCents, sellerCommissionCents } from "../lib/domain/commissions.ts";
 import { calculateSaleFinancials, commissionCents } from "../lib/domain/finance.ts";
 import {
+  allocateOfficeMonthlyCostByDistance,
   averageVehicleCostPerKmCents,
   calculateFleetFreightMetrics,
   hasPossibleFleetMatch,
@@ -27,7 +28,6 @@ test("calcula comissão, custos, margem e recebimento parcial em centavos", () =
     dueDate: "2026-08-30",
     asOfDate: "2026-08-25",
   });
-
   assert.equal(result.commissionCents, 7_000);
   assert.equal(result.transportCostCents, 32_000);
   assert.equal(result.marginCents, 68_000);
@@ -51,24 +51,14 @@ test("calcula combustível, custo fixo e margem da frota", () => {
   ]);
   assert.ok(vehicleRate);
   assert.equal(Math.round(vehicleRate), 163);
-
   const metrics = calculateFleetFreightMetrics(
-    {
-      distanceMeters: 51_100,
-      freightAmountCents: 33_000,
-      tollCents: 570,
-      driverCommissionCents: 1_000,
-    },
-    {
-      fuelPriceCents: 738,
-      averageConsumptionMilliKmPerLiter: 3_200,
-      fallbackFixedCostPerKmCents: 45,
-    },
+    { distanceMeters: 51_100, freightAmountCents: 33_000, tollCents: 570, driverCommissionCents: 1_000 },
+    { fuelPriceCents: 738, averageConsumptionMilliKmPerLiter: 3_200, fallbackFixedCostPerKmCents: 45 },
     vehicleRate,
   );
-
   assert.equal(metrics.fuelCostCents, 11_785);
   assert.equal(metrics.fixedCostCents, 8_353);
+  assert.equal(metrics.allocatedCostCents, 0);
   assert.equal(metrics.totalCostCents, 21_708);
   assert.equal(metrics.netRevenueCents, 11_292);
   assert.equal(metrics.marginBasisPoints, 3_422);
@@ -76,65 +66,45 @@ test("calcula combustível, custo fixo e margem da frota", () => {
 
 test("usa custo fixo padrão quando o veículo não possui histórico", () => {
   const metrics = calculateFleetFreightMetrics(
-    {
-      distanceMeters: 10_000,
-      freightAmountCents: 10_000,
-      tollCents: 0,
-      driverCommissionCents: 0,
-    },
-    {
-      fuelPriceCents: 700,
-      averageConsumptionMilliKmPerLiter: 3_500,
-      fallbackFixedCostPerKmCents: 50,
-    },
+    { distanceMeters: 10_000, freightAmountCents: 10_000, tollCents: 0, driverCommissionCents: 0 },
+    { fuelPriceCents: 700, averageConsumptionMilliKmPerLiter: 3_500, fallbackFixedCostPerKmCents: 50 },
     null,
   );
   assert.equal(metrics.fixedCostCents, 500);
 });
 
+test("rateia o custo mensal do escritório proporcionalmente aos km da competência", () => {
+  const allocated = allocateOfficeMonthlyCostByDistance([
+    { id: "a", pickupDate: "2026-09-01", distanceMeters: 100_000 },
+    { id: "b", pickupDate: "2026-09-15", distanceMeters: 300_000 },
+    { id: "c", pickupDate: "2026-10-01", distanceMeters: 200_000 },
+  ], 10_000);
+  assert.equal(allocated.a, 2_500);
+  assert.equal(allocated.b, 7_500);
+  assert.equal(allocated.c, 10_000);
+  assert.equal(allocated.a + allocated.b, 10_000);
+});
+
 test("identifica encaixe de retorno dentro da janela operacional", () => {
   const freights = [
-    {
-      id: "ida",
-      origin: "São Bernardo do Campo / SP",
-      destination: "Taboão da Serra / SP",
-      pickupDate: "2026-07-17",
-      deliveryDate: "2026-07-17",
-    },
-    {
-      id: "volta",
-      origin: "  TABOÃO DA SERRA / SP ",
-      destination: "São Bernardo do Campo / SP",
-      pickupDate: "2026-07-19",
-      deliveryDate: "2026-07-19",
-    },
+    { id: "ida", origin: "São Bernardo do Campo / SP", destination: "Taboão da Serra / SP", pickupDate: "2026-07-17", deliveryDate: "2026-07-17" },
+    { id: "volta", origin: "  TABOÃO DA SERRA / SP ", destination: "São Bernardo do Campo / SP", pickupDate: "2026-07-19", deliveryDate: "2026-07-19" },
   ];
-
   assert.equal(hasPossibleFleetMatch(freights[0], freights, 3), true);
   assert.equal(hasPossibleFleetMatch(freights[0], freights, 1), false);
 });
 
 test("resume a frota ponderando a margem pelo faturamento", () => {
   const summary = summarizeFleet([
-    {
-      freightAmountCents: 10_000,
-      totalCostCents: 4_000,
-      returnUsed: true,
-      possibleMatch: false,
-    },
-    {
-      freightAmountCents: 30_000,
-      totalCostCents: 21_000,
-      returnUsed: false,
-      possibleMatch: true,
-    },
+    { freightAmountCents: 10_000, allocatedCostCents: 1_000, totalCostCents: 4_000, returnUsed: true, possibleMatch: false },
+    { freightAmountCents: 30_000, allocatedCostCents: 2_000, totalCostCents: 21_000, returnUsed: false, possibleMatch: true },
   ] as never);
-
   assert.deepEqual(summary, {
     freightCount: 2,
     possibleMatchCount: 1,
     returnUsedCount: 1,
     revenueCents: 40_000,
+    allocatedCostCents: 3_000,
     totalCostCents: 25_000,
     netRevenueCents: 15_000,
     averageMarginBasisPoints: 3_750,
@@ -152,6 +122,8 @@ test("respeita as permissões de cada perfil", () => {
   assert.equal(roleCan("VENDEDOR", "MANAGE_USERS"), false);
   assert.equal(roleCan("FINANCEIRO", "MANAGE_PAYMENTS"), true);
   assert.equal(roleCan("GERENCIA", "IMPORT_DATA"), false);
+  assert.equal(roleCan("OPERACIONAL", "MANAGE_USERS"), false);
+  assert.equal(roleCan("OPERACIONAL", "MANAGE_PAYMENTS"), false);
 });
 
 test("armazena somente o hash da senha e rejeita credenciais incorretas", async () => {
@@ -164,17 +136,9 @@ test("armazena somente o hash da senha e rejeita credenciais incorretas", async 
 test("cria e verifica uma sessão assinada do administrador", async () => {
   const previousSecret = process.env.CENTRAL_FRETE_SESSION_SECRET;
   process.env.CENTRAL_FRETE_SESSION_SECRET = "segredo-de-teste-com-pelo-menos-32-caracteres";
-
   try {
-    const token = await createUserSessionToken({
-      id: "user-1",
-      email: "admin@centralfrete.local",
-      username: "admin",
-      name: "ADMINISTRADOR",
-    });
-    const request = new Request("https://central-frete.example/inicio", {
-      headers: { cookie: `${LOCAL_SESSION_COOKIE}=${token}` },
-    });
+    const token = await createUserSessionToken({ id: "user-1", email: "admin@centralfrete.local", username: "admin", name: "ADMINISTRADOR" });
+    const request = new Request("https://central-frete.example/inicio", { headers: { cookie: `${LOCAL_SESSION_COOKIE}=${token}` } });
     const session = await verifyLocalSession(request);
     assert.equal(session?.username, "admin");
     assert.equal(session?.userId, "user-1");
