@@ -2,28 +2,73 @@
 import { useEffect, useState } from "react";
 import { apiMutation, useApi } from "@/components/use-api";
 import { ErrorState, LoadingState, PageHeader } from "@/components/ui";
-type Billing = { enabled: boolean; blocked: boolean; companyName: string; alert?: string | null; nextUnpaid?: string; subscriptionConfigured?: boolean; subscriptionBound?: boolean; paymentConfigured?: boolean; periods: { competency: string; paid: boolean; scheduled: boolean; active: boolean; licenseKey: string | null; approvedAt: string | null }[] };
+
+type Billing = {
+ enabled: boolean;
+ blocked: boolean;
+ companyName: string;
+ alert?: string | null;
+ nextUnpaid?: string;
+ subscriptionConfigured?: boolean;
+ subscriptionBound?: boolean;
+ paymentConfigured?: boolean;
+ periods: { competency: string; paid: boolean; scheduled: boolean; active: boolean; licenseKey: string | null; approvedAt: string | null }[];
+};
+
+type CheckoutMode = "subscription" | "pix";
+
 export function BillingScreen() {
  const api = useApi<{billing: Billing}>("/api/billing");
- const [busy, setBusy] = useState(false); const [error, setError] = useState("");
+ const [busy, setBusy] = useState<CheckoutMode | null>(null);
+ const [error, setError] = useState("");
  useEffect(() => { const timer = setInterval(api.refresh, 15000); return () => clearInterval(timer); }, [api.refresh]);
- async function pay() {
-  setBusy(true); setError("");
-  try { const result = await apiMutation<{url: string}>("/api/billing/checkout", {method: "POST"}); window.location.assign(result.url); }
-  catch(e) { setError(e instanceof Error ? e.message : "Falha ao abrir pagamento."); setBusy(false); }
+
+ async function pay(mode: CheckoutMode) {
+  setBusy(mode); setError("");
+  try {
+   const result = await apiMutation<{url: string}>("/api/billing/checkout", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ mode }),
+   });
+   window.location.assign(result.url);
+  } catch(e) {
+   setError(e instanceof Error ? e.message : "Falha ao abrir pagamento.");
+   setBusy(null);
+  }
  }
+
  if (api.loading && !api.data) return <LoadingState label="Consultando licença…" />;
  if (api.error) return <ErrorState message={api.error} retry={api.refresh} />;
  const b = api.data?.billing; if (!b) return null;
+
+ const canSubscribe = Boolean(b.paymentConfigured && b.subscriptionConfigured && !b.subscriptionBound);
+ const canPayPix = Boolean(b.paymentConfigured && !b.subscriptionBound);
+
  return <div className="fleet-stack">
   <PageHeader eyebrow="Licença mensal" title="Certificado digital" description="Pagamento, validade da licença e certificados da Central Frete." />
-  <section className="panel billing-card"><h2>{b.companyName}</h2><p className="billing-price">R$ 149,99 <small>/ mês · vencimento dia 05</small></p>
+  <section className="panel billing-card">
+   <h2>{b.companyName}</h2>
+   <p className="billing-price">R$ 149,99 <small>/ mês · vencimento dia 05</small></p>
    {!b.enabled ? <p>A cobrança mensal ainda não foi ativada. O acesso ao sistema permanece disponível.</p> : <>
     <p role="status">{b.alert ?? (b.blocked ? "Acesso suspenso por mensalidade pendente." : "Acompanhe sua licença e os pagamentos abaixo.")}</p>
     {b.nextUnpaid && <p>Próxima competência pendente: {b.nextUnpaid}</p>}
-    <button className="button primary" disabled={busy || !b.paymentConfigured} onClick={pay}>{busy ? "Abrindo…" : "Pagar no Mercado Pago"}</button>
+
+    {!b.subscriptionBound ? <div className="billing-payment-options">
+     <div className="billing-payment-option">
+      <h3>Assinatura automática</h3>
+      <p>R$ 149,99 por mês. A cobrança recorrente fica vinculada à sua conta Mercado Pago.</p>
+      <button className="button primary" disabled={Boolean(busy) || !canSubscribe} onClick={() => pay("subscription")}>{busy === "subscription" ? "Abrindo…" : "Assinar automaticamente"}</button>
+      {!b.subscriptionConfigured && <p className="form-help">Plano recorrente ainda não configurado.</p>}
+     </div>
+     <div className="billing-payment-option">
+      <h3>Pix mensal</h3>
+      <p>Pague somente a competência atual por Pix, sem criar cobrança automática.</p>
+      <button className="button secondary" disabled={Boolean(busy) || !canPayPix} onClick={() => pay("pix")}>{busy === "pix" ? "Abrindo…" : "Pagar via Pix"}</button>
+     </div>
+    </div> : <p>Assinatura recorrente vinculada. O Pix mensal fica indisponível para evitar cobrança duplicada.</p>}
+
     <p>O acesso é atualizado após a confirmação do Mercado Pago. Pagamentos antecipados renovam a chave no dia 05.</p>
-    {b.subscriptionBound && <p>Assinatura recorrente vinculada. Regularize a cobrança na sua conta Mercado Pago.</p>}
    </>}
    {error && <p role="alert" className="form-error">{error}</p>}
   </section>
