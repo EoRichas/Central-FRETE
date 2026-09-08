@@ -177,7 +177,7 @@ class SupabaseStorageBucket {
   ) {
     const { key } = supabaseConfig();
     const response = await fetch(storageUrl(path), {
-      method: "DELETE",
+      method: "POST",
       headers: {
         Authorization: `Bearer ${key}`,
         apikey: key,
@@ -208,7 +208,7 @@ class SupabaseStorageBucket {
   async delete(path: string) {
     const { url, key } = supabaseConfig();
     const response = await fetch(`${url}/storage/v1/object/${encodeURIComponent(STORAGE_BUCKET)}`, {
-      method: "POST",
+      method: "DELETE",
       headers: { Authorization: `Bearer ${key}`, apikey: key, "Content-Type": "application/json" },
       body: JSON.stringify({ prefixes: [path] }),
     });

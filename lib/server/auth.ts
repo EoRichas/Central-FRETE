@@ -3,6 +3,9 @@ import { roleCan } from "@/lib/domain/permissions";
 import { ApiError, queryFirst } from "@/lib/server/d1";
 import { verifyLocalSession } from "@/lib/server/local-session";
 
+import { billingStatus } from "@/lib/server/billing";
+import { canUseBillingPath } from "@/lib/domain/billing";
+
 const ALLOWED_ROLES: Role[] = ["ADMIN", "GERENCIA", "VENDEDOR", "FINANCEIRO"];
 
 type UserRow = {
@@ -36,6 +39,10 @@ export async function authorize(
     throw new ApiError(403, "Seu perfil não permite esta operação.");
   }
 
+  const path = new URL(request.url).pathname;
+  if (!canUseBillingPath(path) && (await billingStatus()).blocked) {
+    throw new ApiError(402, "Licença vencida. Administrador ou Financeiro deve regularizar o pagamento.", { code: "LICENSE_EXPIRED" });
+  }
   return {
     id: row.id,
     email: row.email,

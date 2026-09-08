@@ -22,8 +22,8 @@ export async function POST(request: Request) {
             client_name, cargo_vehicle_model, cargo_plate, origin, destination,
             pickup_date, delivery_date, billing_date, operational_status,
             priority, freight_amount_cents, distance_meters, toll_cents,
-            driver_commission_cents, return_used, created_by, updated_by
-          ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            driver_commission_cents, return_used, created_by, updated_by, origin_cep, destination_cep
+          ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           id,
@@ -48,6 +48,7 @@ export async function POST(request: Request) {
           data.returnUsed ? 1 : 0,
           user.id,
           user.id,
+          data.originCep, data.destinationCep,
         ),
       db
         .prepare(

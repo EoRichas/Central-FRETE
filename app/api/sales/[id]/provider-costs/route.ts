@@ -1,3 +1,4 @@
+import { saleProof } from "@/lib/server/sale-proof";
 import { authorize } from "@/lib/server/auth";
 import { ApiError, getD1, jsonError, queryFirst } from "@/lib/server/d1";
 import { getSale } from "@/lib/server/repository";
@@ -59,6 +60,7 @@ export async function POST(request: Request, context: RouteContext) {
         ? dateOnly(payload.paidAt, "Data do pagamento")
         : null;
     const paidBy = paymentStatus === "PAGO" ? user.id : null;
+    const proof = paymentStatus === "PAGO" ? await saleProof(saleId, payload.proofId) : null;
 
     const previous = await queryFirst<ProviderCostRow>(
       `select id, provider_name as providerName, pix_details as pixDetails,
@@ -115,6 +117,7 @@ export async function POST(request: Request, context: RouteContext) {
 
     await db.batch([
       costStatement,
+      db.prepare("update freight_costs set proof_attachment_id=? where id=?").bind(proof?.id ?? null, costId),
       db
         .prepare(
           `update freight_sales set

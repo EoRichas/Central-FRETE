@@ -72,7 +72,7 @@ export async function PATCH(request: Request, context: RouteContext) {
             origin = ?, destination = ?, pickup_date = ?, delivery_date = ?,
             billing_date = ?, operational_status = ?, priority = ?,
             freight_amount_cents = ?, distance_meters = ?, toll_cents = ?,
-            driver_commission_cents = ?, return_used = ?, updated_by = ?,
+            driver_commission_cents = ?, return_used = ?, updated_by = ?, origin_cep = ?, destination_cep = ?,
             updated_at = to_char(timezone('UTC', now()), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
            where id = ?`,
         )
@@ -97,6 +97,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           data.driverCommissionCents,
           data.returnUsed ? 1 : 0,
           user.id,
+          data.originCep, data.destinationCep,
           id,
         ),
       db

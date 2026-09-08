@@ -670,7 +670,7 @@ td > small { max-width: 270px; margin-top: 2px; overflow: hidden; color: var(--m
 }
 .fleet-match-badge.opportunity { color: #8a5007; background: var(--yellow-soft); }
 .fleet-filter-panel {
-  grid-template-columns: minmax(260px, 1.5fr) minmax(170px, .65fr) minmax(150px, .55fr) auto;
+  grid-template-columns: minmax(220px, 1.5fr) repeat(3, minmax(140px, .65fr)) auto;
 }
 .fleet-unit-field { display: flex; align-items: stretch; }
 .fleet-unit-field > input {
@@ -752,3 +752,12 @@ td > small { max-width: 270px; margin-top: 2px; overflow: hidden; color: var(--m
   .fleet-panel-header .button { width: 100%; }
   .fleet-check-field { align-self: stretch; }
 }
+
+.fleet-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; display: grid; gap: 20px; }
+
+.billing-card { padding: 28px; display: grid; gap: 16px; }
+.billing-price { font-size: 30px; font-weight: 700; }
+.billing-price small { font-size: 14px; font-weight: 400; }
+.license-alert { padding: 16px 20px; background: #fff4d9; color: #674b08; border: 1px solid #ead092; border-radius: 12px; margin-bottom: 20px; }
+.license-alert a { margin-left: 12px; text-decoration: underline; }
+.license-key { max-width: 260px; overflow-wrap: anywhere; font-family: monospace; }

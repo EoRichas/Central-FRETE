@@ -8,6 +8,7 @@ export async function migrateDatabase(configuration) {
   const migrationFiles = [
     "001_central_frete_postgres.sql",
     "002_fleet.sql",
+    "003_fleet_billing.sql",
   ];
   const migrations = await Promise.all(
     migrationFiles.map((file) =>

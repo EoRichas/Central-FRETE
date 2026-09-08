@@ -1,3 +1,4 @@
+import { readPdfProof } from "@/lib/server/pdf-proof";
 import { authorize } from "@/lib/server/auth";
 import { ApiError, getBucket, getD1, jsonError } from "@/lib/server/d1";
 import { getSale } from "@/lib/server/repository";
@@ -27,7 +28,7 @@ export async function GET(request: Request, context: RouteContext) {
 export async function POST(request: Request, context: RouteContext) {
   let uploadedKey: string | null = null;
   try {
-    const user = await authorize(request, ["ADMIN", "FINANCEIRO"]);
+    const user = await authorize(request, ["ADMIN", "FINANCEIRO", "VENDEDOR"]);
     const { id: saleId } = await context.params;
     const sale = await getSale(user, saleId);
     if (!sale) throw new ApiError(404, "Venda não encontrada.");
@@ -44,6 +45,7 @@ export async function POST(request: Request, context: RouteContext) {
       throw new ApiError(400, "Envie um arquivo PDF, JPG ou PNG.");
     }
 
+    if (candidate.type === "application/pdf") await readPdfProof(candidate);
     const attachmentId = crypto.randomUUID();
     const fileName = (candidate.name || "comprovante")
       .normalize("NFKC")

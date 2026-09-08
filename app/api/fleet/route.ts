@@ -9,6 +9,7 @@ export async function GET(request: Request) {
     const user = await authorize(request, [...FLEET_VIEW_ROLES]);
     const fleet = await loadFleetData(
       user.role === "ADMIN" || user.role === "GERENCIA",
+      user.role === "ADMIN" || user.role === "FINANCEIRO",
     );
     return Response.json({ fleet });
   } catch (error) {

@@ -24,6 +24,7 @@ const navigation: Array<{
   { href: "/financeiro", label: "Financeiro", icon: Icons.wallet, roles: ["ADMIN", "GERENCIA", "FINANCEIRO"] },
   { href: "/vendedores", label: "Comissões", icon: Icons.users, roles: ["ADMIN", "GERENCIA", "VENDEDOR", "FINANCEIRO"] },
   { href: "/relatorios", label: "Relatórios", icon: Icons.chart, roles: ["ADMIN", "GERENCIA", "FINANCEIRO"] },
+  { href: "/certificado", label: "Certificado digital", icon: Icons.wallet, roles: ["ADMIN", "FINANCEIRO"] },
   { href: "/configuracoes", label: "Configurações", icon: Icons.settings, roles: ["ADMIN"] },
 ];
 
@@ -43,19 +44,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [userLoaded, setUserLoaded] = useState(false);
+  const [license, setLicense] = useState<{ blocked: boolean; alert: string | null }>({blocked: false, alert: null});
 
   useEffect(() => {
-    fetch("/api/me", { cache: "no-store" })
-      .then((response) => {
-        if (response.status === 401 || response.status === 403) {
-          window.location.assign(`/login?return_to=${encodeURIComponent(pathname)}`);
-          return null;
-        }
-        return response.ok ? response.json() : null;
-      })
-      .then((payload) => setUser(payload?.user ?? null))
-      .catch(() => setUser(null))
-      .finally(() => setUserLoaded(true));
+    let stopped = false;
+    async function refresh() {
+      try {
+        const response = await fetch("/api/me", {cache: "no-store"});
+        if (response.status === 401 || response.status === 403) { window.location.assign(`/login?return_to=${encodeURIComponent(pathname)}`); return; }
+        if (!response.ok) throw new Error("Sessão indisponível");
+        const payload = await response.json();
+        if (!stopped) { setUser(payload.user); setLicense(payload.license); setUserLoaded(true); }
+      } catch { if (!stopped) { setUser(null); setUserLoaded(true); } }
+    }
+    void refresh();
+    const timer = setInterval(refresh, 30000);
+    window.addEventListener("focus", refresh);
+    return () => { stopped = true; clearInterval(timer); window.removeEventListener("focus", refresh); };
   }, [pathname]);
 
   async function logout() {
@@ -72,12 +77,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   const visibleNavigation = user
-    ? navigation.filter((item) => item.roles.includes(user.role))
+    ? navigation.filter((item) => item.roles.includes(user.role) && (!license.blocked || item.href === "/certificado"))
     : navigation;
   const currentLabel = navigation.find(
     (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
   )?.label ?? "Central Express";
-  const canCreateSale = user?.role === "ADMIN" || user?.role === "VENDEDOR";
+  const canCreateSale = !license.blocked && (user?.role === "ADMIN" || user?.role === "VENDEDOR");
   const allowed = !user || canAccessPath(pathname, user.role);
 
   return (
@@ -101,7 +106,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="app-main">
         <header className="topbar"><button className="mobile-menu" onClick={() => setMobileOpen(true)} aria-label="Abrir menu"><Icons.menu /></button><div><span className="topbar-eyebrow">Central Express</span><strong>{currentLabel}</strong></div>{canCreateSale && <Link className="topbar-action" href="/vendas/nova"><Icons.plus /> Nova venda</Link>}</header>
         <main className="page-content">
-          {userLoaded && !allowed ? (
+          {license.alert && user?.role === "ADMIN" && <div className="license-alert" role="status">{license.alert} <Link href="/certificado">Ver mensalidade</Link></div>}
+          {!userLoaded ? <p>Carregando sessão…</p> : !user ? <section className="panel"><p>Não foi possível verificar sua sessão. Atualize a página.</p></section> : license.blocked && pathname !== "/certificado" ? <section className="panel billing-card"><h2>Acesso suspenso</h2><p>A licença mensal está pendente. Seus dados estão preservados.</p>{["ADMIN", "FINANCEIRO"].includes(user.role) ? <Link className="button primary" href="/certificado">Regularizar pagamento</Link> : <p>Solicite a regularização ao Administrador ou Financeiro.</p>}</section> : !allowed ? (
             <section className="panel">
               <span className="eyebrow">Acesso restrito</span>
               <h2>Seu perfil não permite abrir esta tela.</h2>
