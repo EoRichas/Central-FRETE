@@ -1,3 +1,4 @@
+import { saleProof } from "@/lib/server/sale-proof";
 import { authorize } from "@/lib/server/auth";
 import {
   ApiError,
@@ -20,7 +21,7 @@ import {
   upper,
 } from "@/lib/server/validation";
 
-const COST_STATUSES = ["EM_ABERTO", "CONFIRMADO"] as const;
+const COST_STATUSES = ["EM_ABERTO", "PAGO"] as const;
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -83,13 +84,14 @@ export async function PATCH(request: Request, context: RouteContext) {
       Object.prototype.hasOwnProperty.call(payload, "pixDetails")
         ? optionalString(payload.pixDetails)
         : previous.pixDetails;
-    const confirmed = status === "CONFIRMADO";
+    const confirmed = status === "PAGO";
+    const proof = confirmed ? await saleProof(saleId, payload.proofId) : null;
     const db = await getD1();
     await db.batch([
       db
         .prepare(
           `update freight_costs set description = ?, pix_details = ?,
-            occurred_on = ?, amount_cents = ?, confirmed = ?,
+            occurred_on = ?, amount_cents = ?, confirmed = ?, payment_status = ?, proof_attachment_id = ?,
             updated_at = to_char(timezone('UTC', now()), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
            where id = ? and sale_id = ?`,
         )
@@ -99,6 +101,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           occurredOn,
           amountCents,
           confirmed ? 1 : 0,
+          status, proof?.id ?? null,
           costId,
           saleId,
         ),

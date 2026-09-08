@@ -16,6 +16,8 @@ import {
   upper,
 } from "@/lib/server/validation";
 
+import { validCpf } from "@/lib/domain/identity";
+
 const MAX_MONEY_CENTS = 9_000_000_000_000;
 
 function boundedRequiredUpper(value: unknown, label: string, maxLength: number) {
@@ -61,6 +63,8 @@ export function parseFleetFreightPayload(payload: Record<string, unknown>) {
       80,
     ),
     cargoPlate: normalizePlate(payload.cargoPlate),
+    originCep: optionalCep(payload.originCep),
+    destinationCep: optionalCep(payload.destinationCep),
     origin: boundedRequiredUpper(payload.origin, "Origem", 180),
     destination: boundedRequiredUpper(payload.destination, "Destino", 180),
     pickupDate: dateOnly(payload.pickupDate, "Data da coleta"),
@@ -154,7 +158,16 @@ export function parseFleetVehiclePayload(payload: Record<string, unknown>) {
 }
 
 export function parseFleetDriverPayload(payload: Record<string, unknown>) {
+  const cpf = String(payload.cpf ?? "").replace(/\D/g, "");
+  if (!validCpf(cpf)) throw new ApiError(400, "Informe um CPF válido.");
+  const phone = String(payload.phone ?? "").replace(/\D/g, "");
+  if (!/^\d{10,13}$/.test(phone)) throw new ApiError(400, "Informe telefone com DDD.");
+  const name = boundedRequiredUpper(payload.name, "Nome completo", 120);
+  if (!name.includes(" ")) throw new ApiError(400, "Informe o nome completo do motorista.");
   return {
+    cpf, phone,
+    address: boundedRequiredUpper(payload.address, "Endereço", 300),
+    vehicleId: payload.vehicleId ? entityId(payload.vehicleId, "Veículo") : null,
     name: boundedRequiredUpper(payload.name, "Nome do motorista", 120),
     active: "active" in payload
       ? booleanValue(payload.active, "Situação do motorista")
@@ -183,4 +196,10 @@ export function parseFleetVehicleCostPayload(payload: Record<string, unknown>) {
       MAX_MONEY_CENTS,
     ),
   };
+}
+
+function optionalCep(value: unknown) {
+ const cep = String(value ?? "").replace(/\D/g, "");
+ if (cep && !/^\d{8}$/.test(cep)) throw new ApiError(400, "CEP deve possuir 8 dígitos.");
+ return cep || null;
 }

@@ -59,6 +59,10 @@ export type FleetVehicle = {
 };
 
 export type FleetDriver = {
+  cpf: string | null;
+  address: string | null;
+  phone: string | null;
+  vehicleId: string | null;
   id: string;
   name: string;
   active: boolean;
@@ -96,6 +100,9 @@ export type FleetFreightMetrics = {
 
 export type FleetFreight = FleetFreightBase & FleetFreightMetrics & {
   id: string;
+  paymentStatus: "EM_ABERTO" | "PAGO";
+  originCep: string | null;
+  destinationCep: string | null;
   possibleMatch: boolean;
   createdAt: string;
   updatedAt: string;
@@ -118,6 +125,7 @@ export type FleetData = {
   freights: FleetFreight[];
   summary: FleetSummary;
   canManage: boolean;
+  canManagePayments: boolean;
 };
 
 type MatchableFreight = Pick<

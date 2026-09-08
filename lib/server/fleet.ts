@@ -34,6 +34,7 @@ type VehicleRow = {
 };
 
 type DriverRow = {
+  cpf: string | null; address: string | null; phone: string | null; vehicleId: string | null;
   id: string;
   name: string;
   active: number;
@@ -48,6 +49,7 @@ type VehicleCostRow = {
 };
 
 type FreightRow = {
+  paymentStatus: "EM_ABERTO" | "PAGO"; originCep: string | null; destinationCep: string | null;
   id: string;
   vehicleId: string | null;
   vehiclePlate: string;
@@ -87,7 +89,7 @@ async function loadParameters(): Promise<FleetParameters> {
   return row ?? { ...DEFAULT_FLEET_PARAMETERS };
 }
 
-export async function loadFleetData(canManage: boolean): Promise<FleetData> {
+export async function loadFleetData(canManage: boolean, canManagePayments = false): Promise<FleetData> {
   const [parameters, vehicleRows, driverRows, costRows, freightRows] =
     await Promise.all([
       loadParameters(),
@@ -96,7 +98,7 @@ export async function loadFleetData(canManage: boolean): Promise<FleetData> {
          order by active desc, plate`,
       ),
       queryAll<DriverRow>(
-        `select id, name, active from fleet_drivers
+        `select id, name, active, cpf, address, phone, vehicle_id as vehicleId from fleet_drivers
          order by active desc, name`,
       ),
       queryAll<VehicleCostRow>(
@@ -110,7 +112,7 @@ export async function loadFleetData(canManage: boolean): Promise<FleetData> {
         `select id, vehicle_id as vehicleId, vehicle_plate as vehiclePlate,
           driver_id as driverId, driver_name as driverName,
           client_name as clientName, cargo_vehicle_model as cargoVehicleModel,
-          cargo_plate as cargoPlate, origin, destination,
+          cargo_plate as cargoPlate, origin, destination, origin_cep as originCep, destination_cep as destinationCep, payment_status as paymentStatus,
           pickup_date as pickupDate, delivery_date as deliveryDate,
           billing_date as billingDate, operational_status as operationalStatus,
           priority, freight_amount_cents as freightAmountCents,
@@ -120,7 +122,7 @@ export async function loadFleetData(canManage: boolean): Promise<FleetData> {
           updated_at as updatedAt
          from fleet_freights
          order by pickup_date desc, created_at desc
-         limit 1000`,
+         `,
       ),
     ]);
 
@@ -151,8 +153,7 @@ export async function loadFleetData(canManage: boolean): Promise<FleetData> {
     vehicles.map((vehicle) => [vehicle.id, vehicle.averageCostPerKmCents]),
   );
   const drivers: FleetDriver[] = driverRows.map((row) => ({
-    id: row.id,
-    name: row.name,
+    ...row,
     active: Boolean(row.active),
   }));
 
@@ -188,5 +189,6 @@ export async function loadFleetData(canManage: boolean): Promise<FleetData> {
     freights,
     summary: summarizeFleet(freights),
     canManage,
+    canManagePayments,
   };
 }

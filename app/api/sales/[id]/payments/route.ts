@@ -1,3 +1,5 @@
+import { saleProof } from "@/lib/server/sale-proof";
+import { readPdfProof } from "@/lib/server/pdf-proof";
 import { authorize } from "@/lib/server/auth";
 import {
   ApiError,
@@ -100,6 +102,10 @@ export async function POST(request: Request, context: RouteContext) {
     }
 
     let proofName: string | null = null;
+    let existingProofKey: string | null = null;
+    if (status === "CONFIRMADO" && !proof && !values.proofId) throw new ApiError(400, "Comprovante PDF obrigatório para confirmar o pagamento.");
+    if (!proof && values.proofId) { const existing = await saleProof(saleId, values.proofId); existingProofKey = existing.storageKey; proofName = existing.fileName; }
+    if (status === "CONFIRMADO" && proof) await readPdfProof(proof);
     if (proof) {
       if (proof.size > 10 * 1024 * 1024) {
         throw new ApiError(400, "O comprovante deve ter no máximo 10 MB.");
@@ -137,7 +143,7 @@ export async function POST(request: Request, context: RouteContext) {
           paymentMethod,
           upper(values.notes),
           idempotencyKey,
-          uploadedKey,
+          uploadedKey ?? existingProofKey,
           proofName,
           user.id,
         ),

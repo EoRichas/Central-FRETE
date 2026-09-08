@@ -61,7 +61,7 @@ export function SaleDetailScreen({ id }: { id: string }) {
   );
   const [operationCost, setOperationCost] = useState<CostRecord | null>(null);
   const [operationCostStatus, setOperationCostStatus] = useState<
-    "EM_ABERTO" | "CONFIRMADO"
+    "EM_ABERTO" | "PAGO"
   >("EM_ABERTO");
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -76,7 +76,7 @@ export function SaleDetailScreen({ id }: { id: string }) {
   const canEditSale = user?.role === "ADMIN";
   const canDeleteSale = user?.role === "ADMIN";
   const canAttach =
-    user?.role === "ADMIN" || user?.role === "FINANCEIRO";
+    user?.role === "ADMIN" || user?.role === "FINANCEIRO" || user?.role === "VENDEDOR";
 
   async function registerPayment(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -143,6 +143,7 @@ export function SaleDetailScreen({ id }: { id: string }) {
           pixDetails: form.get("pixDetails"),
           amountCents: moneyInputToCents(form.get("amount")),
           paymentStatus: providerStatus,
+          proofId: form.get("proofId"),
           paidAt: providerStatus === "PAGO" ? form.get("paidAt") : null,
         }),
       });
@@ -161,7 +162,7 @@ export function SaleDetailScreen({ id }: { id: string }) {
 
   function openOperationCost(cost: CostRecord) {
     setError(null);
-    setOperationCostStatus(cost.confirmed ? "CONFIRMADO" : "EM_ABERTO");
+    setOperationCostStatus(cost.confirmed ? "PAGO" : "EM_ABERTO");
     setOperationCost(cost);
   }
 
@@ -184,6 +185,7 @@ export function SaleDetailScreen({ id }: { id: string }) {
           occurredOn: form.get("occurredOn") || null,
           amountCents: moneyInputToCents(form.get("amount")),
           status: operationCostStatus,
+          proofId: form.get("proofId"),
         }),
       });
       setOperationCost(null);
@@ -398,7 +400,7 @@ export function SaleDetailScreen({ id }: { id: string }) {
                     <strong>{cost.description ?? costCategoryLabel(cost.category)}</strong>
                     <small>{cost.pixDetails ? `PIX: ${cost.pixDetails}` : "PIX NÃO INFORMADO"}</small>
                   </td>
-                  <td data-label="Situação"><StatusBadge status={cost.confirmed ? "CONFIRMADO" : "EM_ABERTO"} /></td>
+                  <td data-label="Situação"><StatusBadge status={cost.confirmed ? "PAGO" : "EM_ABERTO"} /></td>
                   <td data-label="Data">{formatDate(cost.occurredOn)}</td>
                   <td data-label="Valor"><strong>{formatMoney(cost.amountCents)}</strong></td>
                   <td data-label="Ações">
@@ -415,7 +417,7 @@ export function SaleDetailScreen({ id }: { id: string }) {
                     <strong>{cost.description ?? "—"}</strong>
                     <small>{cost.pixDetails ? `PIX: ${cost.pixDetails}` : "PIX NÃO INFORMADO"}</small>
                   </td>
-                  <td data-label="Situação"><StatusBadge status={cost.confirmed ? "CONFIRMADO" : "EM_ABERTO"} /></td>
+                  <td data-label="Situação"><StatusBadge status={cost.confirmed ? "PAGO" : "EM_ABERTO"} /></td>
                   <td data-label="Data">{formatDate(cost.occurredOn)}</td>
                   <td data-label="Valor"><strong>{formatMoney(cost.amountCents)}</strong></td>
                   <td data-label="Ações">
@@ -444,7 +446,7 @@ export function SaleDetailScreen({ id }: { id: string }) {
                   <td data-label="Categoria"><strong>{costCategoryLabel(cost.category)}</strong></td>
                   <td data-label="Referência">{cost.description ?? "—"}</td>
                   <td data-label="Data">{formatDate(cost.occurredOn)}</td>
-                  <td data-label="Situação"><StatusBadge status={cost.confirmed ? "CONFIRMADO" : "EM_ABERTO"} /></td>
+                  <td data-label="Situação"><StatusBadge status={cost.confirmed ? "PAGO" : "EM_ABERTO"} /></td>
                   <td data-label="Valor"><strong>{formatMoney(cost.amountCents)}</strong></td>
                   <td data-label="Ações">
                     {canManageOperationCosts && isEditableOperationCostCategory(cost.category) && (
@@ -516,13 +518,14 @@ export function SaleDetailScreen({ id }: { id: string }) {
         <form className="modal-body form-stack" onSubmit={registerPayment}>
           <input type="hidden" name="type" value="RECEBIMENTO" />
           <div className="form-grid two">
-            <Field label="Situação"><select name="status" defaultValue="CONFIRMADO"><option value="CONFIRMADO">Confirmado</option><option value="PENDENTE">Pendente</option></select></Field>
+            <Field label="Situação"><select name="status" defaultValue="CONFIRMADO"><option value="CONFIRMADO">Pago</option><option value="PENDENTE">Pendente</option></select></Field>
             <Field label="Valor"><input name="amount" inputMode="decimal" placeholder="0,00" required /></Field>
             <Field label="Data"><input name="occurredAt" type="date" defaultValue={todaySaoPaulo()} required /></Field>
             <Field label="Forma de pagamento"><select name="paymentMethod" defaultValue="PIX"><option value="BOLETO">Boleto</option><option value="DINHEIRO">Dinheiro</option><option value="CREDITO">Crédito</option><option value="DEBITO">Débito</option><option value="PIX">PIX</option><option value="FATURADO">Faturado</option></select></Field>
           </div>
           <Field label="Observação"><textarea name="notes" rows={3} /></Field>
-          <Field label="Comprovante do recebimento (opcional)" hint="PDF, JPG ou PNG; máximo 10 MB."><input name="proof" type="file" accept="application/pdf,image/jpeg,image/png" /></Field>
+          <Field label="Novo comprovante PDF" hint="Obrigatório para confirmar Pago, ou selecione um PDF já anexado abaixo. Máximo 10 MB."><input name="proof" type="file" accept="application/pdf" /></Field>
+          <Field label="Comprovante PDF anexado" hint="Use um comprovante enviado na seção Anexos desta venda."><select name="proofId"><option value="">Selecione</option>{sale.attachments.filter(a => a.mimeType === "application/pdf").map(a => <option key={a.id} value={a.id}>{a.fileName}</option>)}</select></Field>
           {error && <p className="form-error" role="alert">{error}</p>}
           <footer className="modal-actions"><button type="button" className="button secondary" onClick={() => setPaymentOpen(false)}>Cancelar</button><button className="button primary" disabled={saving}>{saving ? "Registrando…" : "Registrar"}</button></footer>
         </form>
@@ -540,7 +543,7 @@ export function SaleDetailScreen({ id }: { id: string }) {
             <div className="form-grid two">
               <Field label="Valor"><div className="money-field"><span>R$</span><input name="amount" inputMode="decimal" defaultValue={centsToInput(operationCost.amountCents)} placeholder="0,00" required /></div></Field>
               <Field label="Data"><input name="occurredOn" type="date" defaultValue={operationCost.occurredOn ?? ""} /></Field>
-              <Field label="Situação"><select value={operationCostStatus} onChange={(event) => setOperationCostStatus(event.target.value as "EM_ABERTO" | "CONFIRMADO")}><option value="EM_ABERTO">Em aberto</option><option value="CONFIRMADO">Confirmado</option></select></Field>
+              <Field label="Situação"><select value={operationCostStatus} onChange={(event) => setOperationCostStatus(event.target.value as "EM_ABERTO" | "PAGO")}><option value="EM_ABERTO">Em aberto</option><option value="PAGO">Pago</option></select></Field><Field label="Comprovante PDF anexado" hint="Use um comprovante enviado na seção Anexos desta venda."><select name="proofId"><option value="">Selecione</option>{sale.attachments.filter(a => a.mimeType === "application/pdf").map(a => <option key={a.id} value={a.id}>{a.fileName}</option>)}</select></Field>
             </div>
             {error && <p className="form-error" role="alert">{error}</p>}
             <footer className="modal-actions"><button type="button" className="button secondary" onClick={() => setOperationCost(null)}>Cancelar</button><button className="button primary" disabled={saving}>{saving ? "Salvando…" : "Salvar custo"}</button></footer>
@@ -554,6 +557,7 @@ export function SaleDetailScreen({ id }: { id: string }) {
           <Field label="Dados PIX" hint="Informe a chave PIX, o tipo da chave e o titular para facilitar o pagamento."><textarea name="pixDetails" rows={3} defaultValue={selectedProviderCost?.pixDetails ?? ""} placeholder="Ex.: CPF 123.456.789-00 · TITULAR: NOME DO PRESTADOR" /></Field>
           <Field label="Valor"><div className="money-field"><span>R$</span><input name="amount" inputMode="decimal" defaultValue={selectedProviderCost ? centsToInput(selectedProviderCost.amountCents) : ""} placeholder="0,00" required /></div></Field>
           <Field label="Situação financeira"><select value={providerStatus} onChange={(event) => setProviderStatus(event.target.value as "EM_ABERTO" | "PAGO")}><option value="EM_ABERTO">Em aberto</option><option value="PAGO">Pago</option></select></Field>
+          <Field label="Comprovante PDF anexado" hint="Use um comprovante enviado na seção Anexos desta venda."><select name="proofId"><option value="">Selecione</option>{sale.attachments.filter(a => a.mimeType === "application/pdf").map(a => <option key={a.id} value={a.id}>{a.fileName}</option>)}</select></Field>
           {providerStatus === "PAGO" && <Field label="Data do pagamento"><input name="paidAt" type="date" defaultValue={selectedProviderCost?.paidAt?.slice(0, 10) ?? todaySaoPaulo()} required /></Field>}
           {error && <p className="form-error" role="alert">{error}</p>}
           <footer className="modal-actions"><button type="button" className="button secondary" onClick={() => setProviderSlot(null)}>Cancelar</button><button className="button primary" disabled={saving}>{saving ? "Salvando…" : "Salvar prestador"}</button></footer>

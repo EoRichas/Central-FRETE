@@ -1,5 +1,7 @@
 "use client";
 
+import { FleetPaymentPanel } from "@/components/fleet-payment-panel";
+
 import { useMemo, useState } from "react";
 import { Icons } from "@/components/icons";
 import {
@@ -32,7 +34,7 @@ import {
   moneyInputToCents,
 } from "@/lib/format";
 
-type FleetTab = "overview" | "freights" | "assets" | "settings";
+type FleetTab = "overview" | "freights" | "assets" | "costs" | "settings";
 
 function centsToInput(cents: number | null | undefined) {
   if (cents === null || cents === undefined) return "";
@@ -93,12 +95,14 @@ function todaySaoPaulo() {
 function FreightTable({
   freights,
   canManage,
+  canDelete,
   deletingId,
   onEdit,
   onDelete,
 }: {
   freights: FleetFreight[];
   canManage: boolean;
+  canDelete: boolean;
   deletingId: string | null;
   onEdit: (freight: FleetFreight) => void;
   onDelete: (freight: FleetFreight) => void;
@@ -156,7 +160,7 @@ function FreightTable({
                 <StatusBadge
                   status={FLEET_OPERATIONAL_STATUS_LABELS[freight.operationalStatus]}
                 />
-                <small>{FLEET_PRIORITY_LABELS[freight.priority]}</small>
+                <small>{FLEET_PRIORITY_LABELS[freight.priority]}</small><StatusBadge status={freight.paymentStatus} />
               </td>
               <td data-label="Frete">
                 <strong>{formatMoney(freight.freightAmountCents)}</strong>
@@ -193,14 +197,14 @@ function FreightTable({
                     >
                       Editar
                     </button>
-                    <button
+                    {canDelete && <button
                       type="button"
                       className="button danger compact-button"
                       disabled={deletingId === freight.id}
                       onClick={() => onDelete(freight)}
                     >
                       {deletingId === freight.id ? "Excluindo…" : "Excluir"}
-                    </button>
+                    </button>}
                   </div>
                 </td>
               )}
@@ -225,7 +229,33 @@ function FreightModal({
 }) {
   const editing = Boolean(freight);
   const firstVehicle = fleet.vehicles.find((vehicle) => vehicle.active);
-  const firstDriver = fleet.drivers.find((driver) => driver.active);
+  const firstDriver = fleet.drivers.find((driver) => driver.active && driver.vehicleId === firstVehicle?.id) ?? fleet.drivers.find(driver => driver.active);
+  const [driverId, setDriverId] = useState(freight?.driverId ?? firstDriver?.id ?? "");
+  const [origin, setOrigin] = useState(freight?.origin ?? "");
+  const [destination, setDestination] = useState(freight?.destination ?? "");
+  const [originCep, setOriginCep] = useState(freight?.originCep ?? "");
+  const [destinationCep, setDestinationCep] = useState(freight?.destinationCep ?? "");
+  const [routing, setRouting] = useState(false);
+  const [routeNotice, setRouteNotice] = useState("");
+  async function calculateRoute(from = origin, to = destination) {
+    if (!from || !to) return;
+    setRouting(true); setRouteNotice("");
+    try {
+      const result = await apiMutation<{distanceMeters: number}>("/api/fleet/route-lookup", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({origin: from, destination: to}) });
+      setDistance(distanceToInput(result.distanceMeters)); setRouteNotice("Distância rodoviária calculada. Você pode corrigi-la.");
+    } catch(e) { setRouteNotice(e instanceof Error ? e.message : "Informe a distância manualmente."); }
+    finally { setRouting(false); }
+  }
+  async function lookupCep(side: "origin" | "destination") {
+    const cep = side === "origin" ? originCep : destinationCep;
+    setRouting(true); setRouteNotice("");
+    try {
+      const result = await apiMutation<{address: string}>(`/api/fleet/route-lookup?cep=${encodeURIComponent(cep)}`, {method: "GET"});
+      if (side === "origin") setOrigin(result.address); else setDestination(result.address);
+      await calculateRoute(side === "origin" ? result.address : origin, side === "destination" ? result.address : destination);
+    } catch(e) { setRouteNotice(e instanceof Error ? e.message : "Preencha manualmente."); }
+    finally { setRouting(false); }
+  }
   const [vehicleId, setVehicleId] = useState(freight?.vehicleId ?? firstVehicle?.id ?? "");
   const [freightValue, setFreightValue] = useState(
     centsToInput(freight?.freightAmountCents),
@@ -269,6 +299,7 @@ function FreightModal({
         clientName: form.get("clientName"),
         cargoVehicleModel: form.get("cargoVehicleModel"),
         cargoPlate: form.get("cargoPlate"),
+        originCep, destinationCep,
         origin: form.get("origin"),
         destination: form.get("destination"),
         pickupDate: form.get("pickupDate"),
@@ -316,13 +347,14 @@ function FreightModal({
       description="Os custos e a margem são calculados automaticamente pelos parâmetros da Frota."
     >
       <form className="modal-body form-stack" onSubmit={submit}>
+        <fieldset disabled={!fleet.canManage} className="fleet-fieldset">
         <div className="section-divider">Identificação</div>
         <div className="form-grid three">
           <Field label="Veículo da frota">
             <select
               name="vehicleId"
               value={vehicleId}
-              onChange={(event) => setVehicleId(event.target.value)}
+              onChange={(event) => { setVehicleId(event.target.value); const linked = fleet.drivers.find(d => d.active && d.vehicleId === event.target.value); if (linked) setDriverId(linked.id); }}
               required
             >
               <option value="">Selecione</option>
@@ -332,7 +364,7 @@ function FreightModal({
             </select>
           </Field>
           <Field label="Motorista">
-            <select name="driverId" defaultValue={freight?.driverId ?? firstDriver?.id ?? ""} required>
+            <select name="driverId" value={driverId} onChange={e => setDriverId(e.target.value)} required>
               <option value="">Selecione</option>
               {selectableDrivers.map((driver) => (
                 <option key={driver.id} value={driver.id}>{driver.name}</option>
@@ -354,11 +386,17 @@ function FreightModal({
 
         <div className="section-divider">Rota e datas</div>
         <div className="form-grid two">
+          <Field label="CEP de origem"><input value={originCep} onChange={e => setOriginCep(e.target.value)} maxLength={9} inputMode="numeric" /><button type="button" className="button secondary" disabled={routing} onClick={() => lookupCep("origin")}>Buscar origem</button></Field>
+          <Field label="CEP de destino"><input value={destinationCep} onChange={e => setDestinationCep(e.target.value)} maxLength={9} inputMode="numeric" /><button type="button" className="button secondary" disabled={routing} onClick={() => lookupCep("destination")}>Buscar destino</button></Field>
+        </div>
+        <button type="button" className="button secondary" disabled={routing} onClick={() => calculateRoute()}>{routing ? "Consultando rota…" : "Recalcular distância"}</button>
+        {routeNotice && <p role="status">{routeNotice}</p>}
+        <div className="form-grid two">
           <Field label="Origem">
-            <input name="origin" defaultValue={freight?.origin ?? ""} required />
+            <input name="origin" value={origin} onChange={e => setOrigin(e.target.value)} maxLength={180} required />
           </Field>
           <Field label="Destino">
-            <input name="destination" defaultValue={freight?.destination ?? ""} required />
+            <input name="destination" value={destination} onChange={e => setDestination(e.target.value)} maxLength={180} required />
           </Field>
         </div>
         <div className="form-grid three">
@@ -422,7 +460,9 @@ function FreightModal({
           <button type="button" className="button secondary" onClick={onClose}>Cancelar</button>
           <button className="button primary" disabled={saving}>{saving ? "Salvando…" : editing ? "Salvar alterações" : "Cadastrar frete"}</button>
         </footer>
+        </fieldset>
       </form>
+      {freight && fleet.canManagePayments && <FleetPaymentPanel id={freight.id} status={freight.paymentStatus} onSaved={() => onSaved("Pagamento atualizado.")} />}
     </Modal>
   );
 }
@@ -450,7 +490,7 @@ function VehicleModal({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           plate: form.get("plate"),
-          active: form.get("active") !== "false",
+          active: form.get("active") === "on",
         }),
       });
       onSaved(vehicle ? "Veículo atualizado." : "Veículo cadastrado.");
@@ -467,16 +507,19 @@ function VehicleModal({
         <Field label="Placa">
           <input name="plate" defaultValue={vehicle?.plate ?? ""} maxLength={8} required />
         </Field>
-        {vehicle && (
-          <Field label="Situação">
-            <select name="active" defaultValue={vehicle.active ? "true" : "false"}>
-              <option value="true">Ativo</option>
-              <option value="false">Inativo</option>
-            </select>
+        {(
+          <Field label="Ativo">
+<input name="active" type="checkbox" defaultChecked={vehicle?.active ?? true} />
           </Field>
         )}
         {error && <p className="form-error" role="alert">{error}</p>}
         <footer className="modal-actions">
+          {vehicle && <button type="button" className="button danger" disabled={saving} onClick={async () => {
+            if (!window.confirm("Excluir cadastro? Registros com histórico serão preservados.")) return;
+            setSaving(true); setError(null);
+            try { await apiMutation(`/api/fleet/vehicles/${vehicle.id}`, { method: "DELETE" }); onSaved("Cadastro excluído."); }
+            catch(e) { setError(e instanceof Error ? e.message : "Erro ao excluir."); } finally { setSaving(false); }
+          }}>Excluir</button>}
           <button type="button" className="button secondary" onClick={onClose}>Cancelar</button>
           <button className="button primary" disabled={saving}>{saving ? "Salvando…" : "Salvar"}</button>
         </footer>
@@ -486,11 +529,12 @@ function VehicleModal({
 }
 
 function DriverModal({
-  driver,
+  driver, vehicles,
   onClose,
   onSaved,
 }: {
   driver: FleetDriver | null;
+  vehicles: FleetVehicle[];
   onClose: () => void;
   onSaved: (message: string) => void;
 }) {
@@ -507,8 +551,8 @@ function DriverModal({
         method: driver ? "PATCH" : "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          name: form.get("name"),
-          active: form.get("active") !== "false",
+          name: form.get("name"), cpf: form.get("cpf"), address: form.get("address"), phone: form.get("phone"), vehicleId: form.get("vehicleId"),
+          active: form.get("active") === "on",
         }),
       });
       onSaved(driver ? "Motorista atualizado." : "Motorista cadastrado.");
@@ -522,19 +566,26 @@ function DriverModal({
   return (
     <Modal open onClose={onClose} title={driver ? "Editar motorista" : "Novo motorista"}>
       <form className="modal-body form-stack" onSubmit={submit}>
-        <Field label="Nome">
+        <Field label="Nome completo">
           <input name="name" defaultValue={driver?.name ?? ""} required />
         </Field>
-        {driver && (
-          <Field label="Situação">
-            <select name="active" defaultValue={driver.active ? "true" : "false"}>
-              <option value="true">Ativo</option>
-              <option value="false">Inativo</option>
-            </select>
+        <Field label="CPF"><input name="cpf" defaultValue={driver?.cpf ?? ""} maxLength={14} required /></Field>
+        <Field label="Endereço completo"><input name="address" defaultValue={driver?.address ?? ""} maxLength={300} required /></Field>
+        <Field label="Telefone com DDD"><input name="phone" type="tel" defaultValue={driver?.phone ?? ""} required /></Field>
+        <Field label="Veículo vinculado"><select name="vehicleId" defaultValue={driver?.vehicleId ?? ""}><option value="">Sem vínculo</option>{vehicles.map(v => <option key={v.id} value={v.id}>{v.plate}</option>)}</select></Field>
+        {(
+          <Field label="Ativo">
+<input name="active" type="checkbox" defaultChecked={driver?.active ?? true} />
           </Field>
         )}
         {error && <p className="form-error" role="alert">{error}</p>}
         <footer className="modal-actions">
+          {driver && <button type="button" className="button danger" disabled={saving} onClick={async () => {
+            if (!window.confirm("Excluir cadastro? Registros com histórico serão preservados.")) return;
+            setSaving(true); setError(null);
+            try { await apiMutation(`/api/fleet/drivers/${driver.id}`, { method: "DELETE" }); onSaved("Cadastro excluído."); }
+            catch(e) { setError(e instanceof Error ? e.message : "Erro ao excluir."); } finally { setSaving(false); }
+          }}>Excluir</button>}
           <button type="button" className="button secondary" onClick={onClose}>Cancelar</button>
           <button className="button primary" disabled={saving}>{saving ? "Salvando…" : "Salvar"}</button>
         </footer>
@@ -709,6 +760,7 @@ export function FleetScreen() {
   const fleet = api.data?.fleet;
   const [tab, setTab] = useState<FleetTab>("overview");
   const [search, setSearch] = useState("");
+  const [opportunity, setOpportunity] = useState("");
   const [status, setStatus] = useState("");
   const [priority, setPriority] = useState("");
   const [freightModalOpen, setFreightModalOpen] = useState(false);
@@ -737,9 +789,10 @@ export function FleetScreen() {
         freight.destination,
       ].some((value) => value?.toLocaleUpperCase("pt-BR").includes(normalized));
       return matchesSearch && (!status || freight.operationalStatus === status) &&
-        (!priority || freight.priority === priority);
+        (!priority || freight.priority === priority) &&
+        (!opportunity || (opportunity === "matches" ? freight.possibleMatch : opportunity === "open" ? !freight.returnUsed : freight.returnUsed));
     });
-  }, [fleet, priority, search, status]);
+  }, [fleet, priority, search, status, opportunity]);
 
   function openNewFreight() {
     setEditingFreight(null);
@@ -815,7 +868,8 @@ export function FleetScreen() {
   const tabs: Array<{ id: FleetTab; label: string }> = [
     { id: "overview", label: "Visão geral" },
     { id: "freights", label: "Fretes" },
-    { id: "assets", label: "Veículos e custos" },
+    { id: "assets", label: "Veículos e motoristas" },
+    { id: "costs", label: "Custo rateado" },
     { id: "settings", label: "Parâmetros" },
   ];
 
@@ -855,19 +909,19 @@ export function FleetScreen() {
           {tab === "overview" && (
             <>
               <section className="kpi-grid fleet-kpis">
-                <article className="kpi-card"><span>Fretes registrados</span><strong>{fleet.summary.freightCount}</strong><small>Operações cadastradas</small></article>
+                <article className="kpi-card"><span>Fretes registrados</span><strong>{fleet.summary.freightCount}</strong><small>Todo o histórico cadastrado</small></article>
                 <article className="kpi-card"><span>Faturamento total</span><strong>{formatMoney(fleet.summary.revenueCents)}</strong><small>Soma do valor dos fretes</small></article>
-                <article className="kpi-card"><span>Custo total</span><strong>{formatMoney(fleet.summary.totalCostCents)}</strong><small>Combustível, pedágio, motorista e custo fixo</small></article>
+                <article className="kpi-card"><span>Custo total</span><strong>{formatMoney(fleet.summary.totalCostCents)}</strong><small>Custos dos fretes: combustível, pedágio, motorista e fixo rateado; sem somar o histórico mensal novamente</small></article>
                 <article className="kpi-card accent"><span>Margem líquida total</span><strong>{formatMoney(fleet.summary.netRevenueCents)} <em>{formatPercent(fleet.summary.averageMarginBasisPoints)}</em></strong><small>Margem ponderada pelo faturamento</small></article>
               </section>
               <section className="fleet-opportunity-grid">
                 <article className="panel fleet-opportunity-card">
                   <span className="fleet-opportunity-icon"><Icons.map /></span>
-                  <div><span>Possíveis encaixes</span><strong>{fleet.summary.possibleMatchCount}</strong><small>Destino compatível com nova coleta dentro de {fleet.parameters.matchWindowDays} dia{fleet.parameters.matchWindowDays === 1 ? "" : "s"}</small></div>
+                  <div><span>Possíveis encaixes</span><strong>{fleet.summary.possibleMatchCount}</strong><small>Destino compatível com nova coleta dentro de {fleet.parameters.matchWindowDays} dia{fleet.parameters.matchWindowDays === 1 ? "" : "s"}</small><button type="button" className="text-button" onClick={() => { setOpportunity("matches"); setSearch(""); setStatus(""); setPriority(""); setTab("freights"); }}>Abrir encaixes</button></div>
                 </article>
                 <article className="panel fleet-opportunity-card">
                   <span className="fleet-opportunity-icon used"><Icons.truck /></span>
-                  <div><span>Retornos aproveitados</span><strong>{fleet.summary.returnUsedCount}</strong><small>Marcados manualmente pela equipe</small></div>
+                  <div><span>Retornos em aberto</span><strong>{fleet.freights.filter(f => !f.returnUsed).length}</strong><small>{fleet.summary.returnUsedCount} retorno(s) já aproveitado(s)</small><button type="button" className="text-button" onClick={() => { setOpportunity("open"); setSearch(""); setStatus(""); setPriority(""); setTab("freights"); }}>Abrir retornos</button></div>
                 </article>
               </section>
               <section className="panel table-panel">
@@ -876,7 +930,7 @@ export function FleetScreen() {
                   <button type="button" className="text-button" onClick={() => setTab("freights")}>Ver todos</button>
                 </header>
                 {fleet.freights.length ? (
-                  <FreightTable freights={fleet.freights.slice(0, 6)} canManage={fleet.canManage} deletingId={deletingId} onEdit={openEditFreight} onDelete={deleteFreight} />
+                  <FreightTable freights={fleet.freights.slice(0, 6)} canManage={fleet.canManage || fleet.canManagePayments} canDelete={fleet.canManage} deletingId={deletingId} onEdit={openEditFreight} onDelete={deleteFreight} />
                 ) : (
                   <EmptyState title="Nenhum frete cadastrado" description="Cadastre a primeira operação da Frota para iniciar os indicadores." />
                 )}
@@ -890,10 +944,11 @@ export function FleetScreen() {
                 <label><span>Buscar</span><div className="search-input"><Icons.search /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cliente, rota, placa ou motorista" /></div></label>
                 <label><span>Status</span><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">Todos</option>{FLEET_OPERATIONAL_STATUSES.map((item) => <option key={item} value={item}>{FLEET_OPERATIONAL_STATUS_LABELS[item]}</option>)}</select></label>
                 <label><span>Prioridade</span><select value={priority} onChange={(event) => setPriority(event.target.value)}><option value="">Todas</option>{FLEET_PRIORITIES.map((item) => <option key={item} value={item}>{FLEET_PRIORITY_LABELS[item]}</option>)}</select></label>
+                <label><span>Encaixes e retornos</span><select value={opportunity} onChange={event => setOpportunity(event.target.value)}><option value="">Todos</option><option value="matches">Possíveis encaixes</option><option value="open">Retornos em aberto</option><option value="used">Retornos aproveitados</option></select></label>
                 <div className="filter-stat"><strong>{filteredFreights.length}</strong><span>frete{filteredFreights.length === 1 ? "" : "s"}</span></div>
               </section>
               <section className="panel table-panel">
-                <FreightTable freights={filteredFreights} canManage={fleet.canManage} deletingId={deletingId} onEdit={openEditFreight} onDelete={deleteFreight} />
+                <FreightTable freights={filteredFreights} canManage={fleet.canManage || fleet.canManagePayments} canDelete={fleet.canManage} deletingId={deletingId} onEdit={openEditFreight} onDelete={deleteFreight} />
               </section>
             </>
           )}
@@ -902,29 +957,52 @@ export function FleetScreen() {
             <div className="fleet-assets-stack">
               <section className="panel table-panel">
                 <header className="fleet-panel-header">
-                  <div><span className="eyebrow">Cadastro</span><h2>Veículos da frota</h2><p>A média por km usa o histórico mensal de cada placa.</p></div>
+                  <div><span className="eyebrow">Cadastro</span><h2>Veículos da frota</h2><p>Cadastre as placas e vincule os motoristas abaixo.</p></div>
                   {fleet.canManage && <button type="button" className="button primary" onClick={() => openVehicle(null)}><Icons.plus /> Novo veículo</button>}
                 </header>
                 <div className="responsive-table">
                   <table>
-                    <thead><tr><th>Placa</th><th>Custo médio por km</th><th>Meses calculados</th><th>Situação</th>{fleet.canManage && <th><span className="sr-only">Ações</span></th>}</tr></thead>
+                    <thead><tr><th>Placa</th><th>Situação</th>{fleet.canManage && <th><span className="sr-only">Ações</span></th>}</tr></thead>
                     <tbody>
                       {fleet.vehicles.map((vehicle) => (
                         <tr key={vehicle.id}>
                           <td data-label="Placa"><strong>{vehicle.plate}</strong></td>
-                          <td data-label="Custo médio por km"><strong>{formatRate(vehicle.averageCostPerKmCents)}</strong></td>
-                          <td data-label="Meses calculados">{vehicle.costs.length}</td>
                           <td data-label="Situação"><StatusBadge status={vehicle.active ? "ATIVO" : "INATIVO"} /></td>
-                          {fleet.canManage && <td data-label="Ações"><div className="table-actions"><button type="button" className="button secondary compact-button" onClick={() => openCost(null, vehicle.id)}>Adicionar custo</button><button type="button" className="button secondary compact-button" onClick={() => openVehicle(vehicle)}>Editar</button></div></td>}
+                          {fleet.canManage && <td data-label="Ações"><div className="table-actions"><button type="button" className="button secondary compact-button" onClick={() => openVehicle(vehicle)}>Editar</button></div></td>}
                         </tr>
                       ))}
-                      {!fleet.vehicles.length && <tr><td colSpan={fleet.canManage ? 5 : 4} className="empty-cell">Nenhum veículo cadastrado.</td></tr>}
+                      {!fleet.vehicles.length && <tr><td colSpan={fleet.canManage ? 3 : 2} className="empty-cell">Nenhum veículo cadastrado.</td></tr>}
                     </tbody>
                   </table>
                 </div>
               </section>
 
+
               <section className="panel table-panel">
+                <header className="fleet-panel-header">
+                  <div><span className="eyebrow">Equipe</span><h2>Motoristas</h2></div>
+                  {fleet.canManage && <button type="button" className="button secondary" onClick={() => openDriver(null)}><Icons.plus /> Novo motorista</button>}
+                </header>
+                <div className="responsive-table">
+                  <table>
+                    <thead><tr><th>Nome / contato</th><th>Veículo</th><th>Situação</th>{fleet.canManage && <th><span className="sr-only">Ações</span></th>}</tr></thead>
+                    <tbody>
+                      {fleet.drivers.map((driver) => (
+                        <tr key={driver.id}>
+                          <td data-label="Nome / contato"><strong>{driver.name}</strong><small>{driver.cpf ?? "CPF pendente"} · {driver.phone ?? "Telefone pendente"}</small><small>{driver.address}</small></td><td data-label="Veículo">{fleet.vehicles.find(v => v.id === driver.vehicleId)?.plate ?? "Sem vínculo"}</td>
+                          <td data-label="Situação"><StatusBadge status={driver.active ? "ATIVO" : "INATIVO"} /></td>
+                          {fleet.canManage && <td data-label="Ações"><div className="table-actions"><button type="button" className="button secondary compact-button" onClick={() => openDriver(driver)}>Editar</button></div></td>}
+                        </tr>
+                      ))}
+                      {!fleet.drivers.length && <tr><td colSpan={fleet.canManage ? 4 : 3} className="empty-cell">Nenhum motorista cadastrado.</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+          )}
+
+          {tab === "costs" && (<div className="fleet-assets-stack">              <section className="panel table-panel">
                 <header className="fleet-panel-header">
                   <div><span className="eyebrow">Custo rateado</span><h2>Histórico mensal por veículo</h2></div>
                   {fleet.canManage && <button type="button" className="button secondary" onClick={() => openCost(null, null)}><Icons.plus /> Novo custo</button>}
@@ -948,30 +1026,7 @@ export function FleetScreen() {
                   </table>
                 </div>
               </section>
-
-              <section className="panel table-panel">
-                <header className="fleet-panel-header">
-                  <div><span className="eyebrow">Equipe</span><h2>Motoristas</h2></div>
-                  {fleet.canManage && <button type="button" className="button secondary" onClick={() => openDriver(null)}><Icons.plus /> Novo motorista</button>}
-                </header>
-                <div className="responsive-table">
-                  <table>
-                    <thead><tr><th>Nome</th><th>Situação</th>{fleet.canManage && <th><span className="sr-only">Ações</span></th>}</tr></thead>
-                    <tbody>
-                      {fleet.drivers.map((driver) => (
-                        <tr key={driver.id}>
-                          <td data-label="Nome"><strong>{driver.name}</strong></td>
-                          <td data-label="Situação"><StatusBadge status={driver.active ? "ATIVO" : "INATIVO"} /></td>
-                          {fleet.canManage && <td data-label="Ações"><div className="table-actions"><button type="button" className="button secondary compact-button" onClick={() => openDriver(driver)}>Editar</button></div></td>}
-                        </tr>
-                      ))}
-                      {!fleet.drivers.length && <tr><td colSpan={fleet.canManage ? 3 : 2} className="empty-cell">Nenhum motorista cadastrado.</td></tr>}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-            </div>
-          )}
+</div>)}
 
           {tab === "settings" && (
             <SettingsPanel key={fleet.parameters.updatedAt ?? "default"} fleet={fleet} onSaved={finishMutation} />
@@ -986,7 +1041,7 @@ export function FleetScreen() {
         <VehicleModal key={editingVehicle?.id ?? "new"} vehicle={editingVehicle} onClose={() => setVehicleModalOpen(false)} onSaved={finishMutation} />
       )}
       {driverModalOpen && (
-        <DriverModal key={editingDriver?.id ?? "new"} driver={editingDriver} onClose={() => setDriverModalOpen(false)} onSaved={finishMutation} />
+        <DriverModal vehicles={fleet?.vehicles ?? []} key={editingDriver?.id ?? "new"} driver={editingDriver} onClose={() => setDriverModalOpen(false)} onSaved={finishMutation} />
       )}
       {costModalOpen && fleet && (
         <CostModal key={editingCost?.id ?? `new-${costVehicleId ?? "none"}`} cost={editingCost} defaultVehicleId={costVehicleId} vehicles={fleet.vehicles} onClose={() => setCostModalOpen(false)} onSaved={finishMutation} />

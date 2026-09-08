@@ -11,8 +11,8 @@ export async function POST(request: Request) {
     const db = await getD1();
     await db.batch([
       db
-        .prepare("insert into fleet_drivers (id, name, active) values (?, ?, ?)")
-        .bind(id, data.name, data.active ? 1 : 0),
+        .prepare("insert into fleet_drivers (id, name, active, cpf, address, phone, vehicle_id) values (?, ?, ?, ?, ?, ?, ?)")
+        .bind(id, data.name, data.active ? 1 : 0, data.cpf, data.address, data.phone, data.vehicleId),
       db
         .prepare(
           `insert into audit_logs (
