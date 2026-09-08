@@ -29,12 +29,13 @@ export async function billingOverview() {
  const state = await billingStatus();
  const rows = await periods();
  const calendar = billingCalendar();
- const nextWindow = state.nextUnpaid ? paymentWindow(state.nextUnpaid) : null;
+ const nextUnpaid = "nextUnpaid" in state ? state.nextUnpaid : null;
+ const nextWindow = nextUnpaid ? paymentWindow(nextUnpaid) : null;
  return { ...state, companyName: config.companyName, amountCents: billingAmountCents(),
   subscriptionConfigured: Boolean(process.env.MERCADO_PAGO_PLAN_ID),
   subscriptionBound: Boolean(process.env.MERCADO_PAGO_SUBSCRIPTION_ID),
   paymentConfigured: Boolean(process.env.MERCADO_PAGO_ACCESS_TOKEN && process.env.MERCADO_PAGO_COLLECTOR_ID),
-  paymentAvailable: Boolean(nextWindow?.available && state.nextUnpaid <= calendar.dueCompetency),
+  paymentAvailable: Boolean(nextWindow?.available && nextUnpaid && nextUnpaid <= calendar.dueCompetency),
   paymentOpensOn: nextWindow?.opensOn ?? null,
   periods: rows.map(p => ({ competency: p.competency, paid: p.paid, approvedAt: p.approvedAt,
    scheduled: p.paid && p.competency > calendar.activeCompetency,
