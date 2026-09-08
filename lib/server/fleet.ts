@@ -35,7 +35,9 @@ type VehicleRow = {
 };
 
 type DriverRow = {
-  cpf: string | null; address: string | null; phone: string | null; vehicleId: string | null;
+  cpf: string | null;
+  address: string | null;
+  phone: string | null;
   id: string;
   name: string;
   active: number;
@@ -50,7 +52,9 @@ type VehicleCostRow = {
 };
 
 type FreightRow = {
-  paymentStatus: "EM_ABERTO" | "PAGO"; originCep: string | null; destinationCep: string | null;
+  paymentStatus: "EM_ABERTO" | "PAGO";
+  originCep: string | null;
+  destinationCep: string | null;
   id: string;
   vehicleId: string | null;
   vehiclePlate: string;
@@ -104,7 +108,7 @@ export async function loadFleetData(
          order by active desc, plate`,
       ),
       queryAll<DriverRow>(
-        `select id, name, active, cpf, address, phone, vehicle_id as vehicleId from fleet_drivers
+        `select id, name, active, cpf, address, phone from fleet_drivers
          order by active desc, name`,
       ),
       queryAll<VehicleCostRow>(
@@ -160,6 +164,7 @@ export async function loadFleetData(
   );
   const drivers: FleetDriver[] = driverRows.map((row) => ({
     ...row,
+    vehicleId: null,
     active: Boolean(row.active),
   }));
 
