@@ -10,6 +10,7 @@ export async function migrateDatabase(configuration) {
     "002_fleet.sql",
     "003_fleet_billing.sql",
     "004_operational_role.sql",
+    "005_detach_driver_vehicle.sql",
   ];
   const migrations = await Promise.all(
     migrationFiles.map((file) =>
