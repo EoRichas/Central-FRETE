@@ -4,7 +4,7 @@ import { ApiError, getD1, jsonError, queryAll } from "@/lib/server/d1";
 import { createPasswordCredential } from "@/lib/server/local-session";
 import { asObject, enumValue, requiredUpper } from "@/lib/server/validation";
 
-const ASSIGNABLE_ROLES = ["ADMIN", "VENDEDOR", "FINANCEIRO"] as const;
+const ASSIGNABLE_ROLES = ["ADMIN", "VENDEDOR", "FINANCEIRO", "OPERACIONAL"] as const;
 
 function usernameValue(value: unknown) {
   const username = String(value ?? "").trim().toLowerCase();
