@@ -12,6 +12,8 @@ type Billing = {
  subscriptionConfigured?: boolean;
  subscriptionBound?: boolean;
  paymentConfigured?: boolean;
+ paymentAvailable?: boolean;
+ paymentOpensOn?: string | null;
  periods: { competency: string; paid: boolean; scheduled: boolean; active: boolean; licenseKey: string | null; approvedAt: string | null }[];
 };
 
@@ -42,8 +44,9 @@ export function BillingScreen() {
  if (api.error) return <ErrorState message={api.error} retry={api.refresh} />;
  const b = api.data?.billing; if (!b) return null;
 
- const canSubscribe = Boolean(b.paymentConfigured && b.subscriptionConfigured && !b.subscriptionBound);
- const canPayPix = Boolean(b.paymentConfigured && !b.subscriptionBound);
+ const canSubscribe = Boolean(b.paymentAvailable && b.paymentConfigured && b.subscriptionConfigured && !b.subscriptionBound);
+ const canPayPix = Boolean(b.paymentAvailable && b.paymentConfigured && !b.subscriptionBound);
+ const opensOn = b.paymentOpensOn ? b.paymentOpensOn.split("-").reverse().join("/") : null;
 
  return <div className="fleet-stack">
   <PageHeader eyebrow="Licença mensal" title="Certificado digital" description="Pagamento, validade da licença e certificados da Central Frete." />
@@ -53,6 +56,7 @@ export function BillingScreen() {
    {!b.enabled ? <p>A cobrança mensal ainda não foi ativada. O acesso ao sistema permanece disponível.</p> : <>
     <p role="status">{b.alert ?? (b.blocked ? "Acesso suspenso por mensalidade pendente." : "Acompanhe sua licença e os pagamentos abaixo.")}</p>
     {b.nextUnpaid && <p>Próxima competência pendente: {b.nextUnpaid}</p>}
+    {!b.paymentAvailable && opensOn && <p className="form-help">O pagamento desta competência será liberado em {opensOn}, cinco dias antes do vencimento.</p>}
 
     {!b.subscriptionBound ? <div className="billing-payment-options">
      <div className="billing-payment-option">
@@ -68,7 +72,7 @@ export function BillingScreen() {
      </div>
     </div> : <p>Assinatura recorrente vinculada. O Pix mensal fica indisponível para evitar cobrança duplicada.</p>}
 
-    <p>O acesso é atualizado após a confirmação do Mercado Pago. Pagamentos antecipados renovam a chave no dia 05.</p>
+    <p>O acesso é atualizado após a confirmação do Mercado Pago. A nova competência passa a valer no dia 05.</p>
    </>}
    {error && <p role="alert" className="form-error">{error}</p>}
   </section>
