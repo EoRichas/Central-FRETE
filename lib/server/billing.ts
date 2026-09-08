@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
-import { MONTHLY_AMOUNT_CENTS, billingCalendar, competenciesBetween, licenseState, shiftMonth, saoPauloDate, validCompetency } from "@/lib/domain/billing";
+import { billingCalendar, competenciesBetween, licenseState, shiftMonth, saoPauloDate, validCompetency } from "@/lib/domain/billing";
 import { ApiError, getD1, queryAll, queryFirst } from "@/lib/server/d1";
-import { billingConfig, billingEnabled } from "@/lib/server/billing-config";
+import { billingAmountCents, billingConfig, billingEnabled } from "@/lib/server/billing-config";
 import { mercadoPago, type MpPayment } from "@/lib/server/mercado-pago";
 export type BillingPeriod = { competency: string; licenseKey: string; externalReference: string; checkoutUrl: string | null; paid: boolean; approvedAt: string | null };
 export async function periods(): Promise<BillingPeriod[]> {
@@ -29,7 +29,7 @@ export async function billingOverview() {
  const state = await billingStatus();
  const rows = await periods();
  const calendar = billingCalendar();
- return { ...state, companyName: config.companyName, amountCents: MONTHLY_AMOUNT_CENTS,
+ return { ...state, companyName: config.companyName, amountCents: billingAmountCents(),
   subscriptionConfigured: Boolean(process.env.MERCADO_PAGO_PLAN_ID),
   subscriptionBound: Boolean(process.env.MERCADO_PAGO_SUBSCRIPTION_ID),
   paymentConfigured: Boolean(process.env.MERCADO_PAGO_ACCESS_TOKEN && process.env.MERCADO_PAGO_COLLECTOR_ID),
@@ -43,7 +43,7 @@ export async function reconcilePayment(id: string, subscriptionCompetency?: stri
  if (!/^\d+$/.test(id)) throw new ApiError(400, "Identificador inválido.");
  const config = billingConfig();
  const payment = await mercadoPago<MpPayment>(`/v1/payments/${id}`);
- if (String(payment.id) !== id || String(payment.collector_id) !== process.env.MERCADO_PAGO_COLLECTOR_ID || payment.currency_id !== "BRL" || Math.round(Number(payment.transaction_amount) * 100) !== MONTHLY_AMOUNT_CENTS || payment.live_mode !== (process.env.MERCADO_PAGO_MODE !== "test")) throw new ApiError(400, "Pagamento não corresponde à mensalidade configurada.");
+ if (String(payment.id) !== id || String(payment.collector_id) !== process.env.MERCADO_PAGO_COLLECTOR_ID || payment.currency_id !== "BRL" || Math.round(Number(payment.transaction_amount) * 100) !== billingAmountCents() || payment.live_mode !== (process.env.MERCADO_PAGO_MODE !== "test")) throw new ApiError(400, "Pagamento não corresponde à mensalidade configurada.");
  const external = payment.external_reference ?? "";
  const existing = await queryFirst<{ competency: string }>("select competency from billing_payments where payment_id=? and company_id=?", [id, config.companyId]);
  let competency = existing?.competency ?? subscriptionCompetency;
@@ -65,8 +65,6 @@ export async function reconcilePayment(id: string, subscriptionCompetency?: stri
 export async function reconcileSubscriptionPayment(id: string) {
  if (!/^\d+$/.test(id)) throw new ApiError(400, "Identificador inválido.");
  const invoice = await mercadoPago<{ preapproval_id: string; debit_date: string; payment?: { id: number } }>(`/authorized_payments/${id}`);
- // A plan link is shared by many customers: only the owner-provisioned
- // subscription can activate this company's license.
  if (!process.env.MERCADO_PAGO_SUBSCRIPTION_ID || invoice.preapproval_id !== process.env.MERCADO_PAGO_SUBSCRIPTION_ID) return { ignored: true };
  const subscription = await mercadoPago<{ preapproval_plan_id: string; payer_email: string }>(`/preapproval/${encodeURIComponent(invoice.preapproval_id)}`);
  if (subscription.preapproval_plan_id !== process.env.MERCADO_PAGO_PLAN_ID || !process.env.BILLING_PAYER_EMAIL || subscription.payer_email.toLowerCase() !== process.env.BILLING_PAYER_EMAIL.toLowerCase()) throw new ApiError(400, "Assinatura não corresponde à empresa.");
@@ -79,12 +77,9 @@ export async function runBillingMaintenance() {
  const config = billingConfig();
  const calendar = billingCalendar();
  for (const month of competenciesBetween(config.firstCompetency, calendar.dueCompetency)) await ensurePeriod(month);
- // Reconcile existing transactions as well as notifications: refunds cannot
- // silently leave a previously paid license enabled.
  const known = await queryAll<{ paymentId: string }>("select payment_id as paymentId from billing_payments where company_id=? order by updated_at asc limit 5", [config.companyId]);
  let failures = 0;
  for (const p of known) try { await reconcilePayment(p.paymentId); } catch { failures++; }
- // Recover missed checkout notifications by the immutable monthly reference.
  const rows = await periods();
  for (const p of rows.filter(p => !p.paid).slice(-3)) {
   try {
