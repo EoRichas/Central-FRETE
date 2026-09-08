@@ -2,7 +2,22 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { billingCalendar, licenseState, shiftMonth, canUseBillingPath } from "../lib/domain/billing.ts";
 import { validCpf } from "../lib/domain/identity.ts";
+import { billingAmountCents } from "../lib/server/billing-config.ts";
 import { licensePdf } from "../lib/server/license-pdf.ts";
+
+test("modo de teste cobra R$ 1,00 e produção preserva R$ 149,99", () => {
+ const previous = process.env.MERCADO_PAGO_MODE;
+ try {
+  process.env.MERCADO_PAGO_MODE = "test";
+  assert.equal(billingAmountCents(), 100);
+  process.env.MERCADO_PAGO_MODE = "production";
+  assert.equal(billingAmountCents(), 14_999);
+ } finally {
+  if (previous === undefined) delete process.env.MERCADO_PAGO_MODE;
+  else process.env.MERCADO_PAGO_MODE = previous;
+ }
+});
+
 test("alerta cinco dias antes respeita mês curto e ano bissexto", () => {
  assert.equal(billingCalendar(new Date("2026-02-28T15:00Z")).daysUntilDue, 5);
  assert.match(licenseState("2026-02", ["2026-02"], new Date("2026-02-28T15:00Z")).alert!, /Faltam 5 dias/);
