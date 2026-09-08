@@ -1,0 +1,32 @@
+.fleet-kpis {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.fleet-opportunity-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.fleet-opportunity-icon.allocated {
+  color: var(--teal);
+  background: var(--blue-soft);
+}
+
+.fleet-form-preview {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+@media (max-width: 1020px) {
+  .fleet-kpis,
+  .fleet-opportunity-grid,
+  .fleet-form-preview {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .fleet-kpis,
+  .fleet-opportunity-grid,
+  .fleet-form-preview {
+    grid-template-columns: 1fr;
+  }
+}
