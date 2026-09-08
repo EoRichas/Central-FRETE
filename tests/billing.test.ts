@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { billingCalendar, licenseState, shiftMonth, canUseBillingPath, subscriptionPaymentCompetency } from "../lib/domain/billing.ts";
+import { billingCalendar, licenseState, shiftMonth, canUseBillingPath, subscriptionPaymentCompetency, paymentWindow } from "../lib/domain/billing.ts";
 import { validCpf } from "../lib/domain/identity.ts";
 import { billingAmountCents } from "../lib/server/billing-config.ts";
 import { planMatchesBillingMode, type MpPlan } from "../lib/server/mercado-pago.ts";
@@ -66,6 +66,15 @@ test("plano de teste aceita R$ 1 sem dia fixo e produção continua exigindo dia
 test("assinatura imediata de teste quita a próxima competência, não o mês corrente", () => {
  assert.equal(subscriptionPaymentCompetency("2026-09", "2026-10", true), "2026-10");
  assert.equal(subscriptionPaymentCompetency("2026-10", "2026-10", false), "2026-10");
+});
+
+test("pagamento abre cinco dias antes e permanece disponível após o vencimento", () => {
+ assert.equal(paymentWindow("2026-10", new Date("2026-09-29T15:00Z")).available, false);
+ assert.equal(paymentWindow("2026-10", new Date("2026-09-30T15:00Z")).available, true);
+ assert.equal(paymentWindow("2026-10", new Date("2026-10-05T15:00Z")).available, true);
+ const overdue = paymentWindow("2026-10", new Date("2026-10-06T15:00Z"));
+ assert.equal(overdue.available, true);
+ assert.equal(overdue.overdue, true);
 });
 
 test("alerta cinco dias antes respeita mês curto e ano bissexto", () => {

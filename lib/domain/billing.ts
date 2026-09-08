@@ -18,6 +18,15 @@ export function billingCalendar(now = new Date()) {
  const daysUntilDue = Math.round((Date.parse(`${dueDate}T12:00:00Z`) - Date.parse(`${today}T12:00:00Z`)) / 86400000);
  return { today, month, activeCompetency, dueCompetency, dueDate, daysUntilDue };
 }
+export function paymentWindow(competency: string, now = new Date()) {
+ if (!validCompetency(competency)) throw new Error("Competência inválida.");
+ const today = saoPauloDate(now);
+ const dueDate = `${competency}-05`;
+ const opensAt = new Date(`${dueDate}T12:00:00Z`);
+ opensAt.setUTCDate(opensAt.getUTCDate() - 5);
+ const opensOn = opensAt.toISOString().slice(0, 10);
+ return { available: today >= opensOn, opensOn, dueDate, overdue: today > dueDate };
+}
 export function competenciesBetween(first: string, last: string) {
  const months: string[] = [];
  if (!validCompetency(first) || !validCompetency(last)) throw new Error("Competência inválida.");

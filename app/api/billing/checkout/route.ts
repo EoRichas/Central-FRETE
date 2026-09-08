@@ -1,5 +1,5 @@
 import { authorize } from "@/lib/server/auth";
-import { billingCalendar, licenseState } from "@/lib/domain/billing";
+import { billingCalendar, licenseState, paymentWindow } from "@/lib/domain/billing";
 import { appUrl, billingAmountCents, billingConfig, billingEnabled } from "@/lib/server/billing-config";
 import { ensurePeriod, periods } from "@/lib/server/billing";
 import { mercadoPago, verifiedPlan } from "@/lib/server/mercado-pago";
@@ -25,6 +25,10 @@ export async function POST(request: Request) {
   const config = billingConfig();
   const rows = await periods();
   const state = licenseState(config.firstCompetency, rows.filter(p => p.paid).map(p => p.competency));
+  const competency = state.nextUnpaid;
+  if (competency > billingCalendar().dueCompetency) throw new ApiError(409, "As mensalidades disponíveis já estão pagas.");
+  const window = paymentWindow(competency);
+  if (!window.available) throw new ApiError(409, `Pagamento disponível a partir de ${window.opensOn.split("-").reverse().join("/")}.`);
 
   if (mode === "subscription") {
    const plan = await verifiedPlan();
@@ -34,8 +38,6 @@ export async function POST(request: Request) {
 
   if (process.env.MERCADO_PAGO_SUBSCRIPTION_ID) throw new ApiError(409, "Existe uma assinatura recorrente vinculada. O Pix mensal fica indisponível para evitar cobrança duplicada.");
 
-  const competency = state.nextUnpaid;
-  if (competency > billingCalendar().dueCompetency) throw new ApiError(409, "As mensalidades disponíveis já estão pagas.");
   await ensurePeriod(competency);
   const period = (await periods()).find(p => p.competency === competency)!;
   if (period.paid) return Response.json({ url: `${appUrl()}/certificado`, mode });
