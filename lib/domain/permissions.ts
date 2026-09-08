@@ -1,4 +1,4 @@
-export type PermissionRole = "ADMIN" | "GERENCIA" | "VENDEDOR" | "FINANCEIRO";
+export type PermissionRole = "ADMIN" | "GERENCIA" | "VENDEDOR" | "FINANCEIRO" | "OPERACIONAL";
 
 export type Capability =
   | "VIEW_ALL"
@@ -20,6 +20,7 @@ const grants: Record<PermissionRole, ReadonlySet<Capability>> = {
   GERENCIA: new Set(["VIEW_ALL"]),
   VENDEDOR: new Set(["MANAGE_SALES", "MANAGE_CLIENTS"]),
   FINANCEIRO: new Set(["VIEW_ALL", "MANAGE_PAYMENTS"]),
+  OPERACIONAL: new Set(),
 };
 
 export function roleCan(role: PermissionRole, capability: Capability): boolean {
