@@ -48,7 +48,7 @@ async function freightSnapshot(id: string) {
 
 export async function PATCH(request: Request, context: RouteContext) {
   try {
-    const user = await authorize(request, ["ADMIN", "GERENCIA"]);
+    const user = await authorize(request, ["ADMIN", "GERENCIA", "OPERACIONAL"]);
     const { id } = await context.params;
     const previous = await freightSnapshot(id);
     if (!previous) throw new ApiError(404, "Frete da frota não encontrado.");
