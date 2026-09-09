@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { apiMutation, useApi } from "@/components/use-api";
 import { ErrorState, LoadingState, PageHeader } from "@/components/ui";
+import { PaymentActionButton } from "@/components/payment-action-button";
 
 type Billing = {
  enabled: boolean;
@@ -63,13 +64,13 @@ export function BillingScreen() {
      <div className="billing-payment-option">
       <h3>Assinatura automática</h3>
       <p>R$ 149,99 por mês. A cobrança recorrente fica vinculada à sua conta Mercado Pago.</p>
-      <button className="button primary" disabled={Boolean(busy) || !canSubscribe} onClick={() => pay("subscription")}>{busy === "subscription" ? "Abrindo…" : "Assinar automaticamente"}</button>
+      <PaymentActionButton disabled={Boolean(busy) || !canSubscribe} onClick={() => pay("subscription")}>{busy === "subscription" ? "Abrindo…" : "Assinar automaticamente"}</PaymentActionButton>
       {!b.subscriptionConfigured && <p className="form-help">Plano recorrente ainda não configurado.</p>}
      </div>
      <div className="billing-payment-option">
       <h3>Pix mensal</h3>
       <p>Pague somente a competência atual por Pix, sem criar cobrança automática.</p>
-      <button className="button secondary" disabled={Boolean(busy) || !canPayPix} onClick={() => pay("pix")}>{busy === "pix" ? "Abrindo…" : "Pagar via Pix"}</button>
+      <PaymentActionButton disabled={Boolean(busy) || !canPayPix} onClick={() => pay("pix")}>{busy === "pix" ? "Abrindo…" : "Pagar via Pix"}</PaymentActionButton>
      </div>
     </div> : <p>Assinatura recorrente vinculada. O Pix mensal fica indisponível para evitar cobrança duplicada.</p>}
 
