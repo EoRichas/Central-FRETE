@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { billingCalendar, licenseState, shiftMonth, canUseBillingPath, subscriptionPaymentCompetency, paymentWindow } from "../lib/domain/billing.ts";
+import { billingCalendar, initialGraceCompetency, licenseState, shiftMonth, canUseBillingPath, subscriptionPaymentCompetency, paymentWindow } from "../lib/domain/billing.ts";
 import { validCpf } from "../lib/domain/identity.ts";
 import { billingAmountCents } from "../lib/server/billing-config.ts";
 import { planMatchesBillingMode, type MpPlan } from "../lib/server/mercado-pago.ts";
-import { licensePdf } from "../lib/server/license-pdf.ts";
+import { LICENSE_HOLDER, licensePdf } from "../lib/server/license-pdf.ts";
 
 test("modo de teste cobra R$ 1,00 e produção preserva R$ 149,99", () => {
  const previous = process.env.MERCADO_PAGO_MODE;
@@ -135,4 +135,23 @@ test("setembro liberado e primeira mensalidade em 05/10/2026", () => {
  assert.equal(prepaid.activeCompetency, "2026-09");
  assert.equal(prepaid.blocked, false);
  assert.equal(licenseState("2026-10", ["2026-10"], new Date("2026-10-06T03:00Z")).blocked, false);
+});
+
+test("certificado da carência usa apenas o mês anterior à primeira cobrança", () => {
+ assert.equal(initialGraceCompetency("2026-10", new Date("2026-09-04T15:00Z")), null);
+ assert.equal(initialGraceCompetency("2026-10", new Date("2026-09-09T15:00Z")), "2026-09");
+ assert.equal(initialGraceCompetency("2026-10", new Date("2026-11-09T15:00Z")), "2026-09");
+ assert.equal(licenseState("2026-10", [], new Date("2026-10-06T15:00Z")).blocked, true);
+});
+
+test("PDF da carência identifica titular e CNPJ sem data de pagamento", () => {
+ const pdf = Buffer.from(licensePdf({companyName: LICENSE_HOLDER.name, companyCnpj: LICENSE_HOLDER.cnpj, competency: "2026-09", approvedAt: null, licenseKey: null, gracePeriod: true, status: "active"})).toString("latin1");
+ assert.ok(pdf.includes("Central Express Transportes LTDA"));
+ assert.ok(pdf.includes("33.958.561/0001-57"));
+ assert.ok(pdf.includes("Pagamento concluído"));
+ assert.ok(pdf.includes("Mensalidade dispensada"));
+ assert.ok(pdf.includes("05/10/2026"));
+ assert.ok(!pdf.includes("PAGAMENTO CONFIRMADO EM"));
+ assert.ok(!pdf.includes("Confirmado no sistema"));
+ assert.ok(!pdf.includes("CHAVE DA LICENÇA"));
 });

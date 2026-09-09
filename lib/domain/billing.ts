@@ -27,6 +27,10 @@ export function paymentWindow(competency: string, now = new Date()) {
  const opensOn = opensAt.toISOString().slice(0, 10);
  return { available: today >= opensOn, opensOn, dueDate, overdue: today > dueDate };
 }
+export function initialGraceCompetency(firstCompetency: string, now = new Date()) {
+ const competency = shiftMonth(firstCompetency, -1);
+ return competency <= billingCalendar(now).activeCompetency ? competency : null;
+}
 export function competenciesBetween(first: string, last: string) {
  const months: string[] = [];
  if (!validCompetency(first) || !validCompetency(last)) throw new Error("Competência inválida.");

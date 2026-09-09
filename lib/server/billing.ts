@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { billingCalendar, competenciesBetween, licenseState, paymentWindow, shiftMonth, saoPauloDate, subscriptionPaymentCompetency, validCompetency } from "@/lib/domain/billing";
+import { billingCalendar, competenciesBetween, initialGraceCompetency, licenseState, paymentWindow, shiftMonth, saoPauloDate, subscriptionPaymentCompetency, validCompetency } from "@/lib/domain/billing";
 import { ApiError, getD1, queryAll, queryFirst } from "@/lib/server/d1";
 import { billingAmountCents, billingConfig, billingEnabled, billingTestMode } from "@/lib/server/billing-config";
 import { mercadoPago, type MpPayment } from "@/lib/server/mercado-pago";
@@ -31,7 +31,9 @@ export async function billingOverview() {
  const calendar = billingCalendar();
  const nextUnpaid = "nextUnpaid" in state ? state.nextUnpaid : null;
  const nextWindow = nextUnpaid ? paymentWindow(nextUnpaid) : null;
+ const graceCompetency = initialGraceCompetency(config.firstCompetency);
  return { ...state, companyName: config.companyName, amountCents: billingAmountCents(),
+  graceCertificate: graceCompetency ? { competency: graceCompetency, active: graceCompetency === calendar.activeCompetency && !state.blocked } : null,
   subscriptionConfigured: Boolean(process.env.MERCADO_PAGO_PLAN_ID),
   subscriptionBound: Boolean(process.env.MERCADO_PAGO_SUBSCRIPTION_ID),
   paymentConfigured: Boolean(process.env.MERCADO_PAGO_ACCESS_TOKEN && process.env.MERCADO_PAGO_COLLECTOR_ID),
