@@ -1,0 +1,93 @@
+.payBtn {
+  position: relative;
+  min-height: 46px;
+  padding: 0 18px;
+  font-size: 14px;
+  background: #1a1a1a;
+  color: white;
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: transform .3s ease, box-shadow .3s ease, background .3s ease;
+}
+
+.payBtn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  background: #111;
+  box-shadow: 0 7px 18px rgb(0 0 0 / 24%);
+}
+
+.payBtn:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+
+.iconContainer {
+  position: relative;
+  width: 24px;
+  height: 24px;
+}
+
+.icon {
+  position: absolute;
+  inset: 0;
+  width: 24px;
+  height: 24px;
+  color: #22c55e;
+  opacity: 0;
+  visibility: hidden;
+}
+
+.walletIcon {
+  opacity: 1;
+  visibility: visible;
+}
+
+.payBtn:hover:not(:disabled) .walletIcon {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.payBtn:hover:not(:disabled) .cardIcon { animation: iconRotate 2.5s infinite; animation-delay: 0s; }
+.payBtn:hover:not(:disabled) .paymentIcon { animation: iconRotate 2.5s infinite; animation-delay: .5s; }
+.payBtn:hover:not(:disabled) .dollarIcon { animation: iconRotate 2.5s infinite; animation-delay: 1s; }
+.payBtn:hover:not(:disabled) .checkIcon { animation: iconRotate 2.5s infinite; animation-delay: 1.5s; }
+
+.payBtn:active:not(:disabled) .icon {
+  animation: none;
+  opacity: 0;
+  visibility: hidden;
+}
+
+.payBtn:active:not(:disabled) .checkIcon {
+  animation: checkmarkAppear .6s ease forwards;
+  visibility: visible;
+}
+
+.btnText { font-weight: 700; font-family: inherit; white-space: nowrap; }
+
+@keyframes iconRotate {
+  0% { opacity: 0; visibility: hidden; transform: translateY(10px) scale(.5); }
+  5%, 15% { opacity: 1; visibility: visible; transform: translateY(0) scale(1); }
+  20%, 100% { opacity: 0; visibility: hidden; transform: translateY(-10px) scale(.5); }
+}
+
+@keyframes checkmarkAppear {
+  0% { opacity: 0; transform: scale(.5) rotate(-45deg); }
+  50% { opacity: .5; transform: scale(1.2) rotate(0deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+
+@media (max-width: 700px) {
+  .payBtn { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .payBtn, .icon { transition: none; }
+  .payBtn:hover:not(:disabled) .icon,
+  .payBtn:active:not(:disabled) .checkIcon { animation: none; }
+}

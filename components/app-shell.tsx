@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { CurrentUser, Role } from "@/lib/contracts";
 import { Icons } from "@/components/icons";
+import { TruckLoader } from "@/components/truck-loader";
 
 function roleLabel(role: Role) {
   return role === "GERENCIA" ? "PERFIL LEGADO" : role;
@@ -107,7 +108,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <header className="topbar"><button className="mobile-menu" onClick={() => setMobileOpen(true)} aria-label="Abrir menu"><Icons.menu /></button><div><span className="topbar-eyebrow">Central Express</span><strong>{currentLabel}</strong></div></header>
         <main className="page-content">
           {license.alert && user?.role === "ADMIN" && <div className="license-alert" role="status">{license.alert} <Link href="/certificado">Ver mensalidade</Link></div>}
-          {!userLoaded ? <p>Carregando sessão…</p> : !user ? <section className="panel"><p>Não foi possível verificar sua sessão. Atualize a página.</p></section> : license.blocked && pathname !== "/certificado" ? <section className="panel billing-card"><h2>Acesso suspenso</h2><p>A licença mensal está pendente. Seus dados estão preservados.</p>{["ADMIN", "FINANCEIRO"].includes(user.role) ? <Link className="button primary" href="/certificado">Regularizar pagamento</Link> : <p>Solicite a regularização ao Administrador ou Financeiro.</p>}</section> : !allowed ? (
+          {!userLoaded ? <TruckLoader label="Carregando sessão…" /> : !user ? <section className="panel"><p>Não foi possível verificar sua sessão. Atualize a página.</p></section> : license.blocked && pathname !== "/certificado" ? <section className="panel billing-card"><h2>Acesso suspenso</h2><p>A licença mensal está pendente. Seus dados estão preservados.</p>{["ADMIN", "FINANCEIRO"].includes(user.role) ? <Link className="button primary" href="/certificado">Regularizar pagamento</Link> : <p>Solicite a regularização ao Administrador ou Financeiro.</p>}</section> : !allowed ? (
             <section className="panel">
               <span className="eyebrow">Acesso restrito</span>
               <h2>Seu perfil não permite abrir esta tela.</h2>
