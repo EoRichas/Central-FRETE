@@ -1,0 +1,152 @@
+/* Contraste de navegação e badges/status.
+   Mantém o Bloom (tema) e a seta do sidebar sem alterar comportamento. */
+
+/* Sidebar: item normal limpo e sempre legível. */
+.main-nav a {
+  color: #dbe7ee;
+  background: transparent;
+  border: 1px solid transparent;
+  opacity: 1;
+}
+
+.main-nav a svg,
+.main-nav a span {
+  color: inherit;
+  opacity: 1;
+}
+
+/* O hover não apaga o texto nem desloca o ícone. */
+.main-nav a:hover {
+  color: #ffffff;
+  background: rgb(255 255 255 / 8%);
+  border-color: rgb(255 255 255 / 8%);
+  box-shadow: none;
+}
+
+.main-nav a:hover svg,
+.sidebar-collapsed .main-nav a:hover svg {
+  transform: none;
+}
+
+.main-nav a:hover span {
+  opacity: 1;
+  transform: none;
+}
+
+/* Item ativo: pill claro com texto/ícone escuros para contraste forte. */
+.main-nav a.active {
+  color: #173247;
+  background: #eaf1f5;
+  border-color: #c8d5de;
+  box-shadow: inset 3px 0 var(--teal-2), 0 6px 16px rgb(0 0 0 / 12%);
+  font-weight: 760;
+}
+
+.main-nav a.active svg,
+.main-nav a.active span {
+  color: #173247;
+  opacity: 1;
+}
+
+.main-nav a.active:hover {
+  color: #102a3b;
+  background: #ffffff;
+  border-color: #b8c9d3;
+}
+
+.main-nav a.active::after {
+  background: var(--teal);
+  box-shadow: 0 0 0 3px rgb(8 123 143 / 12%);
+}
+
+/* Badge neutro: elimina cinza lavado e usa as variáveis dos temas. */
+.status-badge {
+  color: var(--ink);
+  background: var(--surface-subtle);
+  opacity: 1;
+  font-weight: 820;
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+
+.status-badge::before {
+  opacity: 1;
+  box-shadow: 0 0 0 3px rgb(255 255 255 / 58%);
+}
+
+/* Preserva as cores semânticas dos status. */
+.status-pago,
+.status-confirmado,
+.status-ativo,
+.status-importado,
+.status-entregue,
+.status-finalizado {
+  color: var(--green);
+  background: var(--green-soft);
+}
+
+.status-vencido,
+.status-cancelado,
+.status-inativo {
+  color: var(--red);
+  background: var(--red-soft);
+}
+
+.status-em_aberto,
+.status-pendente,
+.status-aguardando_coleta,
+.status-aguardando_reembarque {
+  color: var(--yellow);
+  background: var(--yellow-soft);
+}
+
+.status-em_viagem,
+.status-patio_de_apoio,
+.status-patio_central,
+.status-coleta,
+.status-entrega,
+.status-empresa {
+  color: #166180;
+  background: var(--blue-soft);
+}
+
+/* No modo escuro, o badge neutro continua com alto contraste. */
+html[data-theme="dark"] .status-badge {
+  color: var(--ink);
+  background: var(--surface-subtle);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+
+html[data-theme="dark"] .status-pago,
+html[data-theme="dark"] .status-confirmado,
+html[data-theme="dark"] .status-ativo,
+html[data-theme="dark"] .status-importado,
+html[data-theme="dark"] .status-entregue,
+html[data-theme="dark"] .status-finalizado {
+  color: #7ee0ad;
+  background: var(--green-soft);
+}
+
+html[data-theme="dark"] .status-vencido,
+html[data-theme="dark"] .status-cancelado,
+html[data-theme="dark"] .status-inativo {
+  color: #ff9da1;
+  background: var(--red-soft);
+}
+
+html[data-theme="dark"] .status-em_aberto,
+html[data-theme="dark"] .status-pendente,
+html[data-theme="dark"] .status-aguardando_coleta,
+html[data-theme="dark"] .status-aguardando_reembarque {
+  color: #ffd681;
+  background: var(--yellow-soft);
+}
+
+html[data-theme="dark"] .status-em_viagem,
+html[data-theme="dark"] .status-patio_de_apoio,
+html[data-theme="dark"] .status-patio_central,
+html[data-theme="dark"] .status-coleta,
+html[data-theme="dark"] .status-entrega,
+html[data-theme="dark"] .status-empresa {
+  color: #7fd7f2;
+  background: var(--blue-soft);
+}
