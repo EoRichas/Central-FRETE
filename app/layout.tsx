@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import "./fleet-overrides.css";
 import "./visual-refresh.css";
+import "./interaction-refinements.css";
 
 export const metadata: Metadata = {
   title: {
