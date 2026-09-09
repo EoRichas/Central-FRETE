@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { Icons } from "@/components/icons";
+import { TruckLoader } from "@/components/truck-loader";
 
 export function PageHeader({ eyebrow, title, description, actions }: { eyebrow?: string; title: string; description?: string; actions?: React.ReactNode }) {
   return <div className="page-header"><div>{eyebrow && <span className="eyebrow">{eyebrow}</span>}<h1>{title}</h1>{description && <p>{description}</p>}</div>{actions && <div className="page-actions">{actions}</div>}</div>;
 }
 export function LoadingState({ label = "Carregando informações…" }: { label?: string }) {
-  return <div className="state-panel" role="status"><span className="spinner" />{label}</div>;
+  return <TruckLoader label={label} />;
 }
 export function ErrorState({ message, retry }: { message: string; retry?: () => void }) {
   return <div className="state-panel state-error" role="alert"><strong>Não foi possível carregar</strong><span>{message}</span>{retry && <button className="button secondary" onClick={retry}>Tentar novamente</button>}</div>;
