@@ -6,6 +6,7 @@ import "./interaction-refinements.css";
 import "./theme.css";
 import "./sidebar-header-refinements.css";
 import "./dark-mode-action-refinements.css";
+import "./contrast-refinements.css";
 
 export const metadata: Metadata = {
   title: {
