@@ -179,7 +179,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="topbar-heading">
             <div className="topbar-title-row">
               <span className="topbar-eyebrow">Central Express</span>
-              {pathname === "/inicio" && greeting && (
+              {greeting && (
                 <div className="topbar-greeting" role="status">
                   <span className="topbar-greeting-text">{greeting.salutation}, <strong>{greeting.firstName}</strong></span>
                   <span className="topbar-greeting-dot" aria-hidden="true">•</span>
