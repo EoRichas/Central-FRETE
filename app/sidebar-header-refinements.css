@@ -1,20 +1,12 @@
-/* Ajustes finais do sidebar e da saudação no cabeçalho */
+/* Ajustes complementares do sidebar e da saudação no cabeçalho.
+   O Bloom e a seta seguem a implementação do PR #24 em theme.css. */
 
 .sidebar-user {
-  align-items: flex-start;
   gap: 12px;
   padding: 14px 10px 4px;
 }
 
-.sidebar-user-avatar-stack {
-  display: flex;
-  flex: 0 0 auto;
-  flex-direction: column;
-  align-items: center;
-  gap: 7px;
-}
-
-.sidebar-user-avatar-stack .avatar {
+.sidebar-user-identity .avatar {
   width: 38px;
   height: 38px;
   font-size: 12px;
@@ -22,47 +14,14 @@
   box-shadow: inset 0 0 0 1px rgb(126 226 232 / 14%);
 }
 
-.sidebar-user-switch {
-  position: relative;
-  width: 31px;
-  height: 17px;
-  padding: 2px;
-  flex: 0 0 auto;
-  background: rgb(255 255 255 / 12%);
-  border: 1px solid rgb(126 226 232 / 18%);
-  border-radius: 999px;
-  box-shadow: inset 0 1px 3px rgb(0 0 0 / 18%);
-  transition: background .2s ease, border-color .2s ease, box-shadow .2s ease;
-}
-
-.sidebar-user-switch > span {
-  width: 11px;
-  height: 11px;
-  display: block;
-  border-radius: 50%;
-  background: #dffcff;
-  box-shadow: 0 1px 4px rgb(0 0 0 / 25%);
-  transform: translateX(0);
-  transition: transform .2s ease, background .2s ease;
-}
-
-.sidebar-user-switch:hover {
-  background: rgb(8 123 143 / 45%);
-  border-color: rgb(126 226 232 / 34%);
-}
-
-.sidebar-user-switch:hover > span {
-  transform: translateX(14px);
-  background: #fff;
-}
-
 .sidebar-user-copy {
+  min-width: 0;
   gap: 2px;
-  padding-top: 1px;
+  padding-top: 2px;
 }
 
 .sidebar-user-copy strong {
-  max-width: 150px;
+  max-width: 120px;
   font-size: 11px;
   line-height: 1.25;
   text-transform: uppercase;
@@ -75,22 +34,17 @@
   text-transform: uppercase;
 }
 
-.sidebar-user-copy .logout-button {
-  width: max-content;
+.sidebar-user > .logout-button {
+  align-self: flex-start;
   margin-top: 4px;
-  padding: 2px 0;
+  padding: 3px 2px;
   color: #9bb3c0;
   font-size: 9px;
   letter-spacing: .06em;
 }
 
-.sidebar-user-copy .logout-button:hover {
+.sidebar-user > .logout-button:hover {
   color: #fff;
-}
-
-/* O controle de esconder passa a ficar sob o avatar do usuário. */
-.collapse-button {
-  display: none !important;
 }
 
 .topbar-heading {
@@ -137,16 +91,25 @@
   font-size: 11px;
 }
 
-/* A saudação antiga não ocupa mais uma faixa azul abaixo do topo. */
+/* A saudação deixa de ocupar a faixa azul antiga abaixo do cabeçalho. */
 .dashboard-greeting {
   display: none !important;
 }
 
-@media (max-width: 900px) {
-  .sidebar-user-switch {
-    display: none;
-  }
+html[data-theme="dark"] .topbar-greeting {
+  color: var(--ink-soft);
+  border-left-color: var(--line-strong);
+}
 
+html[data-theme="dark"] .topbar-greeting-text strong {
+  color: var(--ink);
+}
+
+html[data-theme="dark"] .topbar-greeting-date {
+  color: var(--muted);
+}
+
+@media (max-width: 900px) {
   .topbar-title-row {
     gap: 10px;
   }
@@ -172,12 +135,5 @@
 @media (max-width: 520px) {
   .topbar-greeting {
     display: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sidebar-user-switch,
-  .sidebar-user-switch > span {
-    transition: none;
   }
 }

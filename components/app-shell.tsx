@@ -71,9 +71,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [userLoaded, setUserLoaded] = useState(false);
   const [license, setLicense] = useState<{ blocked: boolean; alert: string | null }>({blocked: false, alert: null});
+
+  useEffect(() => {
+    setDarkMode(document.documentElement.dataset.theme === "dark");
+  }, []);
 
   useEffect(() => {
     let stopped = false;
@@ -105,6 +110,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     });
   }
 
+  function toggleDarkMode(checked: boolean) {
+    const theme = checked ? "dark" : "light";
+    setDarkMode(checked);
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+    window.localStorage.setItem("cf-theme", theme);
+  }
+
   const visibleNavigation = user
     ? navigation.filter((item) => item.roles.includes(user.role) && (!license.blocked || item.href === "/certificado"))
     : navigation;
@@ -114,6 +127,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const allowed = !user || canAccessPath(pathname, user.role);
   const brandHref = user?.role === "OPERACIONAL" ? "/frota" : "/inicio";
   const greeting = user ? dashboardGreeting(user.name) : null;
+  const themeLabel = darkMode ? "Desativar modo escuro" : "Ativar modo escuro";
 
   return (
     <div className={`app-frame ${collapsed ? "sidebar-collapsed" : ""}`}>
@@ -130,26 +144,34 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
         <div className="sidebar-user">
-          <div className="sidebar-user-avatar-stack">
+          <div className="sidebar-user-identity">
             <span className="avatar">{user ? userInitials(user.name) : "CE"}</span>
-            <button
-              className="sidebar-user-switch"
-              type="button"
-              onClick={toggleCollapsed}
-              aria-label="Esconder menu lateral"
-              title="Esconder menu"
-            >
-              <span aria-hidden="true" />
-            </button>
+            <label className="bloom-switch" aria-label={themeLabel} title={themeLabel}>
+              <input type="checkbox" checked={darkMode} onChange={(event) => toggleDarkMode(event.currentTarget.checked)} />
+              <span className="bloom-switch__track">
+                <span className="bloom-switch__star bloom-switch__star--1" />
+                <span className="bloom-switch__star bloom-switch__star--2" />
+                <span className="bloom-switch__star bloom-switch__star--3" />
+                <span className="bloom-switch__thumb">
+                  <svg className="bloom-switch__sun" viewBox="0 0 256 256" aria-hidden="true">
+                    <path fill="currentColor" d="M120,40V16a8,8,0,0,1,16,0V40a8,8,0,0,1-16,0Zm72,88a64,64,0,1,1-64-64A64.07,64.07,0,0,1,192,128Zm-16,0a48,48,0,1,0-48,48A48.05,48.05,0,0,0,176,128ZM58.34,69.66A8,8,0,0,0,69.66,58.34l-16-16A8,8,0,0,0,42.34,53.66Zm0,116.68-16,16a8,8,0,0,0,11.32,11.32l16-16a8,8,0,0,0-11.32-11.32ZM192,72a8,8,0,0,0,5.66-2.34l16-16a8,8,0,0,0-11.32-11.32l-16,16A8,8,0,0,0,192,72Zm5.66,114.34a8,8,0,0,0-11.32,11.32l16,16a8,8,0,0,0,11.32-11.32ZM48,128a8,8,0,0,0-8-8H16a8,8,0,0,0,0,16H40A8,8,0,0,0,48,128Zm80,80a8,8,0,0,0-8,8v24a8,8,0,0,0,16,0V216A8,8,0,0,0,128,208Zm112-88H216a8,8,0,0,0,0,16h24a8,8,0,0,0,0-16Z" />
+                  </svg>
+                  <svg className="bloom-switch__moon" viewBox="0 0 256 256" aria-hidden="true">
+                    <path fill="currentColor" d="M233.54,142.23a8,8,0,0,0-8-2,88.08,88.08,0,0,1-109.8-109.8,8,8,0,0,0-10-10,104.84,104.84,0,0,0-52.91,37A104,104,0,0,0,136,224a103.09,103.09,0,0,0,62.52-20.88,104.84,104.84,0,0,0,37-52.91A8,8,0,0,0,233.54,142.23Z" />
+                  </svg>
+                </span>
+              </span>
+            </label>
           </div>
           <span className="sidebar-user-copy">
             <strong>{user?.name ?? "Carregando…"}</strong>
             <small>{user ? roleLabel(user.role) : ""}</small>
-            <button className="logout-button" onClick={logout} aria-label="Sair do sistema">Sair</button>
           </span>
+          <button className="logout-button" onClick={logout} aria-label="Sair do sistema">Sair</button>
         </div>
+        {!collapsed && <button className="collapse-button" onClick={toggleCollapsed} aria-label="Recolher menu lateral" title="Recolher menu lateral"><Icons.chevron /></button>}
       </aside>
-      {collapsed && <button className="sidebar-reveal-button" onClick={toggleCollapsed} aria-label="Aparecer menu"><Icons.chevron /><span>Aparecer</span></button>}
+      {collapsed && <button className="sidebar-reveal-button" onClick={toggleCollapsed} aria-label="Mostrar menu lateral" title="Mostrar menu lateral"><Icons.chevron /></button>}
       {mobileOpen && <button className="sidebar-backdrop" onClick={() => setMobileOpen(false)} aria-label="Fechar menu" />}
       <div className="app-main">
         <header className="topbar">
