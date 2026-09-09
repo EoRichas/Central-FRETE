@@ -11,6 +11,13 @@ function roleLabel(role: Role) {
   return role === "GERENCIA" ? "PERFIL LEGADO" : role;
 }
 
+function userInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "CE";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+}
+
 const navigation: Array<{
   href: string;
   label: string;
@@ -122,14 +129,45 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             return <Link key={item.href} href={item.href} onClick={() => setMobileOpen(false)} className={active ? "active" : ""} aria-current={active ? "page" : undefined}><Icon /><span>{item.label}</span></Link>;
           })}
         </nav>
-        <div className="sidebar-user"><span className="avatar">{user?.name?.slice(0, 2) ?? "CE"}</span><span className="sidebar-user-copy"><strong>{user?.name ?? "Carregando…"}</strong><small>{user ? roleLabel(user.role) : ""}</small></span><button className="logout-button" onClick={logout} aria-label="Sair do sistema">Sair</button></div>
-        {!collapsed && <button className="collapse-button" onClick={toggleCollapsed} aria-label="Esconder menu"><Icons.chevron /><span>Esconder</span></button>}
+        <div className="sidebar-user">
+          <div className="sidebar-user-avatar-stack">
+            <span className="avatar">{user ? userInitials(user.name) : "CE"}</span>
+            <button
+              className="sidebar-user-switch"
+              type="button"
+              onClick={toggleCollapsed}
+              aria-label="Esconder menu lateral"
+              title="Esconder menu"
+            >
+              <span aria-hidden="true" />
+            </button>
+          </div>
+          <span className="sidebar-user-copy">
+            <strong>{user?.name ?? "Carregando…"}</strong>
+            <small>{user ? roleLabel(user.role) : ""}</small>
+            <button className="logout-button" onClick={logout} aria-label="Sair do sistema">Sair</button>
+          </span>
+        </div>
       </aside>
       {collapsed && <button className="sidebar-reveal-button" onClick={toggleCollapsed} aria-label="Aparecer menu"><Icons.chevron /><span>Aparecer</span></button>}
       {mobileOpen && <button className="sidebar-backdrop" onClick={() => setMobileOpen(false)} aria-label="Fechar menu" />}
       <div className="app-main">
-        <header className="topbar"><button className="mobile-menu" onClick={() => setMobileOpen(true)} aria-label="Abrir menu"><Icons.menu /></button><div><span className="topbar-eyebrow">Central Express</span><strong>{currentLabel}</strong></div></header>
-        {pathname === "/inicio" && greeting && <div className="dashboard-greeting" role="status"><strong>{greeting.salutation}, {greeting.firstName}</strong><span aria-hidden="true">·</span><span>{greeting.date}</span></div>}
+        <header className="topbar">
+          <button className="mobile-menu" onClick={() => setMobileOpen(true)} aria-label="Abrir menu"><Icons.menu /></button>
+          <div className="topbar-heading">
+            <div className="topbar-title-row">
+              <span className="topbar-eyebrow">Central Express</span>
+              {pathname === "/inicio" && greeting && (
+                <div className="topbar-greeting" role="status">
+                  <span className="topbar-greeting-text">{greeting.salutation}, <strong>{greeting.firstName}</strong></span>
+                  <span className="topbar-greeting-dot" aria-hidden="true">•</span>
+                  <span className="topbar-greeting-date">{greeting.date}</span>
+                </div>
+              )}
+            </div>
+            <strong>{currentLabel}</strong>
+          </div>
+        </header>
         <main className="page-content">
           {license.alert && user?.role === "ADMIN" && <div className="license-alert" role="status">{license.alert} <Link href="/certificado">Ver mensalidade</Link></div>}
           {!userLoaded ? <TruckLoader label="Carregando sessão…" /> : !user ? <section className="panel"><p>Não foi possível verificar sua sessão. Atualize a página.</p></section> : license.blocked && pathname !== "/certificado" ? <section className="panel billing-card"><h2>Acesso suspenso</h2><p>A licença mensal está pendente. Seus dados estão preservados.</p>{["ADMIN", "FINANCEIRO"].includes(user.role) ? <Link className="button primary" href="/certificado">Regularizar pagamento</Link> : <p>Solicite a regularização ao Administrador ou Financeiro.</p>}</section> : !allowed ? (

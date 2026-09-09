@@ -1,0 +1,183 @@
+/* Ajustes finais do sidebar e da saudação no cabeçalho */
+
+.sidebar-user {
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 10px 4px;
+}
+
+.sidebar-user-avatar-stack {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+}
+
+.sidebar-user-avatar-stack .avatar {
+  width: 38px;
+  height: 38px;
+  font-size: 12px;
+  letter-spacing: .04em;
+  box-shadow: inset 0 0 0 1px rgb(126 226 232 / 14%);
+}
+
+.sidebar-user-switch {
+  position: relative;
+  width: 31px;
+  height: 17px;
+  padding: 2px;
+  flex: 0 0 auto;
+  background: rgb(255 255 255 / 12%);
+  border: 1px solid rgb(126 226 232 / 18%);
+  border-radius: 999px;
+  box-shadow: inset 0 1px 3px rgb(0 0 0 / 18%);
+  transition: background .2s ease, border-color .2s ease, box-shadow .2s ease;
+}
+
+.sidebar-user-switch > span {
+  width: 11px;
+  height: 11px;
+  display: block;
+  border-radius: 50%;
+  background: #dffcff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 25%);
+  transform: translateX(0);
+  transition: transform .2s ease, background .2s ease;
+}
+
+.sidebar-user-switch:hover {
+  background: rgb(8 123 143 / 45%);
+  border-color: rgb(126 226 232 / 34%);
+}
+
+.sidebar-user-switch:hover > span {
+  transform: translateX(14px);
+  background: #fff;
+}
+
+.sidebar-user-copy {
+  gap: 2px;
+  padding-top: 1px;
+}
+
+.sidebar-user-copy strong {
+  max-width: 150px;
+  font-size: 11px;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+.sidebar-user-copy small {
+  margin-top: 1px;
+  font-size: 9px;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.sidebar-user-copy .logout-button {
+  width: max-content;
+  margin-top: 4px;
+  padding: 2px 0;
+  color: #9bb3c0;
+  font-size: 9px;
+  letter-spacing: .06em;
+}
+
+.sidebar-user-copy .logout-button:hover {
+  color: #fff;
+}
+
+/* O controle de esconder passa a ficar sob o avatar do usuário. */
+.collapse-button {
+  display: none !important;
+}
+
+.topbar-heading {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.topbar-title-row {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.topbar-greeting {
+  min-width: 0;
+  padding-left: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #526477;
+  border-left: 1px solid #cfd9e0;
+  font-size: 12px;
+  line-height: 1.2;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.topbar-greeting-text strong {
+  color: #13283b;
+  font-size: inherit;
+  font-weight: 780;
+}
+
+.topbar-greeting-dot {
+  color: var(--teal);
+  font-size: 11px;
+}
+
+.topbar-greeting-date {
+  color: #667789;
+  font-size: 11px;
+}
+
+/* A saudação antiga não ocupa mais uma faixa azul abaixo do topo. */
+.dashboard-greeting {
+  display: none !important;
+}
+
+@media (max-width: 900px) {
+  .sidebar-user-switch {
+    display: none;
+  }
+
+  .topbar-title-row {
+    gap: 10px;
+  }
+
+  .topbar-greeting {
+    padding-left: 10px;
+    gap: 6px;
+  }
+}
+
+@media (max-width: 700px) {
+  .topbar-greeting-date,
+  .topbar-greeting-dot {
+    display: none;
+  }
+
+  .topbar-greeting {
+    padding-left: 9px;
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 520px) {
+  .topbar-greeting {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-user-switch,
+  .sidebar-user-switch > span {
+    transition: none;
+  }
+}

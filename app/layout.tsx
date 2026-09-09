@@ -3,6 +3,7 @@ import "./globals.css";
 import "./fleet-overrides.css";
 import "./visual-refresh.css";
 import "./interaction-refinements.css";
+import "./sidebar-header-refinements.css";
 
 export const metadata: Metadata = {
   title: {
