@@ -43,7 +43,7 @@ test("mantém os percentuais de comissão do vendedor e da operação", () => {
   assert.equal(operationalCommissionCents(100_000), 3_000);
 });
 
-test("calcula combustível, custo fixo e margem da frota", () => {
+test("calcula os custos pelos parâmetros, sem aplicar a média do histórico", () => {
   const vehicleRate = averageVehicleCostPerKmCents([
     { distanceMeters: 4_948_000, monthlyCostCents: 617_413 },
     { distanceMeters: 3_193_000, monthlyCostCents: 617_413 },
@@ -54,21 +54,19 @@ test("calcula combustível, custo fixo e margem da frota", () => {
   const metrics = calculateFleetFreightMetrics(
     { distanceMeters: 51_100, freightAmountCents: 33_000, tollCents: 570, driverCommissionCents: 1_000 },
     { fuelPriceCents: 738, averageConsumptionMilliKmPerLiter: 3_200, fallbackFixedCostPerKmCents: 45 },
-    vehicleRate,
   );
   assert.equal(metrics.fuelCostCents, 11_785);
-  assert.equal(metrics.fixedCostCents, 8_353);
+  assert.equal(metrics.fixedCostCents, 2_300);
   assert.equal(metrics.allocatedCostCents, 0);
-  assert.equal(metrics.totalCostCents, 21_708);
-  assert.equal(metrics.netRevenueCents, 11_292);
-  assert.equal(metrics.marginBasisPoints, 3_422);
+  assert.equal(metrics.totalCostCents, 15_655);
+  assert.equal(metrics.netRevenueCents, 17_345);
+  assert.equal(metrics.marginBasisPoints, 5_256);
 });
 
-test("usa custo fixo padrão quando o veículo não possui histórico", () => {
+test("usa o custo fixo por km configurado em Parâmetros", () => {
   const metrics = calculateFleetFreightMetrics(
     { distanceMeters: 10_000, freightAmountCents: 10_000, tollCents: 0, driverCommissionCents: 0 },
     { fuelPriceCents: 700, averageConsumptionMilliKmPerLiter: 3_500, fallbackFixedCostPerKmCents: 50 },
-    null,
   );
   assert.equal(metrics.fixedCostCents, 500);
 });

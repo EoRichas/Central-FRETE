@@ -159,9 +159,6 @@ export async function loadFleetData(
       costs,
     };
   });
-  const vehicleRates = new Map(
-    vehicles.map((vehicle) => [vehicle.id, vehicle.averageCostPerKmCents]),
-  );
   const drivers: FleetDriver[] = driverRows.map((row) => ({
     ...row,
     vehicleId: null,
@@ -183,7 +180,6 @@ export async function loadFleetData(
     const metrics = calculateFleetFreightMetrics(
       row,
       parameters,
-      row.vehicleId ? (vehicleRates.get(row.vehicleId) ?? null) : null,
       allocatedOfficeCosts[row.id] ?? 0,
     );
     return {
