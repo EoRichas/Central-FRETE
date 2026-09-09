@@ -1,53 +1,56 @@
 /* Terceira etapa visual: lateral vertical, ações estáveis e alinhamentos da Frota */
 
 .sidebar {
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
   transition: transform .34s cubic-bezier(.22,.8,.3,1), width .18s ease, background .24s ease, border-color .24s ease;
 }
 
 .main-nav {
-  flex: 1;
+  flex: none;
   min-height: 0;
-  overflow-y: auto;
-  padding-bottom: 126px;
-  scrollbar-width: thin;
+  overflow: visible;
+  padding-bottom: 0;
 }
 
 .sidebar-user {
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 76px;
-  margin-top: 0;
+  position: relative;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  margin-top: 20px;
 }
 
-.collapse-button {
-  position: absolute;
-  left: 50%;
-  bottom: 14px;
+.collapse-button,
+.sidebar-reveal-button {
+  position: relative;
   z-index: 7;
   width: 46px;
   min-width: 46px;
   height: 46px;
   min-height: 46px;
-  margin: 0;
+  margin: 14px auto 16px;
   padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   color: #fff;
-  background: #141414;
-  border: 0;
+  background: var(--navy);
+  border: 1px solid rgb(126 226 232 / 18%);
   border-radius: 50%;
-  box-shadow: 0 0 0 4px rgb(126 226 232 / 12%), 0 8px 22px rgb(0 0 0 / 22%);
-  transform: translateX(-50%);
+  box-shadow: 0 0 0 4px rgb(126 226 232 / 9%), 0 8px 22px rgb(0 0 0 / 18%);
   transition: width .3s ease, border-radius .3s ease, background .3s ease, box-shadow .3s ease, transform .2s ease;
 }
 
-.collapse-button span { display: none !important; }
+.collapse-button span,
+.sidebar-reveal-button span {
+  display: none !important;
+}
 
-.collapse-button::before {
-  content: "Esconder";
+.collapse-button::before,
+.sidebar-reveal-button::before {
   position: absolute;
   inset: 0;
   display: grid;
@@ -60,22 +63,30 @@
   transition: opacity .25s ease, font-size .25s ease;
 }
 
-.collapse-button svg {
+.collapse-button::before { content: "Esconder"; }
+.sidebar-reveal-button::before { content: "Aparecer"; }
+
+.collapse-button svg,
+.sidebar-reveal-button svg {
   width: 15px;
   height: 15px;
   color: #fff;
-  transform: rotate(-90deg);
   transition: transform .3s ease, opacity .22s ease;
 }
 
-.collapse-button:hover {
+.collapse-button svg { transform: rotate(-90deg); }
+.sidebar-reveal-button svg { transform: rotate(90deg); }
+
+.collapse-button:hover,
+.sidebar-reveal-button:hover {
   width: 126px;
-  background: #000;
+  background: var(--navy-2);
   border-radius: 50px;
-  box-shadow: 0 0 0 4px rgb(126 226 232 / 15%), 0 10px 26px rgb(0 0 0 / 26%);
+  box-shadow: 0 0 0 4px rgb(126 226 232 / 12%), 0 10px 26px rgb(0 0 0 / 22%);
 }
 
-.collapse-button:hover::before {
+.collapse-button:hover::before,
+.sidebar-reveal-button:hover::before {
   opacity: 1;
   font-size: 12px;
 }
@@ -85,35 +96,49 @@
   transform: translateY(-20px) rotate(-90deg);
 }
 
+.sidebar-reveal-button:hover svg {
+  opacity: 0;
+  transform: translateY(20px) rotate(90deg);
+}
+
 .sidebar-collapsed .sidebar {
   width: var(--sidebar) !important;
-  background: transparent;
-  border-right-color: transparent;
-  box-shadow: none;
   pointer-events: none;
-  transform: translateY(calc(-100% + 72px));
+  transform: translateY(-105%);
 }
 
-.sidebar-collapsed .sidebar::before { opacity: 0; }
-
-.sidebar-collapsed .brand-row,
-.sidebar-collapsed .main-nav,
-.sidebar-collapsed .sidebar-user {
-  visibility: hidden;
-  pointer-events: none;
-}
-
-.sidebar-collapsed .collapse-button {
-  left: 18px;
-  pointer-events: auto;
-  transform: none;
-}
-
-.sidebar-collapsed .collapse-button::before { content: "Aparecer"; }
-.sidebar-collapsed .collapse-button svg { transform: rotate(90deg); }
-.sidebar-collapsed .collapse-button:hover svg { opacity: 0; transform: translateY(20px) rotate(90deg); }
 .sidebar-collapsed .app-main { margin-left: 0 !important; }
-.sidebar-collapsed .topbar { padding-left: 92px; }
+
+.sidebar-reveal-button {
+  position: fixed;
+  left: 14px;
+  top: 12px;
+  z-index: 80;
+  margin: 0;
+}
+
+.sidebar-collapsed .topbar { padding-left: 88px; }
+
+/* Saudação diária da Dashboard */
+.dashboard-greeting {
+  min-height: 38px;
+  padding: 8px clamp(20px, 3vw, 44px);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #d9e8ef;
+  background: var(--navy);
+  border-bottom: 1px solid rgb(255 255 255 / 7%);
+  font-size: 12px;
+  letter-spacing: .01em;
+}
+
+.dashboard-greeting strong {
+  color: #fff;
+  font-size: 13px;
+}
+
+.dashboard-greeting span[aria-hidden="true"] { color: #77cfd8; }
 
 /* Espaço fixo: o hover não recalcula a largura da tabela e elimina o tremor. */
 td[data-label="Ações"] {
@@ -179,8 +204,8 @@ td[data-label="Ações"] {
   justify-content: center;
   border-radius: 50%;
   color: #fff;
-  background: #141414;
-  box-shadow: 0 4px 16px rgb(0 0 0 / 18%);
+  background: var(--navy);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 16%);
   opacity: 1;
   font-size: 0;
   font-weight: 760;
@@ -225,11 +250,9 @@ td[data-label="Ações"] {
   justify-content: flex-start;
   border-radius: 50px;
   font-size: 12px;
-  box-shadow: 0 8px 20px rgb(0 0 0 / 22%);
+  background: var(--navy-2);
+  box-shadow: 0 8px 20px rgb(0 0 0 / 20%);
 }
-
-.table-actions .button.secondary.compact-button:hover:not(:disabled)::before { background: #141414; }
-.table-actions .button.danger:hover:not(:disabled)::before { background: rgb(255, 69, 69); }
 
 .table-actions .button.secondary.compact-button:hover:not(:disabled)::after,
 .table-actions .button.danger:hover:not(:disabled)::after { left: calc(50% + 30px); }
@@ -241,8 +264,48 @@ td[data-label="Ações"] {
 .fleet-fieldset .form-grid.two:has(input[name="cargoVehicleModel"]) { align-items: start; }
 .fleet-fieldset .form-grid.two:has(input[name="cargoVehicleModel"]) .field { align-self: start; }
 
+/* Cards financeiros inspirados no Uiverse, mas preservando leitura */
+.status-grid {
+  overflow: visible;
+  gap: 14px;
+}
+
+.status-card {
+  border: 1px solid transparent;
+  border-radius: 13px;
+  clip-path: none;
+  cursor: pointer;
+  transition: transform .32s cubic-bezier(.22,.8,.3,1), filter .32s ease, opacity .32s ease, box-shadow .32s ease;
+}
+
+.status-card::before {
+  width: 5px;
+  border-radius: 5px 0 0 5px;
+}
+
+.status-card.open { border-color: #f0d99e; }
+.status-card.paid { border-color: #b9dfcc; }
+.status-card.overdue { border-color: #f0c5c8; }
+
+@media (hover: hover) and (pointer: fine) {
+  .status-grid:hover .status-card:not(:hover) {
+    opacity: .62;
+    filter: blur(1.2px) saturate(.8);
+    transform: scale(.97);
+  }
+
+  .status-grid .status-card:hover {
+    z-index: 2;
+    transform: scale(1.035);
+    filter: none;
+    opacity: 1;
+    box-shadow: 0 16px 34px rgb(11 38 56 / 14%);
+  }
+}
+
 @media (max-width: 900px) {
-  .collapse-button { display: none; }
+  .collapse-button,
+  .sidebar-reveal-button { display: none; }
   .main-nav { flex: 0 1 auto; overflow: visible; padding-bottom: 0; }
   .sidebar-user { position: relative; left: auto; right: auto; bottom: auto; margin-top: 8px; }
   .sidebar-collapsed .sidebar {
@@ -253,10 +316,6 @@ td[data-label="Ações"] {
     transform: translateX(-105%);
   }
   .sidebar-collapsed .sidebar.mobile-open { transform: translateX(0); }
-  .sidebar-collapsed .sidebar::before { opacity: 1; }
-  .sidebar-collapsed .brand-row,
-  .sidebar-collapsed .main-nav,
-  .sidebar-collapsed .sidebar-user { visibility: visible; pointer-events: auto; }
   .sidebar-collapsed .brand-copy,
   .sidebar-collapsed .sidebar-user-copy { display: flex; }
   .sidebar-collapsed .main-nav span,
@@ -266,6 +325,11 @@ td[data-label="Ações"] {
 }
 
 @media (max-width: 700px) {
+  .dashboard-greeting {
+    padding-inline: 18px;
+    flex-wrap: wrap;
+  }
+
   td[data-label="Ações"] { width: auto; min-width: 0; }
   .table-actions,
   .table-actions:has(.button.danger) { flex-direction: row; justify-content: flex-end; }
@@ -284,8 +348,12 @@ td[data-label="Ações"] {
 @media (prefers-reduced-motion: reduce) {
   .sidebar,
   .collapse-button,
+  .sidebar-reveal-button,
   .collapse-button::before,
+  .sidebar-reveal-button::before,
   .collapse-button svg,
+  .sidebar-reveal-button svg,
+  .status-card,
   .table-actions .button.secondary.compact-button,
   .table-actions .button.danger,
   .table-actions .button.secondary.compact-button::before,
