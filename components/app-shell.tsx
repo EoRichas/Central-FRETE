@@ -39,6 +39,27 @@ function canAccessPath(pathname: string, role: Role) {
   return item ? item.roles.includes(role) : true;
 }
 
+function dashboardGreeting(name: string) {
+  const now = new Date();
+  const hourPart = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(now).find((part) => part.type === "hour")?.value;
+  const hour = Number(hourPart ?? "12");
+  const salutation = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
+  const rawDate = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  }).format(now);
+  const date = rawDate.charAt(0).toUpperCase() + rawDate.slice(1);
+  const firstName = name.trim().split(/\s+/)[0] || name;
+  return { salutation, firstName, date };
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
@@ -85,6 +106,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   )?.label ?? "Central Express";
   const allowed = !user || canAccessPath(pathname, user.role);
   const brandHref = user?.role === "OPERACIONAL" ? "/frota" : "/inicio";
+  const greeting = user ? dashboardGreeting(user.name) : null;
 
   return (
     <div className={`app-frame ${collapsed ? "sidebar-collapsed" : ""}`}>
@@ -100,12 +122,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             return <Link key={item.href} href={item.href} onClick={() => setMobileOpen(false)} className={active ? "active" : ""} aria-current={active ? "page" : undefined}><Icon /><span>{item.label}</span></Link>;
           })}
         </nav>
-        <button className="collapse-button" onClick={toggleCollapsed} aria-label={collapsed ? "Expandir menu" : "Recolher menu"}><Icons.chevron /><span>{collapsed ? "Expandir" : "Recolher menu"}</span></button>
         <div className="sidebar-user"><span className="avatar">{user?.name?.slice(0, 2) ?? "CE"}</span><span className="sidebar-user-copy"><strong>{user?.name ?? "Carregando…"}</strong><small>{user ? roleLabel(user.role) : ""}</small></span><button className="logout-button" onClick={logout} aria-label="Sair do sistema">Sair</button></div>
+        {!collapsed && <button className="collapse-button" onClick={toggleCollapsed} aria-label="Esconder menu"><Icons.chevron /><span>Esconder</span></button>}
       </aside>
+      {collapsed && <button className="sidebar-reveal-button" onClick={toggleCollapsed} aria-label="Aparecer menu"><Icons.chevron /><span>Aparecer</span></button>}
       {mobileOpen && <button className="sidebar-backdrop" onClick={() => setMobileOpen(false)} aria-label="Fechar menu" />}
       <div className="app-main">
         <header className="topbar"><button className="mobile-menu" onClick={() => setMobileOpen(true)} aria-label="Abrir menu"><Icons.menu /></button><div><span className="topbar-eyebrow">Central Express</span><strong>{currentLabel}</strong></div></header>
+        {pathname === "/inicio" && greeting && <div className="dashboard-greeting" role="status"><strong>{greeting.salutation}, {greeting.firstName}</strong><span aria-hidden="true">·</span><span>{greeting.date}</span></div>}
         <main className="page-content">
           {license.alert && user?.role === "ADMIN" && <div className="license-alert" role="status">{license.alert} <Link href="/certificado">Ver mensalidade</Link></div>}
           {!userLoaded ? <TruckLoader label="Carregando sessão…" /> : !user ? <section className="panel"><p>Não foi possível verificar sua sessão. Atualize a página.</p></section> : license.blocked && pathname !== "/certificado" ? <section className="panel billing-card"><h2>Acesso suspenso</h2><p>A licença mensal está pendente. Seus dados estão preservados.</p>{["ADMIN", "FINANCEIRO"].includes(user.role) ? <Link className="button primary" href="/certificado">Regularizar pagamento</Link> : <p>Solicite a regularização ao Administrador ou Financeiro.</p>}</section> : !allowed ? (
