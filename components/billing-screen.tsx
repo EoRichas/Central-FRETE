@@ -14,6 +14,7 @@ type Billing = {
  paymentConfigured?: boolean;
  paymentAvailable?: boolean;
  paymentOpensOn?: string | null;
+ graceCertificate?: { competency: string; active: boolean } | null;
  periods: { competency: string; paid: boolean; scheduled: boolean; active: boolean; licenseKey: string | null; approvedAt: string | null }[];
 };
 
@@ -77,8 +78,9 @@ export function BillingScreen() {
    {error && <p role="alert" className="form-error">{error}</p>}
   </section>
   <section className="panel table-panel"><header><h2>Histórico de certificados</h2></header><div className="responsive-table"><table><thead><tr><th>Competência</th><th>Situação</th><th>Licença</th><th>Certificado</th></tr></thead><tbody>
+   {b.graceCertificate && <tr><td>{b.graceCertificate.competency}</td><td>{b.graceCertificate.active ? "Carência vigente" : "Carência encerrada"}</td><td>Mensalidade dispensada</td><td><a className="button secondary" href={`/api/billing/certificate/${b.graceCertificate.competency}`}>Baixar PDF da carência</a></td></tr>}
    {b.periods.map(p => <tr key={p.competency}><td>{p.competency}</td><td>{p.scheduled ? "Paga — renovação agendada" : p.active ? "Paga — vigente" : p.paid ? "Paga" : "Em aberto"}</td><td className="license-key">{p.licenseKey ?? "Disponível após pagamento e início da validade"}</td><td>{p.paid && !p.scheduled ? <a className="button secondary" href={`/api/billing/certificate/${p.competency}`} aria-label={`Baixar certificado PDF da competência ${p.competency}`}>Baixar PDF</a> : <span className="form-help">{p.scheduled ? `Disponível em 05/${p.competency.slice(5)}/${p.competency.slice(0,4)}` : "Aguardando pagamento"}</span>}</td></tr>)}
-   {!b.periods.length && <tr><td colSpan={4}>Nenhum certificado emitido.</td></tr>}
+   {!b.periods.length && !b.graceCertificate && <tr><td colSpan={4}>Nenhum certificado emitido.</td></tr>}
   </tbody></table></div></section>
  </div>;
 }

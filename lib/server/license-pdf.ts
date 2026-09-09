@@ -3,12 +3,19 @@ import { licenseLogo } from "@/lib/server/license-logo";
 
 export type LicenseCertificate = {
  companyName: string;
+ companyCnpj?: string;
  competency: string;
  approvedAt: string | null;
- licenseKey: string;
+ licenseKey: string | null;
+ gracePeriod?: boolean;
  status: "active" | "historical" | "blocked";
  issuedAt?: Date;
  preview?: boolean;
+};
+
+export const LICENSE_HOLDER = {
+ name: "Central Express Transportes LTDA",
+ cnpj: "33.958.561/0001-57",
 };
 
 const PAGE_WIDTH = 595;
@@ -16,7 +23,7 @@ const PAGE_HEIGHT = 842;
 const colors = {
  navy: "0.043 0.149 0.220", red: "0.761 0.247 0.255", ink: "0.075 0.157 0.231",
  muted: "0.322 0.392 0.467", line: "0.859 0.894 0.922", pale: "0.949 0.965 0.973",
- green: "0.090 0.478 0.322", greenPale: "0.910 0.965 0.937", white: "1 1 1",
+ white: "1 1 1",
 };
 const escapeText = (value: string) => value.normalize("NFC").replace(/[^\x20-\xFF]/g, " ").replace(/([\\()])/g, "\\$1");
 const shortDate = (iso: string) => iso.split("-").reverse().join("/");
@@ -46,12 +53,14 @@ export function licensePdf(data: LicenseCertificate): Uint8Array {
  const label = (value: string, x: number, baseline: number) => text(value, x, baseline, 8, "F2", colors.muted);
 
  rect(0, 0, PAGE_WIDTH, 8, colors.navy);
- content.push("q 72 0 0 72 44 752 cm /Logo Do Q");
+ const logoWidth = Math.min(76, 72 * licenseLogo.width / licenseLogo.height);
+ const logoHeight = logoWidth * licenseLogo.height / licenseLogo.width;
+ content.push(`q ${logoWidth} 0 0 ${logoHeight} 44 ${PAGE_HEIGHT-18-logoHeight} cm /Logo Do Q`);
  text("CENTRAL FRETE", 128, 53, 13, "F2", colors.navy);
  text("Gestão de fretes e frota", 128, 70, 9, "F1", colors.muted);
  if (data.preview) {
   rect(352, 44, 199, 24, colors.pale);
-  text("PRÉVIA / DADOS DE EXEMPLO", 365, 60, 9, "F2", colors.muted);
+  text("PRÉVIA DO CERTIFICADO", 365, 60, 9, "F2", colors.muted);
  } else {
   label("LICENCIAMENTO MENSAL", 415, 58);
  }
@@ -59,24 +68,31 @@ export function licensePdf(data: LicenseCertificate): Uint8Array {
 
  text("Certificado digital", 44, 143, 31, "F2", colors.navy);
  text("Licença de uso mensal do sistema", 45, 165, 12, "F1", colors.muted);
- rect(44, 186, 178, 25, colors.greenPale);
- text("PAGAMENTO CONFIRMADO", 56, 203, 9, "F2", colors.green);
+ text("Pagamento concluído", 44, 203, 12, "F2", colors.navy);
+ if (data.gracePeriod) text("Carência inicial | Mensalidade dispensada", 44, 222, 10, "F1", colors.muted);
  text(competency, 44, 242, 13, "F2", colors.ink);
- text("Registro do pagamento e do período de licença da empresa abaixo.", 44, 262, 10, "F1", colors.muted);
+ text(data.gracePeriod ? "Licença liberada durante o período de carência da empresa abaixo." : "Registro do pagamento e do período de licença da empresa abaixo.", 44, 262, 10, "F1", colors.muted);
 
  rect(44, 282, 507, 88, colors.pale);
  label("TITULAR DA LICENÇA", 62, 302);
  const company = data.companyName.replace(/\s+/g, " ").trim().slice(0, 90);
- // Conservative line lengths keep long names inside the fixed certificate card.
- const companyLines = company.match(/.{1,30}/g) ?? ["Empresa"];
- const companySize = company.length <= 24 ? 17 : 12;
- companyLines.forEach((value, index) => text(value.trim(), 62, 325 + index*16, companySize, "F2", colors.navy));
+ const companyLines = company.length <= 45 ? [company] : company.match(/.{1,45}/g) ?? ["Empresa"];
+ const companySize = company.length <= 35 ? 16 : 10;
+ companyLines.forEach((value, index) => text(value.trim(), 62, 325 + index*15, companySize, "F2", colors.navy));
+ if (data.companyCnpj) text(`CNPJ: ${data.companyCnpj}`, 62, 346 + (companyLines.length-1)*15, 11, "F1", colors.muted);
 
- label("PAGAMENTO CONFIRMADO EM", 44, 404);
- const paidOn = paymentDate(data.approvedAt);
- text(paidOn, 44, 433, paidOn.length === 10 ? 21 : 14, "F2", colors.navy);
- label("INÍCIO DA VIGÊNCIA", 310, 404);
- text(shortDate(data.competency + "-05"), 310, 433, 21, "F2", colors.navy);
+ if (data.gracePeriod) {
+  label("MODALIDADE", 44, 404);
+  text("Carência inicial", 44, 433, 18, "F2", colors.navy);
+  label("PERÍODO DE REFERÊNCIA", 310, 404);
+  text(competency, 310, 433, 17, "F2", colors.navy);
+ } else {
+  label("PAGAMENTO CONFIRMADO EM", 44, 404);
+  const paidOn = paymentDate(data.approvedAt);
+  text(paidOn, 44, 433, paidOn.length === 10 ? 21 : 14, "F2", colors.navy);
+  label("INÍCIO DA VIGÊNCIA", 310, 404);
+  text(shortDate(data.competency + "-05"), 310, 433, 21, "F2", colors.navy);
+ }
  line(44, 457, 507);
 
  label("LICENÇA VÁLIDA ATÉ", 44, 483);
@@ -86,16 +102,16 @@ export function licensePdf(data: LicenseCertificate): Uint8Array {
  text("A nova competência começa no dia 05 de cada mês.", 44, 543, 9, "F1", colors.muted);
 
  rect(44, 569, 507, 93, colors.navy);
- text("CHAVE DA LICENÇA", 62, 592, 8, "F2", "0.60 0.85 0.89");
+ text(data.gracePeriod ? "LIBERAÇÃO EM CARÊNCIA" : "CHAVE DA LICENÇA", 62, 592, 8, "F2", "0.60 0.85 0.89");
  // Generated keys contain 48 hex characters; preserve the exact key for copying.
- text(data.licenseKey, 62, 616, 11, "F3", colors.white);
- text("Identificador exclusivo desta competência.", 62, 642, 9, "F1", "0.78 0.84 0.88");
+ text(data.gracePeriod ? "Acesso liberado durante o período inicial." : data.licenseKey ?? "", 62, 616, 11, data.gracePeriod ? "F1" : "F3", colors.white);
+ text(data.gracePeriod ? "A renovação mensal começa após o término da carência." : "Identificador exclusivo desta competência.", 62, 642, 9, "F1", "0.78 0.84 0.88");
 
  const status = data.status === "blocked" ? "Acesso suspenso por pendência na data de emissão." : data.status === "historical" ? "Certificado histórico de uma competência encerrada." : "Licença vigente na data de emissão.";
  text(status, 44, 691, 10, "F2", colors.ink);
  text("Consulte a aba Certificado digital para verificar a situação atual da licença.", 44, 711, 9, "F1", colors.muted);
  line(44, 752, 507);
- text(data.preview ? "Modelo demonstrativo. Não comprova pagamento nem libera acesso." : "Documento emitido eletronicamente pelo sistema Central Frete.", 44, 773, 8, "F1", colors.muted);
+ text(data.preview ? "Prévia para conferência do documento." : "Documento emitido eletronicamente pelo sistema Central Frete.", 44, 773, 8, "F1", colors.muted);
  text("Emissão: " + dateFormatter.format(issuedAt) + " | Horário de Brasília", 44, 790, 8, "F1", colors.muted);
  text("01 / 01", 520, 790, 8, "F1", colors.muted);
 
