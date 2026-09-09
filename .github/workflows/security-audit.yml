@@ -19,5 +19,7 @@ jobs:
           cache: npm
       - name: Instalar dependências
         run: npm ci --include=dev
-      - name: Listar vulnerabilidades
+      - name: Listar todas as vulnerabilidades
         run: npm audit --json || true
+      - name: Listar vulnerabilidades de produção
+        run: npm audit --omit=dev --json || true
