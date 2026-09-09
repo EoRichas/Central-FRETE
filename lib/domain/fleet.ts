@@ -236,7 +236,6 @@ export function calculateFleetFreightMetrics(
     | "averageConsumptionMilliKmPerLiter"
     | "fallbackFixedCostPerKmCents"
   >,
-  vehicleCostPerKmCents: number | null,
   allocatedCostCents = 0,
 ): FleetFreightMetrics {
   const distanceKm = freight.distanceMeters / 1_000;
@@ -244,8 +243,8 @@ export function calculateFleetFreightMetrics(
   const fuelCostCents = consumptionKmPerLiter > 0
     ? Math.round((distanceKm / consumptionKmPerLiter) * parameters.fuelPriceCents)
     : 0;
-  const fixedRate = vehicleCostPerKmCents ?? parameters.fallbackFixedCostPerKmCents;
-  const fixedCostCents = Math.round(distanceKm * fixedRate);
+  // O histórico mensal é preservado, mas não substitui o parâmetro de custo fixo.
+  const fixedCostCents = Math.round(distanceKm * parameters.fallbackFixedCostPerKmCents);
   const allocated = Math.max(0, Math.round(allocatedCostCents));
   const totalCostCents =
     fuelCostCents +
@@ -266,6 +265,17 @@ export function calculateFleetFreightMetrics(
     netRevenueCents,
     marginBasisPoints,
   };
+}
+
+export function calculateFleetFreightPreview(
+  draft: RateableFreight & Pick<FleetFreightBase, "freightAmountCents" | "tollCents" | "driverCommissionCents">,
+  parameters: FleetParameters,
+  freights: RateableFreight[],
+): FleetFreightMetrics {
+  // Substitui a versão salva para não duplicar km ao editar ou mudar de mês.
+  const projectedFreights = [...freights.filter((freight) => freight.id !== draft.id), draft];
+  const allocated = allocateOfficeMonthlyCostByDistance(projectedFreights, parameters.officeMonthlyCostCents);
+  return calculateFleetFreightMetrics(draft, parameters, allocated[draft.id] ?? 0);
 }
 
 export function hasPossibleFleetMatch(
