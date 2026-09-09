@@ -1,5 +1,5 @@
 import { authorize } from "@/lib/server/auth";
-import { billingCalendar, shiftMonth, validCompetency } from "@/lib/domain/billing";
+import { billingCalendar, validCompetency } from "@/lib/domain/billing";
 import { billingConfig } from "@/lib/server/billing-config";
 import { billingStatus, periods } from "@/lib/server/billing";
 import { licensePdf } from "@/lib/server/license-pdf";
@@ -13,7 +13,13 @@ export async function GET(request: Request, context: { params: Promise<{ compete
   if (!period || competency > billingCalendar().activeCompetency) throw new ApiError(409, "O certificado estará disponível após pagamento e início da competência no dia 05.");
   const state = await billingStatus();
   const config = billingConfig();
-  const document = licensePdf(["CENTRAL FRETE", "Certificado de licença de uso mensal", "", `Cliente: ${config.companyName.slice(0,65)}`, `Competência: ${competency}`, "Valor pago: R$ 149,99", `Pagamento aprovado: ${period.approvedAt ?? "Confirmado"}`, `Início: ${competency}-05`, `Próximo vencimento: ${shiftMonth(competency, 1)}-05`, "", "Código da licença:", period.licenseKey, "", state.blocked ? "Situação atual: acesso suspenso por pendência." : competency === billingCalendar().activeCompetency ? "Situação atual: licença vigente." : "Documento histórico; esta chave não libera meses posteriores.", "Validade sujeita à confirmação de pagamento no sistema.", "Consulte a aba Certificado digital para verificar a situação."]);
+  const document = licensePdf({
+   companyName: config.companyName,
+   competency,
+   approvedAt: period.approvedAt,
+   licenseKey: period.licenseKey,
+   status: state.blocked ? "blocked" : competency === billingCalendar().activeCompetency ? "active" : "historical",
+  });
   return new Response(document as BodyInit, {headers: {"Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="licenca-${competency}.pdf"`, "Cache-Control": "private, no-store"}});
  } catch(error) { return jsonError(error); }
 }

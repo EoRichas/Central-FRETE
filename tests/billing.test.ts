@@ -113,8 +113,12 @@ test("CPF rejeita sequências repetidas e dígito verificador incorreto", () => 
  assert.equal(validCpf("52998224725"), true);
 });
 test("certificado é PDF com tabela de offsets consistente e texto escapado", () => {
- const pdf = Buffer.from(licensePdf(["Licença (mensal)", "R$ 149,99"])).toString("latin1");
+ const pdf = Buffer.from(licensePdf({companyName: "Licença (mensal)", competency: "2026-10", approvedAt: "2026-10-01T01:30:00Z", licenseKey: "a".repeat(48), status: "active"})).toString("latin1");
  assert.ok(pdf.startsWith("%PDF-1.4")); assert.ok(pdf.includes(String.raw`Licença \(mensal\)`));
+ assert.ok(pdf.includes("30/09/2026")); // Use the payment date in São Paulo.
+ assert.ok(pdf.includes("05/10/2026"));
+ assert.ok(pdf.includes("04/11/2026")); // The next key becomes active on the 5th.
+ assert.ok(pdf.includes("05/11/2026"));
  const start = Number(pdf.match(/startxref\n(\d+)/)?.[1]); assert.equal(pdf.slice(start, start+4), "xref");
 });
 
