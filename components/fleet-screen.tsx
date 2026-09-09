@@ -2,7 +2,7 @@
 
 import { FleetPaymentPanel } from "@/components/fleet-payment-panel";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Icons } from "@/components/icons";
 import {
   EmptyState,
@@ -349,11 +349,10 @@ function SettingsPanel({ fleet, onSaved }: { fleet: FleetData; onSaved: (message
 export function FleetScreen() {
   const api = useApi<{ fleet: FleetData }>("/api/fleet");
   const fleet = api.data?.fleet;
-  const [tab, setTab] = useState<FleetTab>("overview");
+  const [selectedTab, setTab] = useState<FleetTab>("overview");
+  const tab = fleet?.freightOnly ? "freights" : selectedTab;
   const [search, setSearch] = useState(""); const [opportunity, setOpportunity] = useState(""); const [status, setStatus] = useState(""); const [priority, setPriority] = useState("");
   const [freightModalOpen, setFreightModalOpen] = useState(false); const [editingFreight, setEditingFreight] = useState<FleetFreight | null>(null); const [vehicleModalOpen, setVehicleModalOpen] = useState(false); const [editingVehicle, setEditingVehicle] = useState<FleetVehicle | null>(null); const [driverModalOpen, setDriverModalOpen] = useState(false); const [editingDriver, setEditingDriver] = useState<FleetDriver | null>(null); const [costModalOpen, setCostModalOpen] = useState(false); const [editingCost, setEditingCost] = useState<FleetVehicleCost | null>(null); const [costVehicleId, setCostVehicleId] = useState<string | null>(null); const [deletingId, setDeletingId] = useState<string | null>(null); const [mutationError, setMutationError] = useState<string | null>(null); const [success, setSuccess] = useState<string | null>(null);
-
-  useEffect(() => { if (fleet?.freightOnly && tab !== "freights") setTab("freights"); }, [fleet?.freightOnly, tab]);
 
   const filteredFreights = useMemo(() => { const normalized = search.trim().toLocaleUpperCase("pt-BR"); return (fleet?.freights ?? []).filter((freight) => { const matchesSearch = !normalized || [freight.vehiclePlate, freight.driverName, freight.clientName, freight.cargoVehicleModel, freight.cargoPlate, freight.origin, freight.destination].some((value) => value?.toLocaleUpperCase("pt-BR").includes(normalized)); return matchesSearch && (!status || freight.operationalStatus === status) && (!priority || freight.priority === priority) && (!opportunity || (opportunity === "matches" ? freight.possibleMatch : opportunity === "open" ? !freight.returnUsed : freight.returnUsed)); }); }, [fleet, priority, search, status, opportunity]);
 

@@ -48,15 +48,23 @@ test('migrações rodam duas vezes e novas tabelas não expõem dados anonimamen
  assert.equal(grants.length,0);
 });
 
-test('cadastro normaliza CPF, permite homônimos e preserva veículo com vínculos', async () => {
+test('cadastro normaliza CPF, permite homônimos, desatrela motorista e preserva veículo com fretes', async () => {
  const drivers = await import('../../app/api/fleet/drivers/route.ts');
  const vehicles = await import('../../app/api/fleet/vehicles/[id]/route.ts');
  await pg.exec("INSERT INTO fleet_vehicles(id,plate) VALUES ('vehicle','ABC1D23');");
  const payload = {name:'Motorista Teste', cpf:'529.982.247-25', address:'Rua de Teste 1', phone:'(11) 99999-9999', vehicleId:'vehicle', active:true};
  const result = await drivers.POST(await request('/api/fleet/drivers','admin','POST',payload));
  assert.equal(result.status,201, await result.clone().text());
+ const created = await result.json();
+ const driver = await queryFirst('select cpf, vehicle_id from fleet_drivers where id = ?', [created.id]) as {cpf: string; vehicle_id: string | null};
+ assert.equal(driver.cpf,'52998224725');
+ assert.equal(driver.vehicle_id,null);
  const duplicate = await drivers.POST(await request('/api/fleet/drivers','admin','POST',payload));
  assert.notEqual(duplicate.status,201);
+ const homonym = await drivers.POST(await request('/api/fleet/drivers','admin','POST',{...payload, cpf:'111.444.777-35'}));
+ assert.equal(homonym.status,201, await homonym.clone().text());
+ // The historical freight protects the vehicle; drivers no longer have a permanent vehicle link.
+ await pg.query("INSERT INTO fleet_freights(id,vehicle_id,vehicle_plate,driver_id,driver_name,client_name,origin,destination,pickup_date,operational_status,freight_amount_cents,distance_meters) VALUES ('linked-freight','vehicle','ABC1D23',$1,'MOTORISTA TESTE','CLIENTE','A','B','2026-09-01','SEM_PREVISAO',1000,1000)", [created.id]);
  const deleteResult = await vehicles.DELETE(await request('/api/fleet/vehicles/vehicle','admin','DELETE'), {params: Promise.resolve({id:'vehicle'})});
  assert.equal(deleteResult.status,409, await deleteResult.clone().text());
  assert.ok(await queryFirst("select id from fleet_vehicles where id='vehicle'"));
@@ -90,7 +98,7 @@ test('notificação repetida quita uma vez; estorno bloqueia APIs inclusive do a
  const auth = await import('../../lib/server/auth.ts');
  await billing.ensurePeriod(month);
  const originalFetch = globalThis.fetch;
- let status = 'approved'; let amount=149.99;
+ let status = 'approved'; let amount=1;
  globalThis.fetch = async () => Response.json({id:100, status, transaction_amount:amount, currency_id:'BRL', collector_id:123, external_reference:`cf:test:${month}`, date_approved:new Date().toISOString(), live_mode:false});
  try {
   await billing.reconcilePayment('100'); await billing.reconcilePayment('100');
@@ -99,7 +107,7 @@ test('notificação repetida quita uma vez; estorno bloqueia APIs inclusive do a
   assert.equal((await billing.billingStatus()).blocked,false);
   const key=(await billing.periods())[0].licenseKey;
   await billing.reconcilePayment('100'); assert.equal((await billing.periods())[0].licenseKey,key);
-  amount=1; await assert.rejects(billing.reconcilePayment('100')); amount=149.99;
+  amount=149.99; await assert.rejects(billing.reconcilePayment('100')); amount=1;
   status='refunded'; await billing.reconcilePayment('100');
   // Use previous month to ensure it is overdue on any test execution date.
   process.env.BILLING_FIRST_COMPETENCY='2020-01';
