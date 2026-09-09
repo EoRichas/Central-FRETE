@@ -3,6 +3,7 @@ import "./globals.css";
 import "./fleet-overrides.css";
 import "./visual-refresh.css";
 import "./interaction-refinements.css";
+import "./theme.css";
 
 export const metadata: Metadata = {
   title: {
@@ -20,13 +21,30 @@ export const metadata: Metadata = {
   },
 };
 
+const themeBootstrap = `
+(function () {
+  try {
+    var saved = window.localStorage.getItem("cf-theme");
+    var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+    var theme = saved === "dark" || (!saved && prefersDark) ? "dark" : "light";
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+  } catch (_) {
+    document.documentElement.dataset.theme = "light";
+    document.documentElement.style.colorScheme = "light";
+  }
+})();`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR">
+    <html lang="pt-BR" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
+      </head>
       <body className="antialiased">{children}</body>
     </html>
   );
