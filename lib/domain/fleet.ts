@@ -199,15 +199,15 @@ export function calculateFleetFreightMetrics(
   const fuelCostCents = consumptionKmPerLiter > 0
     ? Math.round((distanceKm / consumptionKmPerLiter) * parameters.fuelPriceCents)
     : 0;
-  const costsConfigured = vehicleCostPerKmCents !== null && Number.isFinite(vehicleCostPerKmCents) && vehicleCostPerKmCents >= 0;
-  // Média simples dos custos/km mensais da placa. Arredondar só o total do frete.
-  // O histórico é base de cálculo; não é somado novamente como despesa.
-  const allocated = costsConfigured ? Math.round(distanceKm * vehicleCostPerKmCents!) : 0;
+  const rateAvailable = vehicleCostPerKmCents !== null && Number.isFinite(vehicleCostPerKmCents) && vehicleCostPerKmCents >= 0;
+
+  // O histórico mensal por placa permanece disponível apenas como referência.
+  // Por decisão operacional, o custo rateado não compõe custo total nem margem do frete.
+  const allocatedCostCents = 0;
   const totalCostCents =
     fuelCostCents +
     freight.tollCents +
-    freight.driverCommissionCents +
-    allocated;
+    freight.driverCommissionCents;
   const netRevenueCents = freight.freightAmountCents - totalCostCents;
   const marginBasisPoints = freight.freightAmountCents > 0
     ? Math.round((netRevenueCents * 10_000) / freight.freightAmountCents)
@@ -215,9 +215,9 @@ export function calculateFleetFreightMetrics(
 
   return {
     fuelCostCents,
-    costPerKmCents: costsConfigured ? vehicleCostPerKmCents : null,
-    costsConfigured,
-    allocatedCostCents: allocated,
+    costPerKmCents: rateAvailable ? vehicleCostPerKmCents : null,
+    costsConfigured: true,
+    allocatedCostCents,
     totalCostCents,
     netRevenueCents,
     marginBasisPoints,
@@ -257,10 +257,7 @@ export function summarizeFleet(freights: FleetFreight[]): FleetSummary {
     (total, freight) => total + freight.freightAmountCents,
     0,
   );
-  const allocatedCostCents = freights.reduce(
-    (total, freight) => total + freight.allocatedCostCents,
-    0,
-  );
+  const allocatedCostCents = 0;
   const totalCostCents = freights.reduce(
     (total, freight) => total + freight.totalCostCents,
     0,
@@ -268,7 +265,7 @@ export function summarizeFleet(freights: FleetFreight[]): FleetSummary {
   const netRevenueCents = revenueCents - totalCostCents;
 
   return {
-    missingCostCount: freights.filter((freight) => !freight.costsConfigured).length,
+    missingCostCount: 0,
     freightCount: freights.length,
     possibleMatchCount: freights.filter((freight) => freight.possibleMatch).length,
     returnUsedCount: freights.filter((freight) => freight.returnUsed).length,
