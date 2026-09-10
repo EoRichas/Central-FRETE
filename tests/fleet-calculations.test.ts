@@ -36,7 +36,6 @@ test("números inválidos não se tornam distâncias ou parâmetros silenciosame
   }
 });
 
-// OPERACIONAL LOGÍSTICA CENTRAL: Custo Rateado km!C14:E17; Parâmetros!B13.
 const history = [
   { distanceMeters: 14_345_000, monthlyCostCents: 1_054_963 },
   { distanceMeters: 9_667_000, monthlyCostCents: 1_154_584 },
@@ -45,45 +44,47 @@ const history = [
 const rate = averageVehicleCostPerKmCents(history)!;
 const vehicles = [{id: "bdc", averageCostPerKmCents: rate}, {id: "other", averageCostPerKmCents: 200}];
 
-test("1200 km mantém combustível e rateio da placa ao abrir, editar e salvar", () => {
+test("1200 km preserva combustível, mas custo rateado não compõe o resultado", () => {
   assert.ok(Math.abs(rate / 100 - 1.0667225884564662) < 1e-12);
   const metrics = calculateFleetFreightMetrics(draft, DEFAULT_FLEET_PARAMETERS, rate);
   assert.equal(metrics.fuelCostCents, 276750);
-  assert.equal(metrics.allocatedCostCents, 128007);
-  assert.equal(metrics.totalCostCents, 437757);
-  assert.equal(metrics.netRevenueCents, 102243);
+  assert.equal(metrics.allocatedCostCents, 0);
+  assert.equal(metrics.totalCostCents, 309750);
+  assert.equal(metrics.netRevenueCents, 230250);
   assert.equal(metrics.costsConfigured, true);
   assert.deepEqual(calculateFleetFreightPreview({
     ...draft, distanceMeters: distanceInputToMeters(distanceToInput(draft.distanceMeters)),
   }, DEFAULT_FLEET_PARAMETERS, vehicles), metrics);
 });
 
-test("51,1 km da planilha tem R$ 54,51 de rateio e R$ 188,06 de custo total", () => {
+test("51,1 km considera apenas combustível, pedágio e motorista no custo total", () => {
   const metrics = calculateFleetFreightMetrics({...draft, distanceMeters:51100, freightAmountCents:33000, tollCents:570, driverCommissionCents:1000}, DEFAULT_FLEET_PARAMETERS, rate);
-  assert.equal(metrics.allocatedCostCents, 5451);
-  assert.equal(metrics.totalCostCents, 18806);
+  assert.equal(metrics.allocatedCostCents, 0);
+  assert.equal(metrics.totalCostCents, 13355);
 });
 
-test("trocar placa usa a sua própria média; campos globais antigos não duplicam custo", () => {
+test("trocar placa não altera resultado pelo rateio", () => {
   const parameters = {...DEFAULT_FLEET_PARAMETERS, fallbackFixedCostPerKmCents:99999, officeMonthlyCostCents:900000000};
-  assert.equal(calculateFleetFreightPreview(draft, parameters, vehicles).allocatedCostCents, 128007);
+  const bdc = calculateFleetFreightPreview(draft, parameters, vehicles);
   const other = calculateFleetFreightPreview({...draft, vehicleId:"other"}, parameters, vehicles);
-  assert.equal(other.allocatedCostCents, 240000);
-  assert.equal(other.totalCostCents, 549750);
+  assert.equal(bdc.allocatedCostCents, 0);
+  assert.equal(other.allocatedCostCents, 0);
+  assert.equal(other.totalCostCents, bdc.totalCostCents);
 });
 
-test("média mensal é simples, não ponderada; ignora km zero e preserva mês com custo zero", () => {
+test("média mensal continua disponível como referência e respeita exclusão de mês", () => {
   assert.equal(averageVehicleCostPerKmCents([{distanceMeters:1000,monthlyCostCents:100}, {distanceMeters:10000,monthlyCostCents:3000}]), 200);
+  assert.equal(averageVehicleCostPerKmCents([{distanceMeters:1000,monthlyCostCents:100,includeInRateAverage:true}, {distanceMeters:10000,monthlyCostCents:3000,includeInRateAverage:false}]), 100);
   assert.equal(averageVehicleCostPerKmCents([{distanceMeters:0,monthlyCostCents:999999}, {distanceMeters:1000,monthlyCostCents:0}]), 0);
   assert.equal(averageVehicleCostPerKmCents([]), null);
   assert.equal(averageVehicleCostPerKmCents([{distanceMeters:NaN,monthlyCostCents:100}]), null);
 });
 
-test("base ausente não usa valor genérico e fica explicitamente pendente", () => {
+test("placa sem base não bloqueia custo total ou margem do frete", () => {
   const missing = calculateFleetFreightPreview({...draft,vehicleId:"missing"},DEFAULT_FLEET_PARAMETERS,vehicles);
-  assert.equal(missing.costsConfigured, false);
+  assert.equal(missing.costsConfigured, true);
   assert.equal(missing.costPerKmCents, null);
-  const zero = calculateFleetFreightMetrics(draft,DEFAULT_FLEET_PARAMETERS,0);
-  assert.equal(zero.costsConfigured,true);
-  assert.equal(zero.allocatedCostCents,0);
+  assert.equal(missing.allocatedCostCents, 0);
+  assert.equal(missing.totalCostCents, 309750);
+  assert.equal(missing.netRevenueCents, 230250);
 });
