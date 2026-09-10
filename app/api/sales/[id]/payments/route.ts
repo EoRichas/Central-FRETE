@@ -1,5 +1,5 @@
 import { saleProof } from "@/lib/server/sale-proof";
-import { readPdfProof } from "@/lib/server/pdf-proof";
+import { readPaymentProof } from "@/lib/server/payment-proof";
 import { authorize } from "@/lib/server/auth";
 import {
   ApiError,
@@ -26,7 +26,6 @@ const PAYMENT_METHODS = [
 ] as const;
 const PAYMENT_TYPES = ["ADIANTAMENTO", "RECEBIMENTO"] as const;
 const PAYMENT_STATUSES = ["PENDENTE", "CONFIRMADO"] as const;
-const ALLOWED_PROOF_TYPES = ["application/pdf", "image/jpeg", "image/png"];
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -103,20 +102,14 @@ export async function POST(request: Request, context: RouteContext) {
 
     let proofName: string | null = null;
     let existingProofKey: string | null = null;
-    if (status === "CONFIRMADO" && !proof && !values.proofId) throw new ApiError(400, "Comprovante PDF obrigatório para confirmar o pagamento.");
+    if (status === "CONFIRMADO" && !proof && !values.proofId) throw new ApiError(400, "Comprovante obrigatório para confirmar o pagamento.");
     if (!proof && values.proofId) { const existing = await saleProof(saleId, values.proofId); existingProofKey = existing.storageKey; proofName = existing.fileName; }
-    if (status === "CONFIRMADO" && proof) await readPdfProof(proof);
     if (proof) {
-      if (proof.size > 10 * 1024 * 1024) {
-        throw new ApiError(400, "O comprovante deve ter no máximo 10 MB.");
-      }
-      if (!ALLOWED_PROOF_TYPES.includes(proof.type)) {
-        throw new ApiError(400, "Envie comprovante PDF, JPG ou PNG.");
-      }
-      proofName = proof.name.slice(0, 180);
+      const validated = await readPaymentProof(proof);
+      proofName = validated.name;
       uploadedKey = `payments/${saleId}/${crypto.randomUUID()}`;
-      await (await getBucket()).put(uploadedKey, await proof.arrayBuffer(), {
-        httpMetadata: { contentType: proof.type },
+      await (await getBucket()).put(uploadedKey, validated.buffer, {
+        httpMetadata: { contentType: validated.mimeType },
         customMetadata: { originalName: proofName },
       });
     }

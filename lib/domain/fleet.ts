@@ -92,7 +92,8 @@ export type FleetFreightBase = {
 
 export type FleetFreightMetrics = {
   fuelCostCents: number;
-  fixedCostCents: number;
+  costPerKmCents: number | null;
+  costsConfigured: boolean;
   allocatedCostCents: number;
   totalCostCents: number;
   netRevenueCents: number;
@@ -101,6 +102,8 @@ export type FleetFreightMetrics = {
 
 export type FleetFreight = FleetFreightBase & FleetFreightMetrics & {
   id: string;
+  paidAt: string | null;
+  proofAttachmentId: string | null;
   paymentStatus: "EM_ABERTO" | "PAGO";
   originCep: string | null;
   destinationCep: string | null;
@@ -110,6 +113,7 @@ export type FleetFreight = FleetFreightBase & FleetFreightMetrics & {
 };
 
 export type FleetSummary = {
+  missingCostCount: number;
   freightCount: number;
   possibleMatchCount: number;
   returnUsedCount: number;
@@ -136,10 +140,6 @@ type MatchableFreight = Pick<
   FleetFreightBase,
   "origin" | "destination" | "pickupDate" | "deliveryDate"
 > & { id: string };
-
-type RateableFreight = Pick<FleetFreightBase, "pickupDate" | "distanceMeters"> & {
-  id: string;
-};
 
 export const DEFAULT_FLEET_PARAMETERS: FleetParameters = {
   fuelPriceCents: 738,
@@ -169,7 +169,7 @@ export function averageVehicleCostPerKmCents(
   costs: Array<Pick<FleetVehicleCost, "distanceMeters" | "monthlyCostCents">>,
 ) {
   const valid = costs.filter(
-    (cost) => cost.distanceMeters > 0 && cost.monthlyCostCents >= 0,
+    (cost) => Number.isFinite(cost.distanceMeters) && Number.isFinite(cost.monthlyCostCents) && cost.distanceMeters > 0 && cost.monthlyCostCents >= 0,
   );
   if (!valid.length) return null;
   return (
@@ -181,50 +181,6 @@ export function averageVehicleCostPerKmCents(
   );
 }
 
-export function allocateOfficeMonthlyCostByDistance(
-  freights: RateableFreight[],
-  officeMonthlyCostCents: number | null,
-) {
-  const result: Record<string, number> = Object.fromEntries(
-    freights.map((freight) => [freight.id, 0]),
-  );
-  const monthlyCost = Math.max(0, Math.round(officeMonthlyCostCents ?? 0));
-  if (!monthlyCost) return result;
-
-  const byCompetency = new Map<string, RateableFreight[]>();
-  for (const freight of freights) {
-    const competency = /^\d{4}-\d{2}-\d{2}$/.test(freight.pickupDate)
-      ? freight.pickupDate.slice(0, 7)
-      : "";
-    if (!competency || freight.distanceMeters <= 0) continue;
-    const group = byCompetency.get(competency) ?? [];
-    group.push(freight);
-    byCompetency.set(competency, group);
-  }
-
-  for (const group of byCompetency.values()) {
-    const totalDistance = group.reduce(
-      (total, freight) => total + freight.distanceMeters,
-      0,
-    );
-    if (totalDistance <= 0) continue;
-
-    const shares = group.map((freight) => {
-      const exact = (monthlyCost * freight.distanceMeters) / totalDistance;
-      const base = Math.floor(exact);
-      return { id: freight.id, base, fraction: exact - base };
-    });
-    let remainder = monthlyCost - shares.reduce((total, share) => total + share.base, 0);
-    shares.sort((a, b) => b.fraction - a.fraction || a.id.localeCompare(b.id));
-    for (const share of shares) {
-      result[share.id] = share.base + (remainder > 0 ? 1 : 0);
-      if (remainder > 0) remainder -= 1;
-    }
-  }
-
-  return result;
-}
-
 export function calculateFleetFreightMetrics(
   freight: Pick<
     FleetFreightBase,
@@ -234,23 +190,22 @@ export function calculateFleetFreightMetrics(
     FleetParameters,
     | "fuelPriceCents"
     | "averageConsumptionMilliKmPerLiter"
-    | "fallbackFixedCostPerKmCents"
   >,
-  allocatedCostCents = 0,
+  vehicleCostPerKmCents: number | null,
 ): FleetFreightMetrics {
   const distanceKm = freight.distanceMeters / 1_000;
   const consumptionKmPerLiter = parameters.averageConsumptionMilliKmPerLiter / 1_000;
   const fuelCostCents = consumptionKmPerLiter > 0
     ? Math.round((distanceKm / consumptionKmPerLiter) * parameters.fuelPriceCents)
     : 0;
-  // O histórico mensal é preservado, mas não substitui o parâmetro de custo fixo.
-  const fixedCostCents = Math.round(distanceKm * parameters.fallbackFixedCostPerKmCents);
-  const allocated = Math.max(0, Math.round(allocatedCostCents));
+  const costsConfigured = vehicleCostPerKmCents !== null && Number.isFinite(vehicleCostPerKmCents) && vehicleCostPerKmCents >= 0;
+  // Média simples dos custos/km mensais da placa. Arredondar só o total do frete.
+  // O histórico é base de cálculo; não é somado novamente como despesa.
+  const allocated = costsConfigured ? Math.round(distanceKm * vehicleCostPerKmCents!) : 0;
   const totalCostCents =
     fuelCostCents +
     freight.tollCents +
     freight.driverCommissionCents +
-    fixedCostCents +
     allocated;
   const netRevenueCents = freight.freightAmountCents - totalCostCents;
   const marginBasisPoints = freight.freightAmountCents > 0
@@ -259,7 +214,8 @@ export function calculateFleetFreightMetrics(
 
   return {
     fuelCostCents,
-    fixedCostCents,
+    costPerKmCents: costsConfigured ? vehicleCostPerKmCents : null,
+    costsConfigured,
     allocatedCostCents: allocated,
     totalCostCents,
     netRevenueCents,
@@ -268,14 +224,12 @@ export function calculateFleetFreightMetrics(
 }
 
 export function calculateFleetFreightPreview(
-  draft: RateableFreight & Pick<FleetFreightBase, "freightAmountCents" | "tollCents" | "driverCommissionCents">,
+  draft: Pick<FleetFreightBase, "vehicleId" | "distanceMeters" | "freightAmountCents" | "tollCents" | "driverCommissionCents">,
   parameters: FleetParameters,
-  freights: RateableFreight[],
+  vehicles: Pick<FleetVehicle, "id" | "averageCostPerKmCents">[],
 ): FleetFreightMetrics {
-  // Substitui a versão salva para não duplicar km ao editar ou mudar de mês.
-  const projectedFreights = [...freights.filter((freight) => freight.id !== draft.id), draft];
-  const allocated = allocateOfficeMonthlyCostByDistance(projectedFreights, parameters.officeMonthlyCostCents);
-  return calculateFleetFreightMetrics(draft, parameters, allocated[draft.id] ?? 0);
+  const rate = vehicles.find((vehicle) => vehicle.id === draft.vehicleId)?.averageCostPerKmCents ?? null;
+  return calculateFleetFreightMetrics(draft, parameters, rate);
 }
 
 export function hasPossibleFleetMatch(
@@ -313,6 +267,7 @@ export function summarizeFleet(freights: FleetFreight[]): FleetSummary {
   const netRevenueCents = revenueCents - totalCostCents;
 
   return {
+    missingCostCount: freights.filter((freight) => !freight.costsConfigured).length,
     freightCount: freights.length,
     possibleMatchCount: freights.filter((freight) => freight.possibleMatch).length,
     returnUsedCount: freights.filter((freight) => freight.returnUsed).length,

@@ -11,8 +11,8 @@ import type {
 import {
   costCategoryLabel,
   isEditableOperationCostCategory,
-  isOperationPaymentCategory,
-  isPaymentControlCostCategory,
+  FIXED_COST_ROWS,
+  normalizeCostCategory,
 } from "@/lib/domain/operations";
 import {
   formatDate,
@@ -20,6 +20,8 @@ import {
   formatPercent,
   moneyInputToCents,
 } from "@/lib/format";
+import { ProofUpload, UploadButton } from "@/components/proof-upload";
+import { isProofMimeType } from "@/lib/domain/proof-files";
 import { Icons } from "@/components/icons";
 import {
   ErrorState,
@@ -104,19 +106,19 @@ export function SaleDetailScreen({ id }: { id: string }) {
     }
   }
 
-  async function reversePayment(paymentId: string) {
-    if (!window.confirm("Confirmar o estorno? O lançamento original será preservado.")) {
+  async function deletePayment(paymentId: string) {
+    if (!window.confirm("Excluir este recebimento? Ele sairá da lista e o saldo da venda será recalculado.")) {
       return;
     }
     setError(null);
     try {
-      await apiMutation(`/api/payments/${paymentId}/reverse`, { method: "POST" });
+      await apiMutation(`/api/payments/${paymentId}`, { method: "DELETE" });
       saleApi.refresh();
     } catch (mutationError) {
       setError(
         mutationError instanceof Error
           ? mutationError.message
-          : "Erro ao estornar.",
+          : "Erro ao excluir recebimento.",
       );
     }
   }
@@ -125,6 +127,15 @@ export function SaleDetailScreen({ id }: { id: string }) {
     setError(null);
     setProviderStatus(cost?.paymentStatus === "PAGO" ? "PAGO" : "EM_ABERTO");
     setProviderSlot(slot);
+  }
+
+  async function proofForCost(form: FormData) {
+    const file = form.get("proof");
+    if (!(file instanceof File) || file.size === 0) return form.get("proofId");
+    const upload = new FormData(); upload.set("file", file);
+    const result = await apiMutation<{ id: string }>(`/api/sales/${id}/attachments`, { method: "POST", body: upload });
+    saleApi.refresh();
+    return result.id;
   }
 
   async function saveProviderCost(event: React.FormEvent<HTMLFormElement>) {
@@ -143,7 +154,7 @@ export function SaleDetailScreen({ id }: { id: string }) {
           pixDetails: form.get("pixDetails"),
           amountCents: moneyInputToCents(form.get("amount")),
           paymentStatus: providerStatus,
-          proofId: form.get("proofId"),
+          proofId: await proofForCost(form),
           paidAt: providerStatus === "PAGO" ? form.get("paidAt") : null,
         }),
       });
@@ -185,7 +196,7 @@ export function SaleDetailScreen({ id }: { id: string }) {
           occurredOn: form.get("occurredOn") || null,
           amountCents: moneyInputToCents(form.get("amount")),
           status: operationCostStatus,
-          proofId: form.get("proofId"),
+          proofId: await proofForCost(form),
         }),
       });
       setOperationCost(null);
@@ -262,29 +273,14 @@ export function SaleDetailScreen({ id }: { id: string }) {
         cost.category === "PRESTADOR_SERVICO" && cost.providerSlot === slot,
     ) ?? legacyProviderCosts[slot - 1],
   );
-  const operationPaymentCosts = sale.costs.filter((cost) =>
-    isOperationPaymentCategory(cost.category),
-  );
-  const paymentControlOrder = [
-    "ICMS",
-    "PATIO_DESTINO",
-    "SEGURO_ALLIANZ",
-    "PATIO_ORIGEM",
-  ];
-  const paymentControlCosts = sale.costs
-    .filter(
-      (cost) =>
-        isPaymentControlCostCategory(cost.category) &&
-        !isOperationPaymentCategory(cost.category),
-    )
-    .sort(
-      (a, b) =>
-        paymentControlOrder.indexOf(a.category) -
-        paymentControlOrder.indexOf(b.category),
-    );
-  const regularCosts = sale.costs.filter((cost) =>
-    cost.category === "OUTRAS_DESPESAS",
-  );
+  const operationRows = FIXED_COST_ROWS.flatMap<{key: string; label: string; slot: number; cost: CostRecord | undefined}>((row) => {
+    if (row.category === "PRESTADOR_SERVICO") {
+      const slot = Number(row.key.slice(-1));
+      return [{ key: row.key, label: row.label, slot, cost: providerCosts[slot - 1] }];
+    }
+    return sale.costs.filter((cost) => normalizeCostCategory(cost.category) === row.category)
+      .map((cost) => ({ key: cost.id, label: row.label, slot: 0, cost }));
+  });
   const selectedProviderCost = providerSlot
     ? providerCosts[providerSlot - 1]
     : undefined;
@@ -364,106 +360,24 @@ export function SaleDetailScreen({ id }: { id: string }) {
       </section>
 
       <section className="panel provider-cost-panel">
-        <header>
-          <div><span className="eyebrow">Pagamentos</span><h2>Pagamentos da operação</h2><p>Controle prestadores, ICMS, seguro, pátios, coleta e entrega; itens em aberto aguardam confirmação do Financeiro.</p></div>
-        </header>
-        <div className="responsive-table">
-          <table>
-            <thead><tr><th>Linha</th><th>Referência</th><th>Situação</th><th>Data</th><th>Valor</th><th><span className="sr-only">Ações</span></th></tr></thead>
-            <tbody>
-              {providerCosts.map((cost, index) => {
-                const slot = index + 1;
-                return (
-                  <tr key={cost?.id ?? `provider-slot-${slot}`}>
-                    <td data-label="Linha"><strong>Prestador {slot}</strong></td>
-                    <td data-label="Referência">
-                      <strong>{cost?.providerName ?? "NÃO CADASTRADO"}</strong>
-                      {cost && <small>{cost.pixDetails ? `PIX: ${cost.pixDetails}` : "PIX NÃO INFORMADO"}</small>}
-                    </td>
-                    <td data-label="Situação">{cost ? <StatusBadge status={cost.paymentStatus} /> : "—"}</td>
-                    <td data-label="Data">{formatDate(cost?.paidAt)}</td>
-                    <td data-label="Valor"><strong>{cost ? formatMoney(cost.amountCents) : "—"}</strong></td>
-                    <td data-label="Ações">
-                      {canManageProviders && (
-                        <button className="button secondary compact-button" onClick={() => openProviderCost(slot, cost)}>
-                          {cost ? "Editar / baixar" : "Cadastrar"}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-              {paymentControlCosts.map((cost) => (
-                <tr key={cost.id}>
-                  <td data-label="Linha"><strong>{costCategoryLabel(cost.category)}</strong></td>
-                  <td data-label="Referência">
-                    <strong>{cost.description ?? costCategoryLabel(cost.category)}</strong>
-                    <small>{cost.pixDetails ? `PIX: ${cost.pixDetails}` : "PIX NÃO INFORMADO"}</small>
-                  </td>
-                  <td data-label="Situação"><StatusBadge status={cost.confirmed ? "PAGO" : "EM_ABERTO"} /></td>
-                  <td data-label="Data">{formatDate(cost.occurredOn)}</td>
-                  <td data-label="Valor"><strong>{formatMoney(cost.amountCents)}</strong></td>
-                  <td data-label="Ações">
-                    {canManageOperationCosts && (
-                      <button className="button secondary compact-button" onClick={() => openOperationCost(cost)}>Editar</button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-              {operationPaymentCosts.map((cost) => (
-                <tr key={cost.id}>
-                  <td data-label="Linha"><strong>{costCategoryLabel(cost.category)}</strong></td>
-                  <td data-label="Referência">
-                    <strong>{cost.description ?? "—"}</strong>
-                    <small>{cost.pixDetails ? `PIX: ${cost.pixDetails}` : "PIX NÃO INFORMADO"}</small>
-                  </td>
-                  <td data-label="Situação"><StatusBadge status={cost.confirmed ? "PAGO" : "EM_ABERTO"} /></td>
-                  <td data-label="Data">{formatDate(cost.occurredOn)}</td>
-                  <td data-label="Valor"><strong>{formatMoney(cost.amountCents)}</strong></td>
-                  <td data-label="Ações">
-                    {canManageOperationCosts && (
-                      <button className="button secondary compact-button" onClick={() => openOperationCost(cost)}>Editar</button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="panel">
-        <header>
-          <div><span className="eyebrow">Custos</span><h2>Demais despesas da operação</h2></div>
-          <span className={`status-badge ${sale.costsPending ? "status-em_aberto" : "status-pago"}`}>{sale.costsPending ? "CUSTOS EM ABERTO" : "CUSTOS CONFIRMADOS"}</span>
-        </header>
-        <div className="responsive-table">
-          <table>
-            <thead><tr><th>Categoria</th><th>Referência</th><th>Data</th><th>Situação</th><th>Valor</th><th><span className="sr-only">Ações</span></th></tr></thead>
-            <tbody>
-              {regularCosts.length ? regularCosts.map((cost) => (
-                <tr key={cost.id}>
-                  <td data-label="Categoria"><strong>{costCategoryLabel(cost.category)}</strong></td>
-                  <td data-label="Referência">{cost.description ?? "—"}</td>
-                  <td data-label="Data">{formatDate(cost.occurredOn)}</td>
-                  <td data-label="Situação"><StatusBadge status={cost.confirmed ? "PAGO" : "EM_ABERTO"} /></td>
-                  <td data-label="Valor"><strong>{formatMoney(cost.amountCents)}</strong></td>
-                  <td data-label="Ações">
-                    {canManageOperationCosts && isEditableOperationCostCategory(cost.category) && (
-                      <button className="button secondary compact-button" onClick={() => openOperationCost(cost)}>Editar</button>
-                    )}
-                  </td>
-                </tr>
-              )) : <tr><td colSpan={6} className="empty-cell">Nenhuma outra despesa cadastrada.</td></tr>}
-            </tbody>
-          </table>
-        </div>
+        <header><div><span className="eyebrow">Custos e pagamentos</span><h2>Custos da operação</h2><p>Mesma sequência do cadastro, com outras despesas ao final.</p></div></header>
+        <div className="responsive-table"><table>
+          <thead><tr><th>Linha</th><th>Referência</th><th>Situação</th><th>Data</th><th>Valor</th><th>Ações</th></tr></thead>
+          <tbody>{operationRows.map(({ key, label, slot, cost }) => <tr key={key}>
+            <td data-label="Linha"><strong>{label}</strong></td>
+            <td data-label="Referência"><strong>{cost?.providerName ?? cost?.description ?? (cost ? label : "NÃO CADASTRADO")}</strong>{cost?.pixDetails && <small>PIX: {cost.pixDetails}</small>}</td>
+            <td data-label="Situação">{cost ? <StatusBadge status={slot ? cost.paymentStatus : cost.confirmed ? "PAGO" : "EM_ABERTO"} /> : "—"}</td>
+            <td data-label="Data">{formatDate(slot ? cost?.paidAt : cost?.occurredOn)}</td>
+            <td data-label="Valor"><strong>{cost ? formatMoney(cost.amountCents) : "—"}</strong></td>
+            <td data-label="Ações">{slot && canManageProviders ? <button type="button" className="button secondary compact-button" onClick={() => openProviderCost(slot, cost)}>{cost ? "Editar / baixar" : "Cadastrar"}</button> : cost && canManageOperationCosts && isEditableOperationCostCategory(cost.category) ? <button type="button" className="button secondary compact-button" onClick={() => openOperationCost(cost)}>Editar / baixar</button> : null}</td>
+          </tr>)}</tbody>
+        </table></div>
       </section>
 
       <section className="panel attachments-panel">
         <header>
-          <div><span className="eyebrow">Documentos</span><h2>Comprovantes da venda</h2><p>Anexe documentos gerais da operação em PDF, JPG ou PNG.</p></div>
-          {canAttach && <button className="button secondary" onClick={() => { setError(null); setAttachmentOpen(true); }}><Icons.plus /> Anexar comprovante</button>}
+          <div><span className="eyebrow">Documentos</span><h2>Comprovantes da venda</h2><p>Anexe comprovantes em PDF ou imagem, com até 10 MB.</p></div>
+          {canAttach && <UploadButton onClick={() => { setError(null); setAttachmentOpen(true); }}>Anexar comprovante</UploadButton>}
         </header>
         {sale.attachments.length ? (
           <div className="attachment-list">
@@ -501,7 +415,7 @@ export function SaleDetailScreen({ id }: { id: string }) {
                   <td data-label="Situação"><StatusBadge status={payment.status} /></td>
                   <td data-label="Observação">{payment.notes ?? "—"}{payment.proofName && <> · <a href={`/api/payments/${payment.id}/proof`} target="_blank" rel="noreferrer">Comprovante</a></>}</td>
                   <td data-label="Valor" className={payment.type === "ESTORNO" ? "negative" : "positive"}><strong>{payment.type === "ESTORNO" ? "− " : ""}{formatMoney(payment.amountCents)}</strong></td>
-                  <td data-label="Ações">{canManagePayments && payment.canReverse && <button className="text-button danger" onClick={() => reversePayment(payment.id)}>Estornar</button>}</td>
+                  <td data-label="Ações">{canManagePayments && payment.canDelete && <div className="table-actions"><button type="button" className="button danger compact-button" aria-label="Excluir recebimento" title="Excluir recebimento" onClick={() => deletePayment(payment.id)}>Excluir</button></div>}</td>
                 </tr>
               )) : <tr><td colSpan={7} className="empty-cell">Nenhum recebimento registrado.</td></tr>}
             </tbody>
@@ -520,12 +434,12 @@ export function SaleDetailScreen({ id }: { id: string }) {
           <div className="form-grid two">
             <Field label="Situação"><select name="status" defaultValue="CONFIRMADO"><option value="CONFIRMADO">Pago</option><option value="PENDENTE">Pendente</option></select></Field>
             <Field label="Valor"><input name="amount" inputMode="decimal" placeholder="0,00" required /></Field>
-            <Field label="Data"><input name="occurredAt" type="date" defaultValue={todaySaoPaulo()} required /></Field>
+            <Field label="Data do pagamento"><input name="occurredAt" type="date" defaultValue={todaySaoPaulo()} required /></Field>
             <Field label="Forma de pagamento"><select name="paymentMethod" defaultValue="PIX"><option value="BOLETO">Boleto</option><option value="DINHEIRO">Dinheiro</option><option value="CREDITO">Crédito</option><option value="DEBITO">Débito</option><option value="PIX">PIX</option><option value="FATURADO">Faturado</option></select></Field>
           </div>
           <Field label="Observação"><textarea name="notes" rows={3} /></Field>
-          <Field label="Novo comprovante PDF" hint="Obrigatório para confirmar Pago, ou selecione um PDF já anexado abaixo. Máximo 10 MB."><input name="proof" type="file" accept="application/pdf" /></Field>
-          <Field label="Comprovante PDF anexado" hint="Use um comprovante enviado na seção Anexos desta venda."><select name="proofId"><option value="">Selecione</option>{sale.attachments.filter(a => a.mimeType === "application/pdf").map(a => <option key={a.id} value={a.id}>{a.fileName}</option>)}</select></Field>
+          <ProofUpload name="proof" disabled={saving} />
+          <Field label="Comprovante já anexado" hint="Use um comprovante enviado na seção Anexos desta venda."><select name="proofId"><option value="">Selecione</option>{sale.attachments.filter(a => isProofMimeType(a.mimeType)).map(a => <option key={a.id} value={a.id}>{a.fileName}</option>)}</select></Field>
           {error && <p className="form-error" role="alert">{error}</p>}
           <footer className="modal-actions"><button type="button" className="button secondary" onClick={() => setPaymentOpen(false)}>Cancelar</button><button className="button primary" disabled={saving}>{saving ? "Registrando…" : "Registrar"}</button></footer>
         </form>
@@ -542,9 +456,10 @@ export function SaleDetailScreen({ id }: { id: string }) {
             )}
             <div className="form-grid two">
               <Field label="Valor"><div className="money-field"><span>R$</span><input name="amount" inputMode="decimal" defaultValue={centsToInput(operationCost.amountCents)} placeholder="0,00" required /></div></Field>
-              <Field label="Data"><input name="occurredOn" type="date" defaultValue={operationCost.occurredOn ?? ""} /></Field>
-              <Field label="Situação"><select value={operationCostStatus} onChange={(event) => setOperationCostStatus(event.target.value as "EM_ABERTO" | "PAGO")}><option value="EM_ABERTO">Em aberto</option><option value="PAGO">Pago</option></select></Field><Field label="Comprovante PDF anexado" hint="Use um comprovante enviado na seção Anexos desta venda."><select name="proofId"><option value="">Selecione</option>{sale.attachments.filter(a => a.mimeType === "application/pdf").map(a => <option key={a.id} value={a.id}>{a.fileName}</option>)}</select></Field>
+              <Field label="Data do pagamento"><input name="occurredOn" type="date" defaultValue={operationCost.occurredOn ?? ""} /></Field>
+              <Field label="Situação"><select value={operationCostStatus} onChange={(event) => setOperationCostStatus(event.target.value as "EM_ABERTO" | "PAGO")}><option value="EM_ABERTO">Em aberto</option><option value="PAGO">Pago</option></select></Field><Field label="Comprovante já anexado" hint="Use um comprovante enviado na seção Anexos desta venda."><select name="proofId"><option value="">Selecione</option>{sale.attachments.filter(a => isProofMimeType(a.mimeType)).map(a => <option key={a.id} value={a.id}>{a.fileName}</option>)}</select></Field>
             </div>
+            <ProofUpload name="proof" disabled={saving} />
             {error && <p className="form-error" role="alert">{error}</p>}
             <footer className="modal-actions"><button type="button" className="button secondary" onClick={() => setOperationCost(null)}>Cancelar</button><button className="button primary" disabled={saving}>{saving ? "Salvando…" : "Salvar custo"}</button></footer>
           </form>
@@ -557,8 +472,9 @@ export function SaleDetailScreen({ id }: { id: string }) {
           <Field label="Dados PIX" hint="Informe a chave PIX, o tipo da chave e o titular para facilitar o pagamento."><textarea name="pixDetails" rows={3} defaultValue={selectedProviderCost?.pixDetails ?? ""} placeholder="Ex.: CPF 123.456.789-00 · TITULAR: NOME DO PRESTADOR" /></Field>
           <Field label="Valor"><div className="money-field"><span>R$</span><input name="amount" inputMode="decimal" defaultValue={selectedProviderCost ? centsToInput(selectedProviderCost.amountCents) : ""} placeholder="0,00" required /></div></Field>
           <Field label="Situação financeira"><select value={providerStatus} onChange={(event) => setProviderStatus(event.target.value as "EM_ABERTO" | "PAGO")}><option value="EM_ABERTO">Em aberto</option><option value="PAGO">Pago</option></select></Field>
-          <Field label="Comprovante PDF anexado" hint="Use um comprovante enviado na seção Anexos desta venda."><select name="proofId"><option value="">Selecione</option>{sale.attachments.filter(a => a.mimeType === "application/pdf").map(a => <option key={a.id} value={a.id}>{a.fileName}</option>)}</select></Field>
           {providerStatus === "PAGO" && <Field label="Data do pagamento"><input name="paidAt" type="date" defaultValue={selectedProviderCost?.paidAt?.slice(0, 10) ?? todaySaoPaulo()} required /></Field>}
+          <ProofUpload name="proof" disabled={saving} />
+          <Field label="Comprovante já anexado" hint="Use um comprovante enviado na seção Anexos desta venda."><select name="proofId"><option value="">Selecione</option>{sale.attachments.filter(a => isProofMimeType(a.mimeType)).map(a => <option key={a.id} value={a.id}>{a.fileName}</option>)}</select></Field>
           {error && <p className="form-error" role="alert">{error}</p>}
           <footer className="modal-actions"><button type="button" className="button secondary" onClick={() => setProviderSlot(null)}>Cancelar</button><button className="button primary" disabled={saving}>{saving ? "Salvando…" : "Salvar prestador"}</button></footer>
         </form>
@@ -566,7 +482,7 @@ export function SaleDetailScreen({ id }: { id: string }) {
 
       <Modal open={attachmentOpen} onClose={() => setAttachmentOpen(false)} title="Anexar comprovante" description="O arquivo ficará vinculado à venda e disponível para consulta.">
         <form className="modal-body form-stack" onSubmit={uploadAttachment}>
-          <Field label="Arquivo" hint="PDF, JPG ou PNG; máximo 10 MB."><input name="file" type="file" accept="application/pdf,image/jpeg,image/png" required /></Field>
+          <ProofUpload required disabled={saving} />
           <Field label="Descrição"><textarea name="description" rows={3} placeholder="Ex.: comprovante da coleta, recibo do pátio…" /></Field>
           {error && <p className="form-error" role="alert">{error}</p>}
           <footer className="modal-actions"><button type="button" className="button secondary" onClick={() => setAttachmentOpen(false)}>Cancelar</button><button className="button primary" disabled={saving}>{saving ? "Anexando…" : "Anexar"}</button></footer>

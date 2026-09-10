@@ -1,4 +1,5 @@
 import { authorize } from "@/lib/server/auth";
+import { currentCompetency, isCompetency } from "@/lib/domain/dates";
 import {
   COST_CATEGORIES,
   normalizeCostCategory,
@@ -30,8 +31,10 @@ export async function GET(request: Request) {
   try {
     const user = await authorize(request);
     const url = new URL(request.url);
+    const competency = url.searchParams.get("competency") || currentCompetency();
+    if (!isCompetency(competency)) throw new ApiError(400, "Competência inválida.");
     const sales = await listSales(user, {
-      competency: url.searchParams.get("competency") || undefined,
+      competency,
       query: url.searchParams.get("q") || undefined,
       operationalStatus:
         url.searchParams.get("operationalStatus") || undefined,
@@ -40,7 +43,7 @@ export async function GET(request: Request) {
       limit: Number(url.searchParams.get("limit") || 200),
       offset: Number(url.searchParams.get("offset") || 0),
     });
-    return Response.json({ sales, count: sales.length });
+    return Response.json({ sales, count: sales.length, canDelete: user.role === "ADMIN" });
   } catch (error) {
     return jsonError(error);
   }

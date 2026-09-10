@@ -7,6 +7,7 @@ import "./theme.css";
 import "./sidebar-header-refinements.css";
 import "./dark-mode-action-refinements.css";
 import "./contrast-refinements.css";
+import "./form-refinements.css";
 import "./animation-restore.css";
 
 export const metadata: Metadata = {

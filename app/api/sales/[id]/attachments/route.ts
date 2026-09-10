@@ -1,15 +1,9 @@
-import { readPdfProof } from "@/lib/server/pdf-proof";
+import { readPaymentProof } from "@/lib/server/payment-proof";
 import { authorize } from "@/lib/server/auth";
 import { ApiError, getBucket, getD1, jsonError } from "@/lib/server/d1";
 import { getSale } from "@/lib/server/repository";
 import { upper } from "@/lib/server/validation";
 
-const ALLOWED_ATTACHMENT_TYPES = [
-  "application/pdf",
-  "image/jpeg",
-  "image/png",
-];
-const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -35,26 +29,13 @@ export async function POST(request: Request, context: RouteContext) {
 
     const form = await request.formData();
     const candidate = form.get("file");
-    if (!(candidate instanceof File) || candidate.size === 0) {
-      throw new ApiError(400, "Selecione um comprovante para anexar.");
-    }
-    if (candidate.size > MAX_ATTACHMENT_SIZE) {
-      throw new ApiError(400, "O comprovante deve ter no máximo 10 MB.");
-    }
-    if (!ALLOWED_ATTACHMENT_TYPES.includes(candidate.type)) {
-      throw new ApiError(400, "Envie um arquivo PDF, JPG ou PNG.");
-    }
-
-    if (candidate.type === "application/pdf") await readPdfProof(candidate);
+    const proof = await readPaymentProof(candidate);
     const attachmentId = crypto.randomUUID();
-    const fileName = (candidate.name || "comprovante")
-      .normalize("NFKC")
-      .replace(/[\u0000-\u001f\u007f]/g, "")
-      .slice(0, 180);
+    const fileName = proof.name;
     const description = upper(form.get("description"))?.slice(0, 300) ?? null;
     uploadedKey = `sales/${saleId}/attachments/${attachmentId}`;
-    await (await getBucket()).put(uploadedKey, await candidate.arrayBuffer(), {
-      httpMetadata: { contentType: candidate.type },
+    await (await getBucket()).put(uploadedKey, proof.buffer, {
+      httpMetadata: { contentType: proof.mimeType },
       customMetadata: { originalName: fileName },
     });
 
@@ -72,8 +53,8 @@ export async function POST(request: Request, context: RouteContext) {
           saleId,
           uploadedKey,
           fileName,
-          candidate.type,
-          candidate.size,
+          proof.mimeType,
+          proof.size,
           description,
           user.id,
         ),
@@ -89,7 +70,7 @@ export async function POST(request: Request, context: RouteContext) {
           attachmentId,
           user.id,
           user.email,
-          JSON.stringify({ saleId, fileName, sizeBytes: candidate.size, description }),
+          JSON.stringify({ saleId, fileName, sizeBytes: proof.size, description }),
           request.headers.get("x-request-id") ?? crypto.randomUUID(),
         ),
     ]);

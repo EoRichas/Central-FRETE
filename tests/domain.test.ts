@@ -3,7 +3,6 @@ import test from "node:test";
 import { operationalCommissionCents, sellerCommissionCents } from "../lib/domain/commissions.ts";
 import { calculateSaleFinancials, commissionCents } from "../lib/domain/finance.ts";
 import {
-  allocateOfficeMonthlyCostByDistance,
   averageVehicleCostPerKmCents,
   calculateFleetFreightMetrics,
   hasPossibleFleetMatch,
@@ -43,7 +42,7 @@ test("mantém os percentuais de comissão do vendedor e da operação", () => {
   assert.equal(operationalCommissionCents(100_000), 3_000);
 });
 
-test("calcula os custos pelos parâmetros, sem aplicar a média do histórico", () => {
+test("conserva precisão da média mensal até o cálculo do frete", () => {
   const vehicleRate = averageVehicleCostPerKmCents([
     { distanceMeters: 4_948_000, monthlyCostCents: 617_413 },
     { distanceMeters: 3_193_000, monthlyCostCents: 617_413 },
@@ -52,35 +51,11 @@ test("calcula os custos pelos parâmetros, sem aplicar a média do histórico", 
   assert.ok(vehicleRate);
   assert.equal(Math.round(vehicleRate), 163);
   const metrics = calculateFleetFreightMetrics(
-    { distanceMeters: 51_100, freightAmountCents: 33_000, tollCents: 570, driverCommissionCents: 1_000 },
-    { fuelPriceCents: 738, averageConsumptionMilliKmPerLiter: 3_200, fallbackFixedCostPerKmCents: 45 },
+    { distanceMeters: 10_000, freightAmountCents: 33000, tollCents: 0, driverCommissionCents: 0 },
+    { fuelPriceCents: 738, averageConsumptionMilliKmPerLiter: 3200 }, vehicleRate,
   );
-  assert.equal(metrics.fuelCostCents, 11_785);
-  assert.equal(metrics.fixedCostCents, 2_300);
-  assert.equal(metrics.allocatedCostCents, 0);
-  assert.equal(metrics.totalCostCents, 15_655);
-  assert.equal(metrics.netRevenueCents, 17_345);
-  assert.equal(metrics.marginBasisPoints, 5_256);
-});
-
-test("usa o custo fixo por km configurado em Parâmetros", () => {
-  const metrics = calculateFleetFreightMetrics(
-    { distanceMeters: 10_000, freightAmountCents: 10_000, tollCents: 0, driverCommissionCents: 0 },
-    { fuelPriceCents: 700, averageConsumptionMilliKmPerLiter: 3_500, fallbackFixedCostPerKmCents: 50 },
-  );
-  assert.equal(metrics.fixedCostCents, 500);
-});
-
-test("rateia o custo mensal do escritório proporcionalmente aos km da competência", () => {
-  const allocated = allocateOfficeMonthlyCostByDistance([
-    { id: "a", pickupDate: "2026-09-01", distanceMeters: 100_000 },
-    { id: "b", pickupDate: "2026-09-15", distanceMeters: 300_000 },
-    { id: "c", pickupDate: "2026-10-01", distanceMeters: 200_000 },
-  ], 10_000);
-  assert.equal(allocated.a, 2_500);
-  assert.equal(allocated.b, 7_500);
-  assert.equal(allocated.c, 10_000);
-  assert.equal(allocated.a + allocated.b, 10_000);
+  assert.equal(metrics.allocatedCostCents, 1635);
+  assert.equal(metrics.totalCostCents, metrics.fuelCostCents + 1635);
 });
 
 test("identifica encaixe de retorno dentro da janela operacional", () => {
@@ -94,10 +69,11 @@ test("identifica encaixe de retorno dentro da janela operacional", () => {
 
 test("resume a frota ponderando a margem pelo faturamento", () => {
   const summary = summarizeFleet([
-    { freightAmountCents: 10_000, allocatedCostCents: 1_000, totalCostCents: 4_000, returnUsed: true, possibleMatch: false },
-    { freightAmountCents: 30_000, allocatedCostCents: 2_000, totalCostCents: 21_000, returnUsed: false, possibleMatch: true },
+    { costsConfigured: true, freightAmountCents: 10_000, allocatedCostCents: 1_000, totalCostCents: 4_000, returnUsed: true, possibleMatch: false },
+    { costsConfigured: true, freightAmountCents: 30_000, allocatedCostCents: 2_000, totalCostCents: 21_000, returnUsed: false, possibleMatch: true },
   ] as never);
   assert.deepEqual(summary, {
+    missingCostCount: 0,
     freightCount: 2,
     possibleMatchCount: 1,
     returnUsedCount: 1,

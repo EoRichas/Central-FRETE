@@ -6,8 +6,8 @@ export async function GET(request: Request) {
   try {
     const user = await authorize(request);
     const url = new URL(request.url);
-    const competency = url.searchParams.get("competency") ?? "2026-08";
-    if (!/^\d{4}-\d{2}$/.test(competency)) {
+    const competency = url.searchParams.get("competency") || currentCompetency();
+    if (!isCompetency(competency)) {
       return Response.json({ error: "Competência inválida." }, { status: 400 });
     }
     return Response.json({ data: await dashboard(user, competency) });
@@ -15,4 +15,4 @@ export async function GET(request: Request) {
     return jsonError(error);
   }
 }
-
+import { currentCompetency, isCompetency } from "@/lib/domain/dates";

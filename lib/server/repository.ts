@@ -24,7 +24,7 @@ type SaleRow = Omit<
   | "costsPending"
 > & { costsPending: number };
 
-type PaymentRow = Omit<PaymentRecord, "canReverse">;
+type PaymentRow = Omit<PaymentRecord, "canDelete">;
 
 function todaySaoPaulo(): string {
   return new Intl.DateTimeFormat("en-CA", {
@@ -132,7 +132,7 @@ export async function listSales(
         p.proof_name as proofName
       from payment_transactions p
       left join financial_accounts a on a.id = p.financial_account_id
-      where p.sale_id in (${idList})
+      where p.sale_id in (${idList}) and p.status <> 'CANCELADO'
       order by p.occurred_at desc, p.created_at desc`,
       ids,
     ),
@@ -158,12 +158,6 @@ export async function listSales(
     ),
   ]);
 
-  const reversed = new Set(
-    paymentRows
-      .filter((payment) => payment.type === "ESTORNO")
-      .map((payment) => payment.reversedTransactionId)
-      .filter(Boolean),
-  );
   const asOfDate = todaySaoPaulo();
   const result = sales.map((row) => {
     const saleCosts = costs
@@ -173,10 +167,7 @@ export async function listSales(
       .filter((payment) => payment.saleId === row.id)
       .map((payment) => ({
         ...payment,
-        canReverse:
-          payment.type !== "ESTORNO" &&
-          payment.status === "CONFIRMADO" &&
-          !reversed.has(payment.id),
+        canDelete: payment.type !== "ESTORNO" && payment.status !== "CANCELADO",
       }));
     const financial = calculateSaleFinancials({
       freightAmountCents: row.freightAmountCents,

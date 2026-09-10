@@ -10,7 +10,6 @@ import type {
 } from "@/lib/domain/fleet";
 import {
   DEFAULT_FLEET_PARAMETERS,
-  allocateOfficeMonthlyCostByDistance,
   averageVehicleCostPerKmCents,
   calculateFleetFreightMetrics,
   hasPossibleFleetMatch,
@@ -52,6 +51,8 @@ type VehicleCostRow = {
 };
 
 type FreightRow = {
+  paidAt: string | null;
+  proofAttachmentId: string | null;
   paymentStatus: "EM_ABERTO" | "PAGO";
   originCep: string | null;
   destinationCep: string | null;
@@ -99,6 +100,7 @@ export async function loadFleetData(
   canManagePayments = false,
   canEditFreights = canManage,
   freightOnly = false,
+  competency?: string,
 ): Promise<FleetData> {
   const [parameters, vehicleRows, driverRows, costRows, freightRows] =
     await Promise.all([
@@ -123,6 +125,7 @@ export async function loadFleetData(
           driver_id as driverId, driver_name as driverName,
           client_name as clientName, cargo_vehicle_model as cargoVehicleModel,
           cargo_plate as cargoPlate, origin, destination, origin_cep as originCep, destination_cep as destinationCep, payment_status as paymentStatus,
+          paid_at as paidAt, proof_attachment_id as proofAttachmentId,
           pickup_date as pickupDate, delivery_date as deliveryDate,
           billing_date as billingDate, operational_status as operationalStatus,
           priority, freight_amount_cents as freightAmountCents,
@@ -172,15 +175,12 @@ export async function loadFleetData(
     pickupDate: row.pickupDate,
     deliveryDate: row.deliveryDate,
   }));
-  const allocatedOfficeCosts = allocateOfficeMonthlyCostByDistance(
-    freightRows,
-    parameters.officeMonthlyCostCents,
-  );
-  const freights: FleetFreight[] = freightRows.map((row) => {
+  const vehicleRates = new Map(vehicles.map((vehicle) => [vehicle.id, vehicle.averageCostPerKmCents]));
+  const freights: FleetFreight[] = freightRows.filter((row) => !competency || row.pickupDate.slice(0, 7) === competency).map((row) => {
     const metrics = calculateFleetFreightMetrics(
       row,
       parameters,
-      allocatedOfficeCosts[row.id] ?? 0,
+      (row.vehicleId ? vehicleRates.get(row.vehicleId) : null) ?? null,
     );
     return {
       ...row,

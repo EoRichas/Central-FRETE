@@ -1,0 +1,29 @@
+/* From Uiverse.io by Creatlydev */
+.button {
+  --bg: linear-gradient(180deg, hsla(0, 0%, 100%, .1), hsla(0, 0%, 100%, 0)), hsl(128, 52%, 45%);
+  box-shadow: 0 1px 2px #25114f66, 0 0 0 1px hsla(128, 50%, 45%, .761);
+  background: var(--bg);
+  border: 1px solid #fff3;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  padding: .5rem 1rem .5rem .5rem;
+  min-height: 42px;
+  cursor: pointer;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.button:hover:not(:disabled) { filter: brightness(.94); }
+.button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
+.button:disabled { opacity: .6; cursor: wait; }
+.icon { display: flex; }
+.row { position: relative; display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; min-width: 0; }
+.filename { overflow-wrap: anywhere; font-size: .85rem; color: var(--muted); }
+.field > label { font: inherit; }
+.input { position: absolute; width: 1px; height: 1px; padding: 0; opacity: 0; overflow: hidden; }
+.row:focus-within { outline: 2px solid var(--teal); outline-offset: 4px; border-radius: 6px; }

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { currentCompetency } from "@/lib/domain/dates";
 import { useMemo, useState } from "react";
 import type { DashboardData } from "@/lib/contracts";
 import { competencyLabel, formatMoney, formatPercent } from "@/lib/format";
@@ -9,16 +10,7 @@ import { Icons } from "@/components/icons";
 import { sellerCommissionCents } from "@/lib/domain/commissions";
 import { useApi } from "@/components/use-api";
 
-function currentCompetency() {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-    month: "2-digit",
-  }).formatToParts(new Date());
-  const year = parts.find((part) => part.type === "year")?.value ?? "2026";
-  const month = parts.find((part) => part.type === "month")?.value ?? "08";
-  return `${year}-${month}`;
-}
+
 
 const statusMeta = {
   EM_ABERTO: { label: "Em aberto", className: "open" },
@@ -43,7 +35,7 @@ export function DashboardScreen() {
         eyebrow="Visão geral"
         title="Início"
         description="Acompanhe faturamento, recebimentos e comissões sem misturar operação e financeiro."
-        actions={<label className="compact-filter"><span>Competência</span><input type="month" value={competency} onChange={(event) => setCompetency(event.target.value)} /></label>}
+        actions={<label className="compact-filter"><span>Competência</span><input type="month" value={competency} onChange={(event) => setCompetency(event.target.value || currentCompetency())} /></label>}
       />
       {loading && <LoadingState label="Calculando os indicadores…" />}
       {error && <ErrorState message={error} retry={refresh} />}

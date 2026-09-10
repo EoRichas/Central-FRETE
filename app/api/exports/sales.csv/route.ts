@@ -1,5 +1,6 @@
 import { authorize } from "@/lib/server/auth";
-import { jsonError } from "@/lib/server/d1";
+import { currentCompetency, isCompetency } from "@/lib/domain/dates";
+import { ApiError, jsonError } from "@/lib/server/d1";
 import { listSales } from "@/lib/server/repository";
 
 function csvCell(value: unknown): string {
@@ -12,7 +13,8 @@ export async function GET(request: Request) {
   try {
     const user = await authorize(request);
     const url = new URL(request.url);
-    const competency = url.searchParams.get("competency") || undefined;
+    const competency = url.searchParams.get("competency") || currentCompetency();
+    if (!isCompetency(competency)) throw new ApiError(400, "Competência inválida.");
     const sales = await listSales(user, { competency, limit: 500 });
     const rows = [
       [
@@ -60,4 +62,3 @@ export async function GET(request: Request) {
     return jsonError(error);
   }
 }
-

@@ -16,27 +16,9 @@ import {
   PageHeader,
   StatusBadge,
 } from "@/components/ui";
+import { currentCompetency, todaySaoPaulo } from "@/lib/domain/dates";
 import { apiMutation, useApi } from "@/components/use-api";
 
-function currentCompetency() {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-    month: "2-digit",
-  }).formatToParts(new Date());
-  const year = parts.find((part) => part.type === "year")?.value ?? "2026";
-  const month = parts.find((part) => part.type === "month")?.value ?? "08";
-  return `${year}-${month}`;
-}
-
-function todaySaoPaulo() {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
-}
 
 export function SellersScreen({
   initialCompetency,
