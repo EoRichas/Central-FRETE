@@ -81,9 +81,9 @@ test("média mensal continua disponível como referência e respeita exclusão d
   assert.equal(averageVehicleCostPerKmCents([{distanceMeters:NaN,monthlyCostCents:100}]), null);
 });
 
-test("placa sem base mantém líquido calculável e rateio pendente", () => {
+test("placa sem base não bloqueia custo total ou margem", () => {
   const missing = calculateFleetFreightPreview({...draft,vehicleId:"missing"},DEFAULT_FLEET_PARAMETERS,vehicles);
-  assert.equal(missing.costsConfigured, false);
+  assert.equal(missing.costsConfigured, true);
   assert.equal(missing.costPerKmCents, null);
   assert.equal(missing.allocatedCostCents, 0);
   assert.equal(missing.totalCostCents, 309750);
