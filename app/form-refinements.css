@@ -23,8 +23,7 @@
 .fleet-settings-panel { display: grid; gap: 18px; }
 .fleet-settings-panel > header { margin-bottom: 0; }
 .fleet-settings-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
-.fleet-cost-preview { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.fleet-cost-preview > div:nth-child(4) { display: none; }
+.fleet-cost-preview { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .fleet-result-preview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .fleet-form-preview strong { overflow-wrap: anywhere; }
 .fixed-cost-row > strong { overflow: visible; text-overflow: clip; white-space: normal; }

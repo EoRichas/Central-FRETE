@@ -44,11 +44,11 @@ const history = [
 const rate = averageVehicleCostPerKmCents(history)!;
 const vehicles = [{id: "bdc", averageCostPerKmCents: rate}, {id: "other", averageCostPerKmCents: 200}];
 
-test("1200 km preserva combustível, mas custo rateado não compõe o resultado", () => {
+test("1200 km mantém rateio visível, mas não o desconta do líquido", () => {
   assert.ok(Math.abs(rate / 100 - 1.0667225884564662) < 1e-12);
   const metrics = calculateFleetFreightMetrics(draft, DEFAULT_FLEET_PARAMETERS, rate);
   assert.equal(metrics.fuelCostCents, 276750);
-  assert.equal(metrics.allocatedCostCents, 0);
+  assert.equal(metrics.allocatedCostCents, 128007);
   assert.equal(metrics.totalCostCents, 309750);
   assert.equal(metrics.netRevenueCents, 230250);
   assert.equal(metrics.costsConfigured, true);
@@ -57,19 +57,20 @@ test("1200 km preserva combustível, mas custo rateado não compõe o resultado"
   }, DEFAULT_FLEET_PARAMETERS, vehicles), metrics);
 });
 
-test("51,1 km considera apenas combustível, pedágio e motorista no custo total", () => {
+test("51,1 km mantém rateio informativo fora do custo total", () => {
   const metrics = calculateFleetFreightMetrics({...draft, distanceMeters:51100, freightAmountCents:33000, tollCents:570, driverCommissionCents:1000}, DEFAULT_FLEET_PARAMETERS, rate);
-  assert.equal(metrics.allocatedCostCents, 0);
+  assert.equal(metrics.allocatedCostCents, 5451);
   assert.equal(metrics.totalCostCents, 13355);
 });
 
-test("trocar placa não altera resultado pelo rateio", () => {
+test("trocar placa altera o rateio exibido, mas não o líquido", () => {
   const parameters = {...DEFAULT_FLEET_PARAMETERS, fallbackFixedCostPerKmCents:99999, officeMonthlyCostCents:900000000};
   const bdc = calculateFleetFreightPreview(draft, parameters, vehicles);
   const other = calculateFleetFreightPreview({...draft, vehicleId:"other"}, parameters, vehicles);
-  assert.equal(bdc.allocatedCostCents, 0);
-  assert.equal(other.allocatedCostCents, 0);
+  assert.equal(bdc.allocatedCostCents, 128007);
+  assert.equal(other.allocatedCostCents, 240000);
   assert.equal(other.totalCostCents, bdc.totalCostCents);
+  assert.equal(other.netRevenueCents, bdc.netRevenueCents);
 });
 
 test("média mensal continua disponível como referência e respeita exclusão de mês", () => {
@@ -80,9 +81,9 @@ test("média mensal continua disponível como referência e respeita exclusão d
   assert.equal(averageVehicleCostPerKmCents([{distanceMeters:NaN,monthlyCostCents:100}]), null);
 });
 
-test("placa sem base não bloqueia custo total ou margem do frete", () => {
+test("placa sem base mantém líquido calculável e rateio pendente", () => {
   const missing = calculateFleetFreightPreview({...draft,vehicleId:"missing"},DEFAULT_FLEET_PARAMETERS,vehicles);
-  assert.equal(missing.costsConfigured, true);
+  assert.equal(missing.costsConfigured, false);
   assert.equal(missing.costPerKmCents, null);
   assert.equal(missing.allocatedCostCents, 0);
   assert.equal(missing.totalCostCents, 309750);
