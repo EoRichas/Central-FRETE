@@ -12,10 +12,15 @@ async function queryAll(query: string, params: unknown[] = []) {
 }
 async function queryFirst(query: string, params: unknown[] = []) { return (await queryAll(query, params))[0] ?? null; }
 function prepare(query: string, params: unknown[] = []) {
- return { query, params, bind: (...values: unknown[]) => prepare(query, values), run: async () => ({results: await queryAll(query, params), success: true}) };
+ return { query, params, bind: (...values: unknown[]) => prepare(query, values), all: async () => ({results: await queryAll(query, params), success: true}), run: async () => ({results: await queryAll(query, params), success: true}) };
 }
 const stored = new Map<string, ArrayBuffer>();
-const bucket = { put: async (key: string, data: ArrayBuffer) => stored.set(key, data), delete: async (key: string) => stored.delete(key) };
+const storedTypes = new Map<string, string>();
+const bucket = {
+ put: async (key: string, data: ArrayBuffer, options?: {httpMetadata?: {contentType?: string}}) => { stored.set(key, data); storedTypes.set(key, options?.httpMetadata?.contentType ?? 'application/octet-stream'); },
+ delete: async (key: string) => stored.delete(key),
+ get: async (key: string) => stored.has(key) ? {body: stored.get(key), writeHttpMetadata: (headers: Headers) => headers.set('content-type',storedTypes.get(key)!)} : null,
+};
 mock.module('../../lib/server/d1.ts', { namedExports: {
  ApiError, queryAll, queryFirst, getBucket: async () => bucket,
  getD1: async () => ({prepare, batch: async (statements: ReturnType<typeof prepare>[]) => pg.transaction(async tx => {
@@ -70,7 +75,7 @@ test('cadastro normaliza CPF, permite homônimos, desatrela motorista e preserva
  assert.ok(await queryFirst("select id from fleet_vehicles where id='vehicle'"));
 });
 
-test('financeiro confirma frete somente com PDF dele; vendedor não pode confirmar', async () => {
+test('financeiro confirma frete somente com comprovante dele e data; vendedor não pode confirmar', async () => {
  await pg.exec("INSERT INTO fleet_freights(id,vehicle_plate,driver_name,client_name,origin,destination,pickup_date,operational_status,freight_amount_cents,distance_meters) VALUES ('freight','ABC1D23','TESTE','CLIENTE','A','B','2026-09-01','SEM_PREVISAO',1000,1000)");
  const payment = await import('../../app/api/fleet/freights/[id]/payment/route.ts');
  const upload = await import('../../app/api/fleet/freights/[id]/attachments/route.ts');
@@ -83,9 +88,10 @@ test('financeiro confirma frete somente com PDF dele; vendedor não pode confirm
  const uploaded = await upload.POST(await request('/api/fleet/freights/freight/attachments','finance','POST',file),context);
  assert.equal(uploaded.status,201,await uploaded.clone().text());
  const proof = await uploaded.json();
- const result = await payment.PATCH(await request('/api/fleet/freights/freight/payment','finance','PATCH',{status:'PAGO',proofId:proof.id}),context);
+ const result = await payment.PATCH(await request('/api/fleet/freights/freight/payment','finance','PATCH',{status:'PAGO',proofId:proof.id,paidAt:'2026-09-09'}),context);
  assert.equal(result.status,200,await result.clone().text());
  assert.equal((await queryFirst("select payment_status from fleet_freights where id='freight'") as {payment_status: string}).payment_status,'PAGO');
+ assert.equal((await queryFirst("select paid_at from fleet_freights where id='freight'") as {paid_at: string}).paid_at,'2026-09-09T15:00:00.000Z');
 });
 
 test('notificação repetida quita uma vez; estorno bloqueia APIs inclusive do administrador', async () => {
@@ -146,7 +152,7 @@ test('webhook rejeita assinatura forjada e divergência entre corpo e URL', asyn
  } finally {process.env.BILLING_ENABLED='false';}
 });
 
-test('Frota salva e reabre 1200 km, rateia por competência e usa apenas Parâmetros', async () => {
+test('Frota salva e reabre 1200 km, usa média da placa e mantém histórico ao filtrar mês', async () => {
  const {distanceInputToMeters, distanceToInput}=await import('../../lib/domain/number-input.ts');
  const {calculateFleetFreightPreview}=await import('../../lib/domain/fleet.ts');
  const list=await import('../../app/api/fleet/route.ts');
@@ -154,8 +160,8 @@ test('Frota salva e reabre 1200 km, rateia por competência e usa apenas Parâme
  const edit=await import('../../app/api/fleet/freights/[id]/route.ts');
  const settings=await import('../../app/api/fleet/settings/route.ts');
  await pg.exec("INSERT INTO fleet_vehicles(id,plate) VALUES ('calc-vehicle','CAL1C23'); INSERT INTO fleet_drivers(id,name) VALUES ('calc-driver','MOTORISTA DO TESTE DE CÁLCULO');");
- // Histórico deliberadamente muito alto: não pode substituir o custo por km de Parâmetros.
- await pg.exec("INSERT INTO fleet_vehicle_costs(id,vehicle_id,competency,distance_meters,monthly_cost_cents) VALUES ('calc-history','calc-vehicle','2026-11',1000,100000000);");
+ // Histórico é somente a base da média por placa, sem cobrança em duplicidade.
+ await pg.exec("INSERT INTO fleet_vehicle_costs(id,vehicle_id,competency,distance_meters,monthly_cost_cents) VALUES ('calc-history','calc-vehicle','2026-04',14345000,1054963), ('calc-history-may','calc-vehicle','2026-05',9667000,1154584), ('calc-history-june','calc-vehicle','2026-06',9702000,1232532);");
  const parameters={fuelPriceCents:738,averageConsumptionMilliKmPerLiter:3200,fallbackFixedCostPerKmCents:45,matchWindowDays:3,officeMonthlyCostCents:120000};
  const configured=await settings.PUT(await request('/api/fleet/settings','admin','PUT',parameters));
  assert.equal(configured.status,200,await configured.clone().text());
@@ -166,7 +172,7 @@ test('Frota salva e reabre 1200 km, rateia por competência e usa apenas Parâme
  const second=await create.POST(await request('/api/fleet/freights','admin','POST',{...payload,distanceMeters:600000}));
  assert.equal(second.status,201,await second.clone().text());
  async function readFleet() {
-  const result=await list.GET(await request('/api/fleet','finance'));
+  const result=await list.GET(await request('/api/fleet?competency=2026-11','finance'));
   assert.equal(result.status,200,await result.clone().text());
   return (await result.json()).fleet as import('../../lib/domain/fleet.ts').FleetData;
  }
@@ -174,10 +180,9 @@ test('Frota salva e reabre 1200 km, rateia por competência e usa apenas Parâme
  const saved=fleet.freights.find(f=>f.id===id)!;
  assert.equal(saved.distanceMeters,1200000);
  assert.equal(saved.fuelCostCents,276750);
- assert.equal(saved.fixedCostCents,54000);
- assert.equal(saved.allocatedCostCents,80000);
- assert.equal(saved.totalCostCents,443750);
- const preview=calculateFleetFreightPreview({...saved,distanceMeters:distanceInputToMeters(distanceToInput(saved.distanceMeters))},fleet.parameters,fleet.freights);
+ assert.equal(saved.allocatedCostCents,128007);
+ assert.equal(saved.totalCostCents,437757);
+ const preview=calculateFleetFreightPreview({...saved,distanceMeters:distanceInputToMeters(distanceToInput(saved.distanceMeters))},fleet.parameters,fleet.vehicles);
  assert.equal(preview.totalCostCents,saved.totalCostCents);
  const patched=await edit.PATCH(await request(`/api/fleet/freights/${id}`,'admin','PATCH',{...payload,distanceMeters:distanceInputToMeters(distanceToInput(saved.distanceMeters))}),{params:Promise.resolve({id})});
  assert.equal(patched.status,200,await patched.clone().text());
@@ -188,7 +193,81 @@ test('Frota salva e reabre 1200 km, rateia por competência e usa apenas Parâme
  fleet=await readFleet();
  const recalculated=fleet.freights.find(f=>f.id===id)!;
  assert.equal(recalculated.fuelCostCents,240000);
- assert.equal(recalculated.fixedCostCents,60000);
- assert.equal(recalculated.allocatedCostCents,80000);
+ assert.equal(recalculated.allocatedCostCents,128007);
  assert.ok(await queryFirst("select id from fleet_vehicle_costs where id='calc-history'"));
+});
+
+test('imagem do vendedor pode comprovar recebimento; pagamento e exclusão continuam restritos', async () => {
+ const upload = await import('../../app/api/sales/[id]/attachments/route.ts');
+ const payments = await import('../../app/api/sales/[id]/payments/route.ts');
+ const remove = await import('../../app/api/payments/[id]/route.ts');
+ const {getSale}=await import('../../lib/server/repository.ts');
+ const {authorize}=await import('../../lib/server/auth.ts');
+ const context={params:Promise.resolve({id:'own'})};
+ const form=new FormData(); form.set('file',new File([new Uint8Array([255,216,255,224,0,16])],'comprovante.jpeg',{type:'image/jpeg'}));
+ const uploaded=await upload.POST(await request('/api/sales/own/attachments','seller','POST',form),context);
+ assert.equal(uploaded.status,201,await uploaded.clone().text());
+ const proof=await uploaded.json();
+ const payload={type:'RECEBIMENTO',status:'CONFIRMADO',amountCents:1000,occurredAt:'2026-09-09',paymentMethod:'PIX',proofId:proof.id};
+ const wrongRequest=await request('/api/sales/other/payments','finance','POST',payload); wrongRequest.headers.set('idempotency-key','wrong-proof');
+ assert.equal((await payments.POST(wrongRequest,{params:Promise.resolve({id:'other'})})).status,400);
+ const paymentRequest=await request('/api/sales/own/payments','finance','POST',payload); paymentRequest.headers.set('idempotency-key','image-payment');
+ const paid=await payments.POST(paymentRequest,context);
+ assert.equal(paid.status,201,await paid.clone().text());
+ const transaction=await paid.json();
+ const user=await authorize(await request('/api/sales/own','finance'));
+ assert.equal((await getSale(user,'own'))!.financial.balanceCents,0);
+ const paymentContext={params:Promise.resolve({id:transaction.id})};
+ assert.equal((await remove.DELETE(await request('/api/payments/x','seller','DELETE'),paymentContext)).status,403);
+ const removed=await remove.DELETE(await request('/api/payments/x','finance','DELETE'),paymentContext);
+ assert.equal(removed.status,200,await removed.clone().text());
+ const sale=await getSale(user,'own');
+ assert.equal(sale!.financial.balanceCents,1000); assert.equal(sale!.payments.length,0);
+ assert.equal((await queryAll("select * from audit_logs where entity_id=? and action='DELETED'",[transaction.id])).length,1);
+ const duplicate=await remove.DELETE(await request('/api/payments/x','finance','DELETE'),paymentContext);
+ assert.equal((await duplicate.json()).alreadyDeleted,true);
+ assert.equal((await queryAll("select * from audit_logs where entity_id=? and action='DELETED'",[transaction.id])).length,1);
+});
+
+test('excluir recebimento com estorno antigo remove o par sem inverter o saldo', async () => {
+ await pg.exec("INSERT INTO payment_transactions(id,sale_id,type,status,amount_cents,occurred_at,payment_method,idempotency_key,created_by,reversed_transaction_id) VALUES ('legacy-payment','own','RECEBIMENTO','CONFIRMADO',500,'2026-09-09','PIX','legacy-payment','admin',null),('legacy-reversal','own','ESTORNO','CONFIRMADO',500,'2026-09-09','PIX','legacy-reversal','admin','legacy-payment')");
+ const remove=await import('../../app/api/payments/[id]/route.ts');
+ const result=await remove.DELETE(await request('/api/payments/legacy-payment','finance','DELETE'),{params:Promise.resolve({id:'legacy-payment'})});
+ assert.equal(result.status,200,await result.clone().text());
+ const rows=await queryAll("select status from payment_transactions where id in ('legacy-payment','legacy-reversal')");
+ assert.ok(rows.every(row=>(row as {status:string}).status==='CANCELADO'));
+ const {getSale}=await import('../../lib/server/repository.ts');
+ const {authorize}=await import('../../lib/server/auth.ts');
+ assert.equal((await getSale(await authorize(await request('/api/sales/own','finance')),'own'))!.financial.balanceCents,1000);
+});
+
+test('frota aceita PNG, baixa exige anexo do próprio frete e download preserva formato', async () => {
+ await pg.exec("INSERT INTO users(id,email,name,role) VALUES ('operator','operator@example.test','Operator','OPERACIONAL')");
+ const upload=await import('../../app/api/fleet/freights/[id]/attachments/route.ts');
+ const payment=await import('../../app/api/fleet/freights/[id]/payment/route.ts');
+ const download=await import('../../app/api/fleet/freights/[id]/attachments/[attachmentId]/route.ts');
+ const form=new FormData();form.set('file',new File([new Uint8Array([137,80,78,71,13,10,26,10])],'recibo.png',{type:'image/png'}));
+ const context={params:Promise.resolve({id:'freight'})};
+ const result=await upload.POST(await request('/api/fleet/freights/freight/attachments','operator','POST',form),context);
+ assert.equal(result.status,201,await result.clone().text()); const proof=await result.json();
+ const body={status:'PAGO',proofId:proof.id,paidAt:'2026-09-10'};
+ assert.equal((await payment.PATCH(await request('/api/fleet/freights/freight/payment','operator','PATCH',body),context)).status,403);
+ assert.equal((await payment.PATCH(await request('/api/fleet/freights/linked-freight/payment','finance','PATCH',body),{params:Promise.resolve({id:'linked-freight'})})).status,400);
+ assert.equal((await payment.PATCH(await request('/api/fleet/freights/freight/payment','finance','PATCH',body),context)).status,200);
+ const file=await download.GET(await request('/api/fleet/freights/freight/attachments/x','finance'),{params:Promise.resolve({id:'freight',attachmentId:proof.id})});
+ assert.equal(file.headers.get('content-type'),'image/png');assert.match(file.headers.get('content-disposition')!,/recibo.png/);
+});
+
+test('listagens abrem no mês atual e permitem consultar outro mês sem perder a base histórica', async () => {
+ const {currentCompetency}=await import('../../lib/domain/dates.ts');
+ const list=await import('../../app/api/fleet/route.ts');
+ const sales=await import('../../app/api/sales/route.ts');
+ const fleet=(await (await list.GET(await request('/api/fleet','finance'))).json()).fleet;
+ assert.ok(fleet.freights.every((f:{pickupDate:string})=>f.pickupDate.startsWith(currentCompetency())));
+ assert.equal(fleet.vehicles.find((v:{id:string})=>v.id==='calc-vehicle').costs.length,3);
+ const saleData=await (await sales.GET(await request('/api/sales','finance'))).json();
+ assert.ok(saleData.sales.every((s:{competency:string})=>s.competency===currentCompetency()));
+ assert.equal(saleData.canDelete,false);
+ assert.equal((await list.GET(await request('/api/fleet?competency=2026-13'))).status,400);
+ assert.equal((await sales.GET(await request('/api/sales?competency=2026-13'))).status,400);
 });

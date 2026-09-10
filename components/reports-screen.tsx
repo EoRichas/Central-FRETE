@@ -1,4 +1,5 @@
 "use client";
+import { currentCompetency } from "@/lib/domain/dates";
 
 import { useMemo, useState } from "react";
 import type { SaleRecord } from "@/lib/contracts";
@@ -27,16 +28,7 @@ type GroupRow = {
   marginBps: number;
 };
 
-function currentCompetency() {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-    month: "2-digit",
-  }).formatToParts(new Date());
-  const year = parts.find((part) => part.type === "year")?.value ?? "2026";
-  const month = parts.find((part) => part.type === "month")?.value ?? "08";
-  return `${year}-${month}`;
-}
+
 
 function groupSales(
   sales: SaleRecord[],
@@ -158,7 +150,7 @@ export function ReportsScreen() {
           <input
             type="month"
             value={competency}
-            onChange={(event) => setCompetency(event.target.value)}
+            onChange={(event) => setCompetency(event.target.value || currentCompetency())}
           />
         </label>
       </section>

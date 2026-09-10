@@ -1,10 +1,10 @@
 import { authorize } from "@/lib/server/auth";
 import { ApiError, getBucket, getD1, jsonError, queryAll, queryFirst } from "@/lib/server/d1";
-import { readPdfProof } from "@/lib/server/pdf-proof";
+import { readPaymentProof } from "@/lib/server/payment-proof";
 type Context = { params: Promise<{ id: string }> };
 export async function GET(request: Request, context: Context) {
  try {
-  await authorize(request, ["ADMIN", "GERENCIA", "FINANCEIRO"]);
+  await authorize(request, ["ADMIN", "GERENCIA", "FINANCEIRO", "OPERACIONAL"]);
   const { id } = await context.params;
   const attachments = await queryAll("select id, file_name as fileName, created_at as createdAt from fleet_attachments where freight_id = ? order by created_at desc", [id]);
   return Response.json({ attachments });
@@ -13,13 +13,13 @@ export async function GET(request: Request, context: Context) {
 export async function POST(request: Request, context: Context) {
  let key: string | null = null;
  try {
-  const user = await authorize(request, ["ADMIN", "FINANCEIRO"]);
+  const user = await authorize(request, ["ADMIN", "GERENCIA", "FINANCEIRO", "OPERACIONAL"]);
   const { id } = await context.params;
   if (!await queryFirst("select id from fleet_freights where id = ?", [id])) throw new ApiError(404, "Frete não encontrado.");
-  const file = await readPdfProof((await request.formData()).get("file"));
+  const file = await readPaymentProof((await request.formData()).get("file"));
   const attachmentId = crypto.randomUUID();
-  key = `fleet/${id}/${attachmentId}.pdf`;
-  await (await getBucket()).put(key, file.buffer, { httpMetadata: { contentType: "application/pdf" } });
+  key = `fleet/${id}/${attachmentId}`;
+  await (await getBucket()).put(key, file.buffer, { httpMetadata: { contentType: file.mimeType } });
   const db = await getD1();
   await db.batch([
    db.prepare("insert into fleet_attachments(id, freight_id, storage_key, file_name, size_bytes, uploaded_by) values (?, ?, ?, ?, ?, ?)").bind(attachmentId, id, key, file.name, file.size, user.id),

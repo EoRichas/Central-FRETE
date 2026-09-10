@@ -77,7 +77,7 @@ export type PaymentRecord = {
   notes: string | null;
   reversedTransactionId: string | null;
   proofName: string | null;
-  canReverse: boolean;
+  canDelete: boolean;
 };
 
 export type InstallmentRecord = {

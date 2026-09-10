@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { SaleRecord } from "@/lib/contracts";
+import { currentCompetency } from "@/lib/domain/dates";
 import { costCategoryLabel } from "@/lib/domain/operations";
 import { formatDate, formatMoney, formatPercent } from "@/lib/format";
 import { Icons } from "@/components/icons";
@@ -15,7 +16,7 @@ import {
 import { useApi } from "@/components/use-api";
 
 export function FinanceScreen() {
-  const [competency, setCompetency] = useState("");
+  const [competency, setCompetency] = useState(currentCompetency);
   const url = `/api/sales?limit=500${
     competency ? `&competency=${competency}` : ""
   }`;
@@ -44,11 +45,11 @@ export function FinanceScreen() {
       />
       <section className="filter-panel compact">
         <label>
-          <span>Competência (opcional)</span>
+          <span>Competência</span>
           <input
             type="month"
             value={competency}
-            onChange={(event) => setCompetency(event.target.value)}
+            onChange={(event) => setCompetency(event.target.value || currentCompetency())}
           />
         </label>
         <div className="filter-stat">

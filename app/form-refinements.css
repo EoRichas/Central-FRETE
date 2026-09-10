@@ -1,0 +1,73 @@
+/* Formulários alinhados em ambos os temas. */
+.page-content { width: 100%; max-width: 1680px; margin-inline: auto; }
+.form-page, .fleet-stack, .form-section { width: 100%; min-width: 0; }
+.operation-form-section > header,
+.operation-form-section .operation-section-grid { width: 100%; }
+.form-grid, .operation-timing-grid { align-items: start; }
+.form-grid > *, .route-side > *, .filter-panel > * { min-width: 0; }
+.form-grid > .field > span:first-child,
+.operation-timing-grid > .field > span:first-child {
+  min-height: 2.4em;
+  display: flex;
+  align-items: end;
+}
+.field input:is([type="checkbox"], [type="radio"]) {
+  width: 18px; min-height: 18px; height: 18px; margin: 10px 0; align-self: start;
+}
+.money-field, .fleet-unit-field { min-width: 0; width: 100%; }
+.money-field > input, .fleet-unit-field > input { min-width: 0; flex: 1; }
+.money-field > span, .fleet-unit-field > span { flex-shrink: 0; }
+.fleet-check-field { min-height: 42px; align-self: start; margin-top: 30px; }
+.fleet-panel-header, .panel > header { align-items: center; flex-wrap: wrap; }
+.fleet-panel-header > div, .panel > header > div { min-width: 0; }
+.fleet-settings-panel { display: grid; gap: 18px; }
+.fleet-settings-panel > header { margin-bottom: 0; }
+.fleet-settings-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.fleet-cost-preview { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.fleet-result-preview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.fleet-form-preview strong { overflow-wrap: anywhere; }
+.fixed-cost-row > strong { overflow: visible; text-overflow: clip; white-space: normal; }
+.fixed-cost-row:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.attachment-row > div { min-width: 0; }
+.attachment-row strong { overflow-wrap: anywhere; }
+.modal-actions, .sticky-form-actions { flex-wrap: wrap; align-items: center; }
+
+/* Superfícies internas que ainda usavam branco fixo. */
+html[data-theme="dark"] :is(
+  .fixed-cost-row, .route-side, .route-side.destination, .financial-preview,
+  .calculation-summary, .receivable-summary, .import-file, .login-card,
+  .fleet-check-field, .fleet-form-preview > div, .sticky-form-actions
+) {
+  color: var(--ink);
+  background: var(--surface);
+  border-color: var(--line);
+}
+html[data-theme="dark"] :is(
+  .money-field > span, .fleet-unit-field > span, .cost-index, .cost-currency-tag,
+  .client-list-header, .fixed-cost-row:hover, .status-sem_previsao,
+  .fleet-match-badge:not(.opportunity)
+) { color: var(--ink-soft); background: var(--surface-subtle); border-color: var(--line-strong); }
+html[data-theme="dark"] :is(
+  .form-section h2, .modal h2, .login-card h1, .empty-state h3,
+  .calculation-summary strong, .financial-preview strong, .receivable-summary strong,
+  .fleet-form-preview strong, .client-metrics strong, .attachment-row strong,
+  .details-list dd, .money-breakdown strong, .identity-card h2
+) { color: var(--ink); }
+html[data-theme="dark"] .form-error { color: #ffb4b9; border-color: #8e454b; }
+html[data-theme="dark"] .success-banner { color: #9cf1bf; border-color: #326d50; }
+html[data-theme="dark"] .data-warning,
+html[data-theme="dark"] .fleet-match-badge.opportunity { color: #f1cf8b; }
+html[data-theme="dark"] select:disabled,
+html[data-theme="dark"] textarea:disabled { color: var(--muted); background: var(--surface-subtle); }
+
+@media (max-width: 1020px) {
+  .fleet-cost-preview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  .fleet-cost-preview, .fleet-result-preview { grid-template-columns: 1fr; }
+  .form-grid > .field > span:first-child,
+  .operation-timing-grid > .field > span:first-child { min-height: 0; }
+  .fleet-check-field { margin-top: 0; }
+  .fixed-cost-row { grid-template-columns: 24px minmax(0, 1fr) minmax(110px, 140px); }
+  .fixed-cost-row:last-child:nth-child(odd) { grid-column: auto; }
+}
