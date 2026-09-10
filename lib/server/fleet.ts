@@ -48,6 +48,7 @@ type VehicleCostRow = {
   competency: string;
   distanceMeters: number;
   monthlyCostCents: number;
+  includeInRateAverage: number;
 };
 
 type FreightRow = {
@@ -116,7 +117,8 @@ export async function loadFleetData(
       queryAll<VehicleCostRow>(
         `select id, vehicle_id as vehicleId, competency,
           distance_meters as distanceMeters,
-          monthly_cost_cents as monthlyCostCents
+          monthly_cost_cents as monthlyCostCents,
+          include_in_rate_average as includeInRateAverage
          from fleet_vehicle_costs
          order by competency desc, id`,
       ),
@@ -142,10 +144,15 @@ export async function loadFleetData(
   const costsByVehicle = new Map<string, FleetVehicleCost[]>();
   for (const row of costRows) {
     const cost: FleetVehicleCost = {
-      ...row,
+      id: row.id,
+      vehicleId: row.vehicleId,
+      competency: row.competency,
+      distanceMeters: row.distanceMeters,
+      monthlyCostCents: row.monthlyCostCents,
       costPerKmCents: row.distanceMeters > 0
         ? row.monthlyCostCents / (row.distanceMeters / 1_000)
         : 0,
+      includeInRateAverage: Boolean(row.includeInRateAverage),
     };
     const current = costsByVehicle.get(row.vehicleId) ?? [];
     current.push(cost);
