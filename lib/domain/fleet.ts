@@ -48,6 +48,7 @@ export type FleetVehicleCost = {
   distanceMeters: number;
   monthlyCostCents: number;
   costPerKmCents: number;
+  includeInRateAverage: boolean;
 };
 
 export type FleetVehicle = {
@@ -166,10 +167,10 @@ function utcDay(value: string | null) {
 }
 
 export function averageVehicleCostPerKmCents(
-  costs: Array<Pick<FleetVehicleCost, "distanceMeters" | "monthlyCostCents">>,
+  costs: Array<Pick<FleetVehicleCost, "distanceMeters" | "monthlyCostCents"> & Partial<Pick<FleetVehicleCost, "includeInRateAverage">>>,
 ) {
   const valid = costs.filter(
-    (cost) => Number.isFinite(cost.distanceMeters) && Number.isFinite(cost.monthlyCostCents) && cost.distanceMeters > 0 && cost.monthlyCostCents >= 0,
+    (cost) => cost.includeInRateAverage !== false && Number.isFinite(cost.distanceMeters) && Number.isFinite(cost.monthlyCostCents) && cost.distanceMeters > 0 && cost.monthlyCostCents >= 0,
   );
   if (!valid.length) return null;
   return (
