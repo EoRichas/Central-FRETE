@@ -191,13 +191,13 @@ export function calculateFleetFreightMetrics(
   const fuelCostCents = consumptionKmPerLiter > 0
     ? Math.round((distanceKm / consumptionKmPerLiter) * parameters.fuelPriceCents)
     : 0;
-  const costsConfigured = vehicleCostPerKmCents !== null && Number.isFinite(vehicleCostPerKmCents) && vehicleCostPerKmCents >= 0;
-  const allocatedCostCents = costsConfigured
+  const rateAvailable = vehicleCostPerKmCents !== null && Number.isFinite(vehicleCostPerKmCents) && vehicleCostPerKmCents >= 0;
+  const allocatedCostCents = rateAvailable
     ? Math.round(distanceKm * vehicleCostPerKmCents!)
     : 0;
 
-  // O rateio continua calculado e visível como informação gerencial,
-  // mas não compõe o líquido/margem geral do frete.
+  // O rateio é uma informação independente da placa.
+  // Ele não bloqueia o frete e não compõe o custo total nem a margem líquida.
   const totalCostCents =
     fuelCostCents +
     freight.tollCents +
@@ -209,8 +209,9 @@ export function calculateFleetFreightMetrics(
 
   return {
     fuelCostCents,
-    costPerKmCents: costsConfigured ? vehicleCostPerKmCents : null,
-    costsConfigured,
+    costPerKmCents: rateAvailable ? vehicleCostPerKmCents : null,
+    // A base mensal não é requisito para concluir custo/margem do frete.
+    costsConfigured: true,
     allocatedCostCents,
     totalCostCents,
     netRevenueCents,
@@ -251,7 +252,7 @@ export function summarizeFleet(freights: FleetFreight[]): FleetSummary {
   const netRevenueCents = revenueCents - totalCostCents;
 
   return {
-    missingCostCount: freights.filter((freight) => !freight.costsConfigured).length,
+    missingCostCount: 0,
     freightCount: freights.length,
     possibleMatchCount: freights.filter((freight) => freight.possibleMatch).length,
     returnUsedCount: freights.filter((freight) => freight.returnUsed).length,
