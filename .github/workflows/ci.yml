@@ -3,12 +3,14 @@ name: Validar Central Frete
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Baixar o código
@@ -23,8 +25,17 @@ jobs:
       - name: Instalar dependências
         run: npm ci --include=dev
 
+      - name: Auditar dependências de produção
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Auditar todas as dependências
+        run: npm audit --audit-level=high
+
       - name: Executar testes de regressão
         run: npm test
+
+      - name: Executar testes de integração
+        run: npm run test:integration
 
       - name: Validar tipos TypeScript
         run: npm exec -- tsc --noEmit
