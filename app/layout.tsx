@@ -9,6 +9,7 @@ import "./dark-mode-action-refinements.css";
 import "./contrast-refinements.css";
 import "./form-refinements.css";
 import "./animation-restore.css";
+import "./action-refinements.css";
 
 export const metadata: Metadata = {
   title: {
