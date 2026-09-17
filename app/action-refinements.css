@@ -1,11 +1,13 @@
-/* Ações de tabela mais discretas para manter o foco nos dados. */
+/* Ações de tabela mais discretas para manter o foco nos dados.
+   O estilo fica restrito a .table-actions para não transformar botões como
+   Abrir, Cadastrar ou outras ações compactas em ícones incorretos. */
 
 .table-actions {
   gap: 4px;
 }
 
-.button.secondary.compact-button,
-.button.danger.compact-button {
+.table-actions .button.secondary.compact-button,
+.table-actions .button.danger.compact-button {
   position: relative;
   width: 32px;
   min-width: 32px;
@@ -18,10 +20,12 @@
   font-size: 0;
   line-height: 0;
   overflow: visible;
+  opacity: .68;
+  transition: color .15s ease, background .15s ease, opacity .15s ease;
 }
 
-.button.secondary.compact-button::before,
-.button.danger.compact-button::before {
+.table-actions .button.secondary.compact-button::before,
+.table-actions .button.danger.compact-button::before {
   content: "";
   width: 16px;
   height: 16px;
@@ -35,30 +39,34 @@
   mask-size: contain;
 }
 
-.button.secondary.compact-button::before {
+.table-actions .button.secondary.compact-button::before {
   -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round' d='M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Zm9.5-13.5 4 4'/%3E%3C/svg%3E");
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round' d='M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Zm9.5-13.5 4 4'/%3E%3C/svg%3E");
 }
 
-.button.danger.compact-button::before {
+.table-actions .button.danger.compact-button::before {
   -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round' d='M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5'/%3E%3C/svg%3E");
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round' d='M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5'/%3E%3C/svg%3E");
 }
 
-.button.secondary.compact-button:hover {
+.table-actions .button.secondary.compact-button:hover,
+.table-actions .button.secondary.compact-button:focus-visible {
   color: var(--teal);
   background: rgb(8 123 143 / 8%);
   border-color: transparent;
+  opacity: 1;
 }
 
-.button.danger.compact-button:hover {
+.table-actions .button.danger.compact-button:hover,
+.table-actions .button.danger.compact-button:focus-visible {
   color: var(--red);
   background: var(--red-soft);
   border-color: transparent;
+  opacity: 1;
 }
 
-.button.secondary.compact-button::after,
-.button.danger.compact-button::after {
+.table-actions .button.secondary.compact-button::after,
+.table-actions .button.danger.compact-button::after {
   position: absolute;
   left: 50%;
   bottom: calc(100% + 7px);
@@ -78,32 +86,47 @@
   transition: opacity .12s ease, transform .12s ease;
 }
 
-.button.secondary.compact-button::after {
+.table-actions .button.secondary.compact-button::after {
   content: "Editar";
 }
 
-.button.danger.compact-button::after {
+.table-actions .button.danger.compact-button::after {
   content: "Excluir";
 }
 
-.button.secondary.compact-button:hover::after,
-.button.secondary.compact-button:focus-visible::after,
-.button.danger.compact-button:hover::after,
-.button.danger.compact-button:focus-visible::after {
+.table-actions .button.secondary.compact-button:hover::after,
+.table-actions .button.secondary.compact-button:focus-visible::after,
+.table-actions .button.danger.compact-button:hover::after,
+.table-actions .button.danger.compact-button:focus-visible::after {
   opacity: 1;
   transform: translate(-50%, 0);
 }
 
-.button.danger.compact-button:disabled {
+.table-actions .button.danger.compact-button:disabled {
   color: var(--red);
   background: rgb(194 63 65 / 7%);
+  opacity: .55;
 }
 
-html[data-theme="dark"] .button.secondary.compact-button:hover {
+tr:hover .table-actions .button.secondary.compact-button:not(:disabled),
+tr:hover .table-actions .button.danger.compact-button:not(:disabled) {
+  opacity: 1;
+}
+
+html[data-theme="dark"] .table-actions .button.secondary.compact-button:hover,
+html[data-theme="dark"] .table-actions .button.secondary.compact-button:focus-visible {
   background: rgb(126 226 232 / 9%);
 }
 
-html[data-theme="dark"] .button.danger.compact-button:hover,
-html[data-theme="dark"] .button.danger.compact-button:disabled {
+html[data-theme="dark"] .table-actions .button.danger.compact-button:hover,
+html[data-theme="dark"] .table-actions .button.danger.compact-button:focus-visible,
+html[data-theme="dark"] .table-actions .button.danger.compact-button:disabled {
   background: rgb(194 63 65 / 14%);
+}
+
+@media (hover: none) {
+  .table-actions .button.secondary.compact-button,
+  .table-actions .button.danger.compact-button {
+    opacity: 1;
+  }
 }
