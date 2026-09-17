@@ -19,7 +19,7 @@
   background-color: transparent !important;
 }
 
-/* Login: a arte agora é um elemento img real, não um background CSS. */
+/* Login: usa a arte aprovada como imagem real, sem recriar o painel por CSS. */
 .login-page {
   background: #dce5ee !important;
 }
@@ -40,18 +40,17 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: left center;
+  object-position: center 58%;
   display: block;
   user-select: none;
   pointer-events: none;
 }
 
-.login-visual::before {
-  z-index: 2;
-}
-
+/* A própria arte já contém as faixas vermelha e azul. Evita duplicação. */
+.login-visual::before,
 .login-visual::after {
-  z-index: 2;
+  content: none !important;
+  display: none !important;
 }
 
 .login-page::after {
@@ -185,7 +184,7 @@ html[data-theme="dark"] .table-actions .button.danger.compact-button:focus-visib
   }
 
   .login-visual-image {
-    object-position: 34% center;
+    object-position: center 58%;
   }
 
   .login-page::after {
