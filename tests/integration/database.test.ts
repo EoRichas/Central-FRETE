@@ -33,7 +33,7 @@ mock.module('../../lib/server/d1.ts', { namedExports: {
 
 before(async () => {
  await pg.exec('CREATE ROLE anon; CREATE ROLE authenticated;');
- for (let pass = 0; pass < 2; pass++) for (const file of ['001_central_frete_postgres.sql', '002_fleet.sql', '003_fleet_billing.sql', '004_operational_role.sql', '005_detach_driver_vehicle.sql']) await pg.exec(await readFile(new URL(`../../database/${file}`, import.meta.url), 'utf8'));
+ for (let pass = 0; pass < 2; pass++) for (const file of ['001_central_frete_postgres.sql', '002_fleet.sql', '003_fleet_billing.sql', '004_operational_role.sql', '005_detach_driver_vehicle.sql', '006_fleet_vehicle_cost_average_flag.sql', '008_fleet_results.sql']) await pg.exec(await readFile(new URL(`../../database/${file}`, import.meta.url), 'utf8'));
  await pg.exec("INSERT INTO users(id,email,name,role) VALUES ('admin','admin@example.test','Admin','ADMIN'),('finance','finance@example.test','Finance','FINANCEIRO'),('seller','seller@example.test','Seller','VENDEDOR');");
  process.env.CENTRAL_FRETE_SESSION_SECRET = 'test-secret-never-use-in-production-1234';
  process.env.BILLING_ENABLED = 'false';
@@ -181,7 +181,7 @@ test('Frota salva e reabre 1200 km, usa média da placa e mantém histórico ao 
  assert.equal(saved.distanceMeters,1200000);
  assert.equal(saved.fuelCostCents,276750);
  assert.equal(saved.allocatedCostCents,128007);
- assert.equal(saved.totalCostCents,437757);
+ assert.equal(saved.totalCostCents,309750);
  const preview=calculateFleetFreightPreview({...saved,distanceMeters:distanceInputToMeters(distanceToInput(saved.distanceMeters))},fleet.parameters,fleet.vehicles);
  assert.equal(preview.totalCostCents,saved.totalCostCents);
  const patched=await edit.PATCH(await request(`/api/fleet/freights/${id}`,'admin','PATCH',{...payload,distanceMeters:distanceInputToMeters(distanceToInput(saved.distanceMeters))}),{params:Promise.resolve({id})});
@@ -270,4 +270,87 @@ test('listagens abrem no mês atual e permitem consultar outro mês sem perder a
  assert.equal(saleData.canDelete,false);
  assert.equal((await list.GET(await request('/api/fleet?competency=2026-13'))).status,400);
  assert.equal((await sales.GET(await request('/api/sales?competency=2026-13'))).status,400);
+});
+
+test('viagem agrupa dois veículos, conta diesel uma vez e fecha o mês com histórico', async () => {
+ const tripsApi = await import('../../app/api/fleet/trips/route.ts');
+ const tripApi = await import('../../app/api/fleet/trips/[id]/route.ts');
+ const freightsApi = await import('../../app/api/fleet/freights/route.ts');
+ const freightApi = await import('../../app/api/fleet/freights/[id]/route.ts');
+ const monthlyApi = await import('../../app/api/fleet/monthly/route.ts');
+ const { loadFleetData } = await import('../../lib/server/fleet.ts');
+ const { calculateMonthlyResult } = await import('../../lib/domain/fleet-results.ts');
+ await pg.exec("insert into fleet_vehicles(id,plate) values ('results-truck','XYZ1A23'),('results-other','XYZ1A24'); insert into fleet_drivers(id,name,active) values ('results-driver','MOTORISTA RESULTADOS',1); insert into users(id,email,name,role) values ('operator','operator@example.test','Operador','OPERACIONAL') on conflict (id) do nothing;");
+ const tripPayload = { name:'VIAGEM NOVEMBRO',vehicleId:'results-truck',driverId:'results-driver',operationDate:'2026-11-10',fuelCostCents:30000,tollCents:10000,otherCostCents:5000,notes:'Custos compartilhados' };
+ assert.equal((await tripsApi.POST(await request('/api/fleet/trips','seller','POST',tripPayload))).status,403);
+ const tripResponse = await tripsApi.POST(await request('/api/fleet/trips','admin','POST',tripPayload));
+ assert.equal(tripResponse.status,201,await tripResponse.clone().text());
+ const trip = await tripResponse.json();
+ const base = {tripId:trip.id,vehicleId:'results-truck',driverId:'results-driver',clientName:'CLIENTE TESTE',origin:'A',destination:'B',pickupDate:'2026-11-10',deliveryDate:'2026-11-11',billingDate:'2026-11-11',operationalStatus:'FATURADO',priority:'NORMAL',freightAmountCents:100000,distanceMeters:100000,tollCents:0,driverCommissionCents:10000,returnUsed:false,yardCostCents:5000,pickupCostCents:2000,deliveryCostCents:3000,otherCostCents:1000};
+ const f1Response = await freightsApi.POST(await request('/api/fleet/freights','admin','POST',base));
+ assert.equal(f1Response.status,201,await f1Response.clone().text());
+ const f1 = await f1Response.json();
+ const f2Response = await freightsApi.POST(await request('/api/fleet/freights','admin','POST',{...base,freightAmountCents:150000,driverCommissionCents:15000}));
+ assert.equal(f2Response.status,201,await f2Response.clone().text());
+ const fleet = await loadFleetData(true,true,true,false,'2026-11');
+ const result = fleet.tripResults.find(t => t.id === trip.id)!;
+ assert.equal(result.freights.length,2);
+ assert.equal(result.directCostCents,47000);
+ assert.equal(result.sharedCostCents,45000);
+ assert.equal(result.resultCents,158000);
+ assert.equal(result.freights[0].fuelCostCents,0);
+ assert.equal(result.freights.find(f => f.id === f1.id)!.contributionCents,79000);
+ // Costs cannot be entered again on an individual freight in a shared trip.
+ assert.equal((await freightsApi.POST(await request('/api/fleet/freights','admin','POST',{...base,tollCents:1000}))).status,400);
+ assert.notEqual((await freightsApi.POST(await request('/api/fleet/freights','admin','POST',{...base,vehicleId:'results-other'}))).status,201);
+ const tripContext = {params:Promise.resolve({id:trip.id})};
+ assert.notEqual((await tripApi.DELETE(await request('/api/fleet/trips/x','admin','DELETE'),tripContext)).status,200);
+ const month = '2026-11';
+ const monthlyPost = async (payload: object, role = 'finance') => monthlyApi.POST(await request('/api/fleet/monthly',role,'POST',{competency:month,...payload}));
+ const monthlyGet = async () => {
+  const response = await monthlyApi.GET(await request(`/api/fleet/monthly?competency=${month}`,'finance'));
+  assert.equal(response.status,200,await response.clone().text()); return response.json();
+ };
+ assert.equal((await monthlyApi.GET(await request(`/api/fleet/monthly?competency=${month}`,'operator'))).status,403);
+ assert.equal((await monthlyPost({action:'ENTRY',kind:'FIXED',description:'ALUGUEL',amountCents:40000},'seller')).status,403);
+ for (const [kind,description,amountCents] of [['FIXED','ALUGUEL',40000],['VARIABLE','OUTROS CUSTOS',5000],['REVENUE','OUTRA RECEITA',20000]]) {
+   const res = await monthlyPost({action:'ENTRY',kind,description,amountCents}); assert.equal(res.status,200,await res.clone().text());
+ }
+ const beforeClosing = await monthlyGet();
+ assert.equal(calculateMonthlyResult(beforeClosing.current).resultCents,133000);
+ assert.equal((await monthlyPost({action:'CLOSE',reviewed:false})).status,400);
+ // No estimates may be silently recorded as final expenses.
+ const soloPayload = {...base,tripId:null,freightAmountCents:50000,driverCommissionCents:0,yardCostCents:0,pickupCostCents:0,deliveryCostCents:0,otherCostCents:0,tollCents:1000};
+ const soloResponse = await freightsApi.POST(await request('/api/fleet/freights','admin','POST',soloPayload));
+ assert.equal(soloResponse.status,201,await soloResponse.clone().text());
+ const solo = await soloResponse.json();
+ assert.equal((await monthlyPost({action:'CLOSE',reviewed:true})).status,409);
+ const soloUpdate = await freightApi.PATCH(await request('/api/fleet/freights/x','admin','PATCH',{...soloPayload,actualFuelCostCents:10000}),{params:Promise.resolve({id:solo.id})});
+ assert.equal(soloUpdate.status,200,await soloUpdate.clone().text());
+ const closingResponse = await monthlyPost({action:'CLOSE',reviewed:true});
+ assert.equal(closingResponse.status,200,await closingResponse.clone().text());
+ const closed = await monthlyGet();
+ assert.equal(closed.history.length,1);
+ assert.equal(calculateMonthlyResult(closed.history[0].snapshot).resultCents,172000);
+ assert.equal((await monthlyPost({action:'CLOSE',reviewed:true})).status,409);
+ assert.equal((await monthlyPost({action:'ENTRY',kind:'FIXED',description:'NÃO PODE',amountCents:1})).status,409);
+ assert.equal((await monthlyPost({action:'DELETE_ENTRY',id:closed.current.entries[0].id})).status,409);
+ const tripUpdate = await tripApi.PATCH(await request('/api/fleet/trips/x','admin','PATCH',{...tripPayload,fuelCostCents:40000}),tripContext);
+ assert.equal(tripUpdate.status,200,await tripUpdate.clone().text());
+ const changed = await monthlyGet();
+ assert.equal(calculateMonthlyResult(changed.current).resultCents,162000);
+ assert.equal(calculateMonthlyResult(changed.history[0].snapshot).resultCents,172000);
+ assert.equal((await monthlyPost({action:'REOPEN',id:closed.history[0].id,reason:'x'})).status,400);
+ const reopened = await monthlyPost({action:'REOPEN',id:closed.history[0].id,reason:'Conferência do diesel realizado'});
+ assert.equal(reopened.status,200,await reopened.clone().text());
+ const reclosed = await monthlyPost({action:'CLOSE',reviewed:true}); assert.equal(reclosed.status,200,await reclosed.clone().text());
+ const history = (await monthlyGet()).history;
+ assert.equal(history.length,2); assert.equal(history.filter((h: {reopenedAt: string | null}) => !h.reopenedAt).length,1);
+ assert.ok(history.some((h: {snapshot: import('../../lib/domain/fleet-results.ts').MonthlySource}) => calculateMonthlyResult(h.snapshot).resultCents === 172000));
+ const audit = await queryAll("select action from audit_logs where entity_type='MONTHLY_RESULT' and entity_id='2026-11'");
+ assert.equal(audit.length,6); // Three entries, two closings and one reopening.
+ const security = await queryAll("select tablename,rowsecurity from pg_tables where schemaname='public' and tablename in ('fleet_trips','company_monthly_entries','company_monthly_closings')");
+ assert.equal(security.length,3); assert.ok(security.every(t => (t as {rowsecurity:boolean}).rowsecurity));
+ const grants = await queryAll("select * from information_schema.role_table_grants where grantee in ('anon','authenticated') and table_name in ('fleet_trips','company_monthly_entries','company_monthly_closings')");
+ assert.equal(grants.length,0);
 });

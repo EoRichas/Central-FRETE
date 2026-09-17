@@ -5,7 +5,7 @@ import { apiMutation } from "@/components/use-api";
 import { Field } from "@/components/ui";
 import type { Role } from "@/lib/contracts";
 
-const LOGIN_IMAGE_SRC = "/central-login.png?v=central-login-original-20260917-1";
+const LOGIN_IMAGE_SRC = "/central-login.png?v=central-login-clean-20260917-2";
 
 function LoginVisual() {
   return (

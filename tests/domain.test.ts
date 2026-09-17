@@ -55,7 +55,8 @@ test("conserva precisão da média mensal até o cálculo do frete", () => {
     { fuelPriceCents: 738, averageConsumptionMilliKmPerLiter: 3200 }, vehicleRate,
   );
   assert.equal(metrics.allocatedCostCents, 1635);
-  assert.equal(metrics.totalCostCents, metrics.fuelCostCents + 1635);
+  assert.equal(metrics.totalCostCents, metrics.fuelCostCents);
+  assert.equal(metrics.contributionCents, 33000);
 });
 
 test("identifica encaixe de retorno dentro da janela operacional", () => {
@@ -69,10 +70,12 @@ test("identifica encaixe de retorno dentro da janela operacional", () => {
 
 test("resume a frota ponderando a margem pelo faturamento", () => {
   const summary = summarizeFleet([
-    { costsConfigured: true, freightAmountCents: 10_000, allocatedCostCents: 1_000, totalCostCents: 4_000, returnUsed: true, possibleMatch: false },
-    { costsConfigured: true, freightAmountCents: 30_000, allocatedCostCents: 2_000, totalCostCents: 21_000, returnUsed: false, possibleMatch: true },
+    { costsConfigured: true, freightAmountCents: 10_000, allocatedCostCents: 1_000, totalCostCents: 4_000, directCostCents: 1_000, contributionCents: 9_000, returnUsed: true, possibleMatch: false },
+    { costsConfigured: true, freightAmountCents: 30_000, allocatedCostCents: 2_000, totalCostCents: 21_000, directCostCents: 8_000, contributionCents: 22_000, returnUsed: false, possibleMatch: true },
   ] as never);
   assert.deepEqual(summary, {
+    directCostCents: 9_000,
+    contributionCents: 31_000,
     missingCostCount: 0,
     freightCount: 2,
     possibleMatchCount: 1,

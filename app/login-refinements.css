@@ -19,7 +19,7 @@
   pointer-events: none;
   background-image:
     linear-gradient(90deg, rgb(7 27 44 / 8%) 0%, rgb(7 27 44 / 2%) 54%, rgb(226 233 240 / 18%) 76%, #e2e9f0 100%),
-    url("/central-login.webp");
+    url("/central-login.png?v=central-login-clean-20260917-2");
   background-repeat: no-repeat;
   background-position: left center;
   background-size: cover;

@@ -54,7 +54,7 @@ export function FleetParametersPanel({ fleet, onSaved }: { fleet: FleetData; onS
         <div>
           <span className="eyebrow">Parâmetros operacionais</span>
           <h2>Combustível e operação</h2>
-          <p>Esses parâmetros são independentes da Base de custo por placa.</p>
+          <p>Usados somente para estimar diesel de fretes avulsos que ainda não possuem o custo realizado.</p>
         </div>
       </header>
       <form className="form-stack" onSubmit={saveParameters}>
@@ -72,7 +72,7 @@ export function FleetParametersPanel({ fleet, onSaved }: { fleet: FleetData; onS
         <div>
           <span className="eyebrow">Base</span>
           <h2>Dados da Base por placa</h2>
-          <p>Consulta dos dados já cadastrados. O rateio usa somente esta Base.</p>
+          <p>Histórico de referência. Esses valores não são descontados dos fretes nem somados ao fechamento mensal. Lance os custos fixos efetivos na aba Fechamento mensal.</p>
         </div>
       </header>
       <div className="responsive-table"><table>
