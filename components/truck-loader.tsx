@@ -1,5 +1,25 @@
 import styles from "./truck-loader.module.css";
 
+function CarrierCar({ x, y, scale = 1 }: { x: number; y: number; scale?: number }) {
+  return (
+    <g transform={`translate(${x} ${y}) scale(${scale})`}>
+      <path
+        d="M2 14.5h2.8l3.5-5.2c.8-1.2 2.1-1.9 3.6-1.9h12.4c1.4 0 2.7.6 3.5 1.7l4.2 5.4h2.6c1.3 0 2.4 1.1 2.4 2.4v3.2H0v-3.5c0-1.2.9-2.1 2-2.1Z"
+        fill="#e9eef2"
+        stroke="#263640"
+        strokeWidth="1.35"
+        strokeLinejoin="round"
+      />
+      <path d="m10.1 9.1-3.2 5.2h19.8l-4-5.2H10.1Z" fill="#a9c7d8" stroke="#263640" strokeWidth="1.05" />
+      <path d="M17 9.2v5" stroke="#263640" strokeWidth="1" />
+      <circle cx="8" cy="20" r="3.1" fill="#263640" />
+      <circle cx="8" cy="20" r="1.25" fill="#c7d2d9" />
+      <circle cx="29" cy="20" r="3.1" fill="#263640" />
+      <circle cx="29" cy="20" r="1.25" fill="#c7d2d9" />
+    </g>
+  );
+}
+
 export function TruckLoader({ label = "Carregando…" }: { label?: string }) {
   return (
     <div className={styles.loadingState} role="status" aria-live="polite">
@@ -8,53 +28,80 @@ export function TruckLoader({ label = "Carregando…" }: { label?: string }) {
           <div className={styles.truckBody}>
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 230 105"
+              viewBox="0 0 270 118"
               className={styles.trucksvg}
             >
-              <g
-                fill="none"
-                stroke="#282828"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path fill="#ffffff" d="M162 44h34l20 18v23h-54z" />
-                <path fill="#dce7ec" d="M174 51h18l13 12h-31z" />
-                <path d="M168 74h42" />
+              <defs>
+                <linearGradient id="carrierCab" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stopColor="#ffffff" />
+                  <stop offset="1" stopColor="#edf2f5" />
+                </linearGradient>
+                <linearGradient id="carrierBlue" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0" stopColor="#153f5c" />
+                  <stop offset="1" stopColor="#0c2f47" />
+                </linearGradient>
+              </defs>
 
-                <path fill="#2f566d" d="M10 74h151v11H10z" />
-                <path d="M18 70 34 43h116l14 31" />
-                <path d="M34 43h112M39 40h108M31 55h128" />
-                <path d="M47 43v12M83 43v12M119 43v12M150 43v12" />
+              <g strokeLinecap="round" strokeLinejoin="round">
+                <path
+                  d="M18 84h177l13-42h29l22 22v28h-27"
+                  fill="none"
+                  stroke="#243640"
+                  strokeWidth="3"
+                />
+                <path d="M20 86h180v8H20z" fill="url(#carrierBlue)" stroke="#243640" strokeWidth="2" />
+                <path d="M25 48h174l-7 27H19z" fill="#f7f9fa" stroke="#243640" strokeWidth="2.2" />
+                <path d="M29 50h165" stroke="#6c7e89" strokeWidth="1.3" />
+                <path d="M22 77h172" stroke="#6c7e89" strokeWidth="1.3" />
+                <path d="M38 47 28 77M93 47 89 77M147 47l-4 30M198 47l-8 30" stroke="#50636e" strokeWidth="1.35" />
 
-                <g fill="#e9eef1">
-                  <path d="M40 36h27l7 7H34z" />
-                  <path d="M82 36h27l7 7H76z" />
-                  <path d="M124 36h27l7 7H118z" />
-                  <path d="M54 57h27l7 7H48z" />
-                  <path d="M98 57h27l7 7H92z" />
-                </g>
+                <CarrierCar x={38} y={22} scale={0.9} />
+                <CarrierCar x={93} y={22} scale={0.9} />
+                <CarrierCar x={148} y={22} scale={0.9} />
+                <CarrierCar x={54} y={54} scale={0.82} />
+                <CarrierCar x={108} y={54} scale={0.82} />
+                <CarrierCar x={160} y={54} scale={0.82} />
 
-                <g fill="#282828">
-                  <circle cx="50" cy="89" r="9" />
-                  <circle cx="50" cy="89" r="4" fill="#dfe5e8" />
-                  <circle cx="144" cy="89" r="9" />
-                  <circle cx="144" cy="89" r="4" fill="#dfe5e8" />
-                  <circle cx="197" cy="89" r="9" />
-                  <circle cx="197" cy="89" r="4" fill="#dfe5e8" />
+                <path
+                  d="M204 45h31l22 21v26h-60l3-31 4-16Z"
+                  fill="url(#carrierCab)"
+                  stroke="#243640"
+                  strokeWidth="2.4"
+                />
+                <path
+                  d="M211 50h20l15 15h-38l1.8-11.5c.3-2 1.1-3.5 1.2-3.5Z"
+                  fill="#9fc4d7"
+                  stroke="#243640"
+                  strokeWidth="1.6"
+                />
+                <path d="M230 50v15" stroke="#243640" strokeWidth="1.4" />
+                <path d="M199 76h58" stroke="#cbd5dc" strokeWidth="1.3" />
+                <path d="M199 81h58" stroke="#d9e1e6" strokeWidth="1" />
+                <rect x="248" y="69" width="8" height="5" rx="1.5" fill="#ffd45a" stroke="#243640" strokeWidth="1.2" />
+                <path d="M204 86h52" stroke="#143f5d" strokeWidth="4" />
+                <path d="M204 82h52" stroke="#c8333c" strokeWidth="2.2" />
+
+                <text
+                  x="215"
+                  y="79"
+                  fontFamily="Arial, sans-serif"
+                  fontSize="6.5"
+                  fontWeight="800"
+                  letterSpacing=".6"
+                  fill="#123c58"
+                >
+                  CENTRAL
+                </text>
+
+                <g>
+                  <circle cx="48" cy="96" r="10" fill="#263640" />
+                  <circle cx="48" cy="96" r="4.4" fill="#bfcbd2" />
+                  <circle cx="184" cy="96" r="10" fill="#263640" />
+                  <circle cx="184" cy="96" r="4.4" fill="#bfcbd2" />
+                  <circle cx="231" cy="96" r="10" fill="#263640" />
+                  <circle cx="231" cy="96" r="4.4" fill="#bfcbd2" />
                 </g>
               </g>
-
-              <text
-                x="168"
-                y="72"
-                fontFamily="Arial, sans-serif"
-                fontSize="6"
-                fontWeight="700"
-                fill="#0b2638"
-              >
-                CENTRAL
-              </text>
             </svg>
           </div>
           <div className={styles.road} />
