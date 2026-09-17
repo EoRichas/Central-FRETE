@@ -24,9 +24,9 @@ export const metadata: Metadata = {
     "codex-preview": "development",
   },
   icons: {
-    icon: [{ url: "/central-express-favicon.png", type: "image/png", sizes: "64x64" }],
-    shortcut: "/central-express-favicon.png",
-    apple: "/central-express-favicon.png",
+    icon: [{ url: "/central-express-logo.webp", type: "image/webp" }],
+    shortcut: "/central-express-logo.webp",
+    apple: "/central-express-logo.webp",
   },
 };
 
