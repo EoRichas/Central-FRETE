@@ -19,51 +19,84 @@
   background-color: transparent !important;
 }
 
-/* Login: usa a arte aprovada como imagem real, sem recriar o painel por CSS. */
+/* Login: a arte aprovada ocupa a página inteira e o formulário fica sobreposto
+   à direita, como na referência enviada. Nenhuma faixa adicional é recriada. */
 .login-page {
+  position: relative !important;
+  isolation: isolate;
+  min-height: 100vh !important;
+  min-height: 100dvh !important;
+  overflow: hidden !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  padding: clamp(24px, 3.2vw, 48px) clamp(24px, 4vw, 64px) !important;
   background: #dce5ee !important;
 }
 
 .login-visual {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 0 !important;
   display: block !important;
-  width: min(64vw, 980px) !important;
+  width: 100% !important;
+  height: 100% !important;
   min-height: 100% !important;
   opacity: 1 !important;
   background: none !important;
   filter: none !important;
-  overflow: hidden;
+  overflow: hidden !important;
 }
 
 .login-visual-image {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center 58%;
-  display: block;
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  object-fit: cover !important;
+  object-position: center center !important;
+  display: block !important;
   user-select: none;
   pointer-events: none;
 }
 
-/* A própria arte já contém as faixas vermelha e azul. Evita duplicação. */
+/* A própria arte contém os elementos diagonais e a identidade da Central. */
 .login-visual::before,
 .login-visual::after {
   content: none !important;
   display: none !important;
 }
 
+/* Suaviza somente a região que recebe o card. A foto continua visível no
+   restante da tela e não ganha uma nova composição artificial. */
 .login-page::after {
-  background:
-    linear-gradient(90deg, transparent 0 53%, rgb(220 229 238 / 4%) 64%, #dce5ee 79%),
-    radial-gradient(circle at 67% 45%, rgb(255 255 255 / 5%), transparent 32%) !important;
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 0 0 auto !important;
+  z-index: 1 !important;
+  width: min(46vw, 700px) !important;
+  pointer-events: none !important;
+  background: linear-gradient(
+    90deg,
+    rgb(220 229 238 / 0%) 0%,
+    rgb(220 229 238 / 28%) 18%,
+    rgb(220 229 238 / 68%) 48%,
+    rgb(220 229 238 / 92%) 76%,
+    #dce5ee 100%
+  ) !important;
 }
 
 .login-card {
+  position: relative !important;
+  z-index: 2 !important;
   width: min(100%, 500px) !important;
+  margin: 0 !important;
   background: rgb(255 255 255 / 97%) !important;
-  border-color: rgb(193 207 220 / 90%) !important;
-  box-shadow: 0 28px 72px rgb(17 39 61 / 19%) !important;
+  border-color: rgb(193 207 220 / 92%) !important;
+  border-radius: 28px !important;
+  box-shadow: 0 28px 72px rgb(17 39 61 / 20%) !important;
+  backdrop-filter: blur(8px);
 }
 
 /* Ações de tabela: Editar e Excluir ficam sempre visíveis com ícone e texto. */
@@ -175,24 +208,41 @@ html[data-theme="dark"] .table-actions .button.danger.compact-button:focus-visib
 
 @media (max-width: 980px) {
   .login-page {
+    justify-content: center !important;
+    padding: 24px !important;
     background: #d9e2eb !important;
   }
 
   .login-visual {
     width: 100% !important;
-    opacity: .44 !important;
+    opacity: 1 !important;
   }
 
   .login-visual-image {
-    object-position: center 58%;
+    object-position: center center !important;
   }
 
   .login-page::after {
-    background: rgb(221 230 238 / 34%) !important;
+    inset: 0 !important;
+    width: 100% !important;
+    background: rgb(221 230 238 / 60%) !important;
+    backdrop-filter: blur(1px);
+  }
+
+  .login-card {
+    width: min(100%, 500px) !important;
   }
 }
 
 @media (max-width: 700px) {
+  .login-page {
+    padding: 18px !important;
+  }
+
+  .login-visual-image {
+    object-position: 42% center !important;
+  }
+
   td[data-label="Ações"] {
     width: auto !important;
     min-width: 0 !important;
