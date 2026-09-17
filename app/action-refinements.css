@@ -1,0 +1,189 @@
+/* Ajustes visuais globais aprovados para o Central-Frete. */
+
+/* Sidebar: mantém a rolagem, mas remove a barra visual. */
+.sidebar {
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.sidebar::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+/* Certificado digital: substitui visualmente a carteira por uma página/caderno. */
+.main-nav a[href="/certificado"] svg {
+  display: none;
+}
+
+.main-nav a[href="/certificado"]::before {
+  content: "";
+  width: 19px;
+  height: 19px;
+  flex: 0 0 19px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' d='M6 3h12a2 2 0 0 1 2 2v16H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm2 0v18M11 8h6M11 12h6M11 16h4'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' d='M6 3h12a2 2 0 0 1 2 2v16H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm2 0v18M11 8h6M11 12h6M11 16h4'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+/* Loader: mantém a animação original, mas troca o baú por uma cegonha compacta. */
+.truckWrapper {
+  width: 220px !important;
+  height: 112px !important;
+}
+
+.truckBody {
+  width: 184px !important;
+  height: 84px !important;
+  margin-bottom: 7px !important;
+  position: relative;
+}
+
+.truckBody .trucksvg {
+  display: none;
+}
+
+.truckBody::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 230 105'%3E%3Cg fill='none' stroke='%23282828' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath fill='%23ffffff' d='M162 44h34l20 18v23h-54z'/%3E%3Cpath fill='%23dce7ec' d='M174 51h18l13 12h-31z'/%3E%3Cpath d='M168 74h42'/%3E%3Cpath fill='%232f566d' d='M10 74h151v11H10z'/%3E%3Cpath d='M18 70 34 43h116l14 31M34 43h112M39 40h108'/%3E%3Cpath d='M31 55h128M47 43v12M83 43v12M119 43v12M150 43v12'/%3E%3Cg fill='%23e9eef1'%3E%3Cpath d='M40 36h27l7 7H34z'/%3E%3Cpath d='M82 36h27l7 7H76z'/%3E%3Cpath d='M124 36h27l7 7H118z'/%3E%3Cpath d='M54 57h27l7 7H48z'/%3E%3Cpath d='M98 57h27l7 7H92z'/%3E%3C/g%3E%3Cg fill='%23282828'%3E%3Ccircle cx='50' cy='89' r='9'/%3E%3Ccircle cx='50' cy='89' r='4' fill='%23dfe5e8'/%3E%3Ccircle cx='144' cy='89' r='9'/%3E%3Ccircle cx='144' cy='89' r='4' fill='%23dfe5e8'/%3E%3Ccircle cx='197' cy='89' r='9'/%3E%3Ccircle cx='197' cy='89' r='4' fill='%23dfe5e8'/%3E%3C/g%3E%3C/g%3E%3Ctext x='168' y='72' font-family='Arial,sans-serif' font-size='6' font-weight='700' fill='%230b2638'%3ECENTRAL%3C/text%3E%3C/svg%3E");
+}
+
+.truckTires {
+  display: none !important;
+}
+
+/* Ações de tabela mais discretas para manter o foco nos dados.
+   O estilo fica restrito a .table-actions para não transformar botões como
+   Abrir, Cadastrar ou outras ações compactas em ícones incorretos. */
+.table-actions {
+  gap: 4px;
+}
+
+.table-actions .button.secondary.compact-button,
+.table-actions .button.danger.compact-button {
+  position: relative;
+  width: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  color: var(--ink-soft);
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  font-size: 0;
+  line-height: 0;
+  overflow: visible;
+  opacity: .68;
+  transition: color .15s ease, background .15s ease, opacity .15s ease;
+}
+
+.table-actions .button.secondary.compact-button::before,
+.table-actions .button.danger.compact-button::before {
+  content: "";
+  width: 16px;
+  height: 16px;
+  display: block;
+  background: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  -webkit-mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: contain;
+}
+
+.table-actions .button.secondary.compact-button::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round' d='M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Zm9.5-13.5 4 4'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round' d='M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Zm9.5-13.5 4 4'/%3E%3C/svg%3E");
+}
+
+.table-actions .button.danger.compact-button::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round' d='M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round' d='M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5'/%3E%3C/svg%3E");
+}
+
+.table-actions .button.secondary.compact-button:hover,
+.table-actions .button.secondary.compact-button:focus-visible {
+  color: var(--teal);
+  background: rgb(8 123 143 / 8%);
+  border-color: transparent;
+  opacity: 1;
+}
+
+.table-actions .button.danger.compact-button:hover,
+.table-actions .button.danger.compact-button:focus-visible {
+  color: var(--red);
+  background: var(--red-soft);
+  border-color: transparent;
+  opacity: 1;
+}
+
+.table-actions .button.secondary.compact-button::after,
+.table-actions .button.danger.compact-button::after {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 7px);
+  z-index: 50;
+  min-width: max-content;
+  padding: 4px 7px;
+  color: #fff;
+  background: var(--navy);
+  border-radius: 5px;
+  box-shadow: var(--shadow-sm);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 3px);
+  transition: opacity .12s ease, transform .12s ease;
+}
+
+.table-actions .button.secondary.compact-button::after {
+  content: "Editar";
+}
+
+.table-actions .button.danger.compact-button::after {
+  content: "Excluir";
+}
+
+.table-actions .button.secondary.compact-button:hover::after,
+.table-actions .button.secondary.compact-button:focus-visible::after,
+.table-actions .button.danger.compact-button:hover::after,
+.table-actions .button.danger.compact-button:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.table-actions .button.danger.compact-button:disabled {
+  color: var(--red);
+  background: rgb(194 63 65 / 7%);
+  opacity: .55;
+}
+
+tr:hover .table-actions .button.secondary.compact-button:not(:disabled),
+tr:hover .table-actions .button.danger.compact-button:not(:disabled) {
+  opacity: 1;
+}
+
+html[data-theme="dark"] .table-actions .button.secondary.compact-button:hover,
+html[data-theme="dark"] .table-actions .button.secondary.compact-button:focus-visible {
+  background: rgb(126 226 232 / 9%);
+}
+
+html[data-theme="dark"] .table-actions .button.danger.compact-button:hover,
+html[data-theme="dark"] .table-actions .button.danger.compact-button:focus-visible,
+html[data-theme="dark"] .table-actions .button.danger.compact-button:disabled {
+  background: rgb(194 63 65 / 14%);
+}
+
+@media (hover: none) {
+  .table-actions .button.secondary.compact-button,
+  .table-actions .button.danger.compact-button {
+    opacity: 1;
+  }
+}

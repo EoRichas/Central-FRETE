@@ -63,9 +63,8 @@ export function LoginScreen() {
   if (checkingSetup) {
     return (
       <main className="login-page">
-        <section className="login-card">
-          <span className="eyebrow">Sistema de fretes</span>
-          <h1>Central Express</h1>
+        <section className="login-card login-card-checking">
+          <span className="login-logo" role="img" aria-label="Central Express" />
           <p>Verificando a configuração inicial…</p>
         </section>
       </main>
@@ -76,22 +75,23 @@ export function LoginScreen() {
     <main className="login-page">
       <section className="login-card">
         <span className="login-logo" role="img" aria-label="Central Express" />
-        <span className="eyebrow">Sistema de fretes</span>
-        <h1>Central Express</h1>
-        <p>Entre com o usuário e a senha cadastrados pelo administrador.</p>
         {setupDone && <p className="form-success" role="status">Administrador criado. Agora entre com o usuário e a senha escolhidos.</p>}
         <form className="form-stack" onSubmit={submit}>
           <Field label="Usuário">
-            <input name="username" autoComplete="username" autoFocus required />
+            <input name="username" autoComplete="username" autoFocus required placeholder="Digite seu usuário" />
           </Field>
           <Field label="Senha">
-            <input name="password" type="password" autoComplete="current-password" required />
+            <input name="password" type="password" autoComplete="current-password" required placeholder="Digite sua senha" />
           </Field>
           {error && <p className="form-error" role="alert">{error}</p>}
           <button className="button primary" disabled={saving}>
-            {saving ? "Entrando…" : "Entrar"}
+            {saving ? "Entrando…" : "Entrar →"}
           </button>
         </form>
+        <p className="login-restricted">
+          Acesso restrito a colaboradores da Central Express.<br />
+          Uso interno do sistema.
+        </p>
       </section>
     </main>
   );
