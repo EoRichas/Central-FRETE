@@ -5,6 +5,21 @@ import { apiMutation } from "@/components/use-api";
 import { Field } from "@/components/ui";
 import type { Role } from "@/lib/contracts";
 
+const LOGIN_IMAGE_SRC = "/central-login.webp?v=20260917-3";
+
+function LoginVisual() {
+  return (
+    <div className="login-visual" aria-hidden="true">
+      <img
+        src={LOGIN_IMAGE_SRC}
+        alt=""
+        className="login-visual-image"
+        draggable={false}
+      />
+    </div>
+  );
+}
+
 export function LoginScreen() {
   const [checkingSetup, setCheckingSetup] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -63,7 +78,7 @@ export function LoginScreen() {
   if (checkingSetup) {
     return (
       <main className="login-page">
-        <div className="login-visual" aria-hidden="true" />
+        <LoginVisual />
         <section className="login-card login-card-checking">
           <span className="login-logo" role="img" aria-label="Central Express" />
           <p>Verificando a configuração inicial…</p>
@@ -74,7 +89,7 @@ export function LoginScreen() {
 
   return (
     <main className="login-page">
-      <div className="login-visual" aria-hidden="true" />
+      <LoginVisual />
       <section className="login-card">
         <span className="login-logo" role="img" aria-label="Central Express" />
         {setupDone && <p className="form-success" role="status">Administrador criado. Agora entre com o usuário e a senha escolhidos.</p>}
