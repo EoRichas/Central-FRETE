@@ -19,7 +19,7 @@
   background-color: transparent !important;
 }
 
-/* Login: preserva o formulário funcional e usa a arte local em alta definição. */
+/* Login: a arte agora é um elemento img real, não um background CSS. */
 .login-page {
   background: #dce5ee !important;
 }
@@ -29,13 +29,29 @@
   width: min(64vw, 980px) !important;
   min-height: 100% !important;
   opacity: 1 !important;
-  background-image:
-    linear-gradient(90deg, rgb(7 27 44 / 2%) 0%, rgb(7 27 44 / 0%) 58%, rgb(220 229 238 / 10%) 76%, #dce5ee 100%),
-    url("/central-login.webp") !important;
-  background-repeat: no-repeat !important;
-  background-position: left center !important;
-  background-size: cover !important;
+  background: none !important;
   filter: none !important;
+  overflow: hidden;
+}
+
+.login-visual-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: left center;
+  display: block;
+  user-select: none;
+  pointer-events: none;
+}
+
+.login-visual::before {
+  z-index: 2;
+}
+
+.login-visual::after {
+  z-index: 2;
 }
 
 .login-page::after {
@@ -166,7 +182,10 @@ html[data-theme="dark"] .table-actions .button.danger.compact-button:focus-visib
   .login-visual {
     width: 100% !important;
     opacity: .44 !important;
-    background-position: 34% center !important;
+  }
+
+  .login-visual-image {
+    object-position: 34% center;
   }
 
   .login-page::after {
