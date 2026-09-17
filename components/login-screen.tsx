@@ -5,7 +5,7 @@ import { apiMutation } from "@/components/use-api";
 import { Field } from "@/components/ui";
 import type { Role } from "@/lib/contracts";
 
-const LOGIN_IMAGE_SRC = "/central-login.webp?v=20260917-3";
+const LOGIN_IMAGE_SRC = "/central-login.webp?v=central-login-approved-20260917-1";
 
 function LoginVisual() {
   return (
@@ -14,6 +14,10 @@ function LoginVisual() {
         src={LOGIN_IMAGE_SRC}
         alt=""
         className="login-visual-image"
+        width={835}
+        height={1086}
+        fetchPriority="high"
+        decoding="async"
         draggable={false}
       />
     </div>
