@@ -1,0 +1,192 @@
+/* Correções visuais consolidadas em 17/09/2026. */
+
+/* Usa a mesma marca local no menu lateral, no cabeçalho e no login. */
+.brand-logo,
+.topbar::before,
+.login-logo {
+  background-image: url("/central-express-logo.webp") !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  background-size: contain !important;
+}
+
+.brand-logo,
+.topbar::before {
+  background-color: #fff !important;
+}
+
+.login-logo {
+  background-color: transparent !important;
+}
+
+/* Login: preserva o formulário funcional e usa a arte local em alta definição. */
+.login-page {
+  background: #dce5ee !important;
+}
+
+.login-visual {
+  display: block !important;
+  width: min(64vw, 980px) !important;
+  min-height: 100% !important;
+  opacity: 1 !important;
+  background-image:
+    linear-gradient(90deg, rgb(7 27 44 / 2%) 0%, rgb(7 27 44 / 0%) 58%, rgb(220 229 238 / 10%) 76%, #dce5ee 100%),
+    url("/central-login.webp") !important;
+  background-repeat: no-repeat !important;
+  background-position: left center !important;
+  background-size: cover !important;
+  filter: none !important;
+}
+
+.login-page::after {
+  background:
+    linear-gradient(90deg, transparent 0 53%, rgb(220 229 238 / 4%) 64%, #dce5ee 79%),
+    radial-gradient(circle at 67% 45%, rgb(255 255 255 / 5%), transparent 32%) !important;
+}
+
+.login-card {
+  width: min(100%, 500px) !important;
+  background: rgb(255 255 255 / 97%) !important;
+  border-color: rgb(193 207 220 / 90%) !important;
+  box-shadow: 0 28px 72px rgb(17 39 61 / 19%) !important;
+}
+
+/* Ações de tabela: Editar e Excluir ficam sempre visíveis com ícone e texto. */
+td[data-label="Ações"] {
+  width: auto !important;
+  min-width: 184px !important;
+}
+
+.table-actions,
+.table-actions:has(.button.danger) {
+  min-width: 0 !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 8px !important;
+  flex-wrap: wrap;
+  overflow: visible !important;
+}
+
+.table-actions .button.secondary.compact-button,
+.table-actions .button.danger.compact-button {
+  width: auto !important;
+  min-width: 82px !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  padding: 0 12px !important;
+  gap: 6px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 9px !important;
+  font-size: 12px !important;
+  font-weight: 720 !important;
+  line-height: 1 !important;
+  opacity: 1 !important;
+  transform: none !important;
+  box-shadow: 0 2px 7px rgb(15 49 70 / 7%) !important;
+}
+
+.table-actions .button.secondary.compact-button {
+  color: #0f5f7a !important;
+  background: #eef7fb !important;
+  border-color: #b8d7e3 !important;
+}
+
+.table-actions .button.secondary.compact-button:hover:not(:disabled),
+.table-actions .button.secondary.compact-button:focus-visible {
+  color: #0b4d63 !important;
+  background: #deeff6 !important;
+  border-color: #96c3d3 !important;
+  box-shadow: 0 6px 15px rgb(21 78 94 / 12%) !important;
+  transform: translateY(-1px) !important;
+}
+
+.table-actions .button.danger.compact-button {
+  color: #9f1f1f !important;
+  background: #fff1f1 !important;
+  border-color: #e3b7b7 !important;
+}
+
+.table-actions .button.danger.compact-button:hover:not(:disabled),
+.table-actions .button.danger.compact-button:focus-visible {
+  color: #fff !important;
+  background: #b42318 !important;
+  border-color: #8e1c14 !important;
+  box-shadow: 0 6px 15px rgb(148 27 19 / 20%) !important;
+  transform: translateY(-1px) !important;
+}
+
+.table-actions .button.secondary.compact-button::before,
+.table-actions .button.danger.compact-button::before {
+  width: 14px !important;
+  height: 14px !important;
+  flex: 0 0 14px !important;
+}
+
+.table-actions .button.secondary.compact-button::after,
+.table-actions .button.danger.compact-button::after {
+  display: none !important;
+  content: none !important;
+}
+
+html[data-theme="dark"] .table-actions .button.secondary.compact-button {
+  color: #d8e5ec !important;
+  background: #18384b !important;
+  border-color: #416b7c !important;
+}
+
+html[data-theme="dark"] .table-actions .button.secondary.compact-button:hover:not(:disabled),
+html[data-theme="dark"] .table-actions .button.secondary.compact-button:focus-visible {
+  color: #9debf0 !important;
+  background: #20475c !important;
+  border-color: #5a8393 !important;
+}
+
+html[data-theme="dark"] .table-actions .button.danger.compact-button {
+  color: #ffd7d9 !important;
+  background: #49272c !important;
+  border-color: #8a5a60 !important;
+}
+
+html[data-theme="dark"] .table-actions .button.danger.compact-button:hover:not(:disabled),
+html[data-theme="dark"] .table-actions .button.danger.compact-button:focus-visible {
+  color: #fff !important;
+  background: #b93c40 !important;
+  border-color: #d76d72 !important;
+}
+
+@media (max-width: 980px) {
+  .login-page {
+    background: #d9e2eb !important;
+  }
+
+  .login-visual {
+    width: 100% !important;
+    opacity: .44 !important;
+    background-position: 34% center !important;
+  }
+
+  .login-page::after {
+    background: rgb(221 230 238 / 34%) !important;
+  }
+}
+
+@media (max-width: 700px) {
+  td[data-label="Ações"] {
+    width: auto !important;
+    min-width: 0 !important;
+  }
+
+  .table-actions,
+  .table-actions:has(.button.danger) {
+    justify-content: flex-end !important;
+  }
+
+  .table-actions .button.secondary.compact-button,
+  .table-actions .button.danger.compact-button {
+    min-width: 76px !important;
+  }
+}
