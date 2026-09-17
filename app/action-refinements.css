@@ -1,6 +1,5 @@
 /* Refinamentos visuais do Central-Frete.
-   Este arquivo cuida apenas da camada de apresentação.
-   As ações animadas de tabela permanecem em animation-restore.css. */
+   Este arquivo atua somente na camada de apresentação. */
 
 /* Sidebar: mantém rolagem funcional sem exibir a barra nativa. */
 .sidebar {
@@ -15,7 +14,7 @@
   display: none;
 }
 
-/* Certificado digital: ícone de documento/caderno. */
+/* Certificado digital: documento/caderno com a mesma animação dos demais itens. */
 .main-nav a[href="/certificado"] svg {
   display: none;
 }
@@ -28,6 +27,15 @@
   background: currentColor;
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' d='M6 3h12a2 2 0 0 1 2 2v16H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm2 0v18M11 8h6M11 12h6M11 16h4'/%3E%3C/svg%3E") center / contain no-repeat;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' d='M6 3h12a2 2 0 0 1 2 2v16H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm2 0v18M11 8h6M11 12h6M11 16h4'/%3E%3C/svg%3E") center / contain no-repeat;
+  transition: transform .18s ease;
+}
+
+.main-nav a[href="/certificado"]:hover::before {
+  transform: translateX(76px) scale(1.22);
+}
+
+.sidebar-collapsed .main-nav a[href="/certificado"]:hover::before {
+  transform: scale(1.18);
 }
 
 /* Botões comuns: melhora acabamento sem substituir interações existentes. */
@@ -122,6 +130,153 @@
   background: rgb(16 56 79 / 5%);
 }
 
+/* Editar e Excluir: botões compactos, estáveis e sem expansão visual. */
+td[data-label="Ações"] {
+  width: 104px;
+  min-width: 104px;
+  overflow: visible;
+  text-align: center;
+}
+
+.table-actions,
+.table-actions:has(.button.danger) {
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  overflow: visible;
+}
+
+.table-actions .button.secondary.compact-button,
+.table-actions .button.danger.compact-button {
+  position: relative;
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+  color: #435d70;
+  background: var(--surface);
+  border: 1px solid #d3dee6;
+  border-radius: 9px;
+  box-shadow: 0 1px 2px rgb(15 49 70 / 5%);
+  font-size: 0;
+  line-height: 0;
+  opacity: 1;
+  transform: none;
+  transition: color .15s ease, background .15s ease, border-color .15s ease, box-shadow .15s ease, transform .12s ease;
+}
+
+.table-actions .button.danger.compact-button {
+  color: #b33f44;
+  border-color: #ead0d2;
+}
+
+.table-actions .button.secondary.compact-button::before,
+.table-actions .button.danger.compact-button::before {
+  content: "";
+  position: static;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  display: block;
+  flex: 0 0 16px;
+  background: currentColor;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  opacity: 1;
+  transform: none;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  -webkit-mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: contain;
+}
+
+.table-actions .button.secondary.compact-button::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round' d='M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Zm9.5-13.5 4 4'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round' d='M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Zm9.5-13.5 4 4'/%3E%3C/svg%3E");
+}
+
+.table-actions .button.danger.compact-button::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round' d='M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round' d='M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5'/%3E%3C/svg%3E");
+}
+
+.table-actions .button.secondary.compact-button:hover:not(:disabled),
+.table-actions .button.secondary.compact-button:focus-visible {
+  color: #0b7184;
+  background: #f5fafb;
+  border-color: #9fc3cd;
+  box-shadow: 0 5px 14px rgb(21 78 94 / 9%);
+  transform: translateY(-1px);
+}
+
+.table-actions .button.danger.compact-button:hover:not(:disabled),
+.table-actions .button.danger.compact-button:focus-visible {
+  color: #a93439;
+  background: #fff6f6;
+  border-color: #dfb5b8;
+  box-shadow: 0 5px 14px rgb(140 43 47 / 9%);
+  transform: translateY(-1px);
+}
+
+.table-actions .button.secondary.compact-button:active:not(:disabled),
+.table-actions .button.danger.compact-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.table-actions .button.secondary.compact-button::after,
+.table-actions .button.danger.compact-button::after {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 7px);
+  z-index: 50;
+  min-width: max-content;
+  padding: 5px 8px;
+  color: #fff;
+  background: var(--navy);
+  border-radius: 6px;
+  box-shadow: var(--shadow-sm);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 3px);
+  transition: opacity .12s ease, transform .12s ease;
+}
+
+.table-actions .button.secondary.compact-button::after {
+  content: "Editar";
+}
+
+.table-actions .button.danger.compact-button::after {
+  content: "Excluir";
+}
+
+.table-actions .button.secondary.compact-button:hover::after,
+.table-actions .button.secondary.compact-button:focus-visible::after,
+.table-actions .button.danger.compact-button:hover::after,
+.table-actions .button.danger.compact-button:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.table-actions .button.secondary.compact-button:disabled,
+.table-actions .button.danger.compact-button:disabled {
+  transform: none;
+  opacity: .45;
+}
+
 html[data-theme="dark"] .button.secondary:not(.compact-button) {
   color: #d8e5ec;
   background: #153246;
@@ -138,4 +293,53 @@ html[data-theme="dark"] .button.secondary:not(.compact-button):focus-visible {
 html[data-theme="dark"] .button.danger:not(.compact-button) {
   background: #1b2e3b;
   border-color: #68484d;
+}
+
+html[data-theme="dark"] .table-actions .button.secondary.compact-button {
+  color: #b9cbd6;
+  background: #132d3f;
+  border-color: #2d485a;
+}
+
+html[data-theme="dark"] .table-actions .button.secondary.compact-button:hover:not(:disabled),
+html[data-theme="dark"] .table-actions .button.secondary.compact-button:focus-visible {
+  color: #8be3ea;
+  background: #18374a;
+  border-color: #416b7c;
+}
+
+html[data-theme="dark"] .table-actions .button.danger.compact-button {
+  color: #df8a8f;
+  background: #1b2e3b;
+  border-color: #65464b;
+}
+
+html[data-theme="dark"] .table-actions .button.danger.compact-button:hover:not(:disabled),
+html[data-theme="dark"] .table-actions .button.danger.compact-button:focus-visible {
+  color: #f0a0a4;
+  background: #33262d;
+  border-color: #8a5a60;
+}
+
+@media (max-width: 700px) {
+  .main-nav a[href="/certificado"]:hover::before {
+    transform: none;
+  }
+
+  td[data-label="Ações"] {
+    width: auto;
+    min-width: 0;
+  }
+
+  .table-actions,
+  .table-actions:has(.button.danger) {
+    justify-content: flex-end;
+  }
+}
+
+@media (hover: none) {
+  .table-actions .button.secondary.compact-button::after,
+  .table-actions .button.danger.compact-button::after {
+    display: none;
+  }
 }

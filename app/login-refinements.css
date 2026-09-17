@@ -6,7 +6,7 @@
   padding: 48px clamp(32px, 6vw, 96px);
   display: grid;
   place-items: center end;
-  background: #dfe7ef;
+  background: #e2e9f0;
   isolation: isolate;
 }
 
@@ -14,15 +14,16 @@
   position: absolute;
   inset: 0 auto 0 0;
   z-index: 0;
-  width: min(68vw, 1120px);
+  width: min(70vw, 1180px);
+  min-height: 100%;
   pointer-events: none;
   background-image:
-    linear-gradient(90deg, rgb(7 27 44 / 24%), rgb(7 27 44 / 8%) 56%, rgb(223 231 239 / 78%) 92%, #dfe7ef 100%),
+    linear-gradient(90deg, rgb(7 27 44 / 8%) 0%, rgb(7 27 44 / 2%) 54%, rgb(226 233 240 / 18%) 76%, #e2e9f0 100%),
     url("/central-login.webp");
   background-repeat: no-repeat;
   background-position: left center;
   background-size: cover;
-  filter: saturate(.92) contrast(1.04) brightness(.78);
+  filter: saturate(1.02) contrast(1.03) brightness(.98);
 }
 
 .login-visual::before,
@@ -58,8 +59,8 @@
   z-index: 1;
   pointer-events: none;
   background:
-    linear-gradient(90deg, transparent 0 46%, rgb(223 231 239 / 8%) 57%, #dfe7ef 70%),
-    radial-gradient(circle at 64% 44%, rgb(255 255 255 / 8%), transparent 34%);
+    linear-gradient(90deg, transparent 0 50%, rgb(226 233 240 / 4%) 61%, #e2e9f0 75%),
+    radial-gradient(circle at 67% 45%, rgb(255 255 255 / 6%), transparent 32%);
 }
 
 .login-card {
@@ -180,13 +181,13 @@
 
   .login-visual {
     width: 100%;
-    opacity: .6;
+    opacity: .72;
     background-position: 30% center;
-    filter: saturate(.85) contrast(1.04) brightness(.7);
+    filter: saturate(.96) contrast(1.02) brightness(.94);
   }
 
   .login-page::after {
-    background: rgb(221 230 238 / 42%);
+    background: rgb(221 230 238 / 28%);
   }
 
   .login-card {
@@ -209,6 +210,11 @@
     width: 150px;
     height: 104px;
     margin-bottom: 24px;
+  }
+
+  .login-visual {
+    opacity: .58;
+    background-position: 28% center;
   }
 
   .login-visual::before {
