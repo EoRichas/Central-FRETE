@@ -63,6 +63,7 @@ export function LoginScreen() {
   if (checkingSetup) {
     return (
       <main className="login-page">
+        <div className="login-visual" aria-hidden="true" />
         <section className="login-card login-card-checking">
           <span className="login-logo" role="img" aria-label="Central Express" />
           <p>Verificando a configuração inicial…</p>
@@ -73,6 +74,7 @@ export function LoginScreen() {
 
   return (
     <main className="login-page">
+      <div className="login-visual" aria-hidden="true" />
       <section className="login-card">
         <span className="login-logo" role="img" aria-label="Central Express" />
         {setupDone && <p className="form-success" role="status">Administrador criado. Agora entre com o usuário e a senha escolhidos.</p>}
