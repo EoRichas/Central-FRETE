@@ -16,8 +16,8 @@
 }
 
 .truckWrapper {
-  width: 200px;
-  height: 100px;
+  width: 220px;
+  height: 112px;
   display: flex;
   flex-direction: column;
   position: relative;
@@ -27,31 +27,16 @@
 }
 
 .truckBody {
-  width: 130px;
-  height: fit-content;
-  margin-bottom: 6px;
+  width: 184px;
+  height: 84px;
+  margin-bottom: 7px;
   animation: motion 1s linear infinite;
 }
 
 .trucksvg {
-  width: 130px;
-  height: auto;
-}
-
-.truckTires {
-  width: 130px;
-  height: fit-content;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 10px 0 15px;
-  position: absolute;
-  bottom: 0;
-}
-
-.tiresvg {
-  width: 24px;
-  height: 24px;
+  width: 184px;
+  height: 84px;
+  display: block;
 }
 
 .road {
