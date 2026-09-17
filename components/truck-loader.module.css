@@ -16,8 +16,8 @@
 }
 
 .truckWrapper {
-  width: 220px;
-  height: 112px;
+  width: 252px;
+  height: 122px;
   display: flex;
   flex-direction: column;
   position: relative;
@@ -27,22 +27,24 @@
 }
 
 .truckBody {
-  width: 184px;
-  height: 84px;
-  margin-bottom: 7px;
+  width: 226px;
+  height: 99px;
+  margin-bottom: 5px;
   animation: motion 1s linear infinite;
+  transform-origin: center bottom;
 }
 
 .trucksvg {
-  width: 184px;
-  height: 84px;
+  width: 226px;
+  height: 99px;
   display: block;
+  filter: drop-shadow(0 4px 3px rgb(12 30 43 / 12%));
 }
 
 .road {
   width: 100%;
-  height: 1.5px;
-  background-color: #282828;
+  height: 2px;
+  background-color: #283842;
   position: relative;
   bottom: 0;
   align-self: flex-end;
@@ -52,34 +54,35 @@
 .road::before {
   content: "";
   position: absolute;
-  width: 20px;
+  width: 24px;
   height: 100%;
-  background-color: #282828;
+  background-color: #283842;
   right: -50%;
   border-radius: 3px;
   animation: roadAnimation 1.4s linear infinite;
-  border-left: 10px solid white;
+  border-left: 12px solid white;
 }
 
 .road::after {
   content: "";
   position: absolute;
-  width: 10px;
+  width: 12px;
   height: 100%;
-  background-color: #282828;
+  background-color: #283842;
   right: -65%;
   border-radius: 3px;
   animation: roadAnimation 1.4s linear infinite;
-  border-left: 4px solid white;
+  border-left: 5px solid white;
 }
 
 .lampPost {
   position: absolute;
-  bottom: 0;
+  bottom: 1px;
   right: -90%;
-  height: 90px;
+  height: 96px;
   width: auto;
   animation: roadAnimation 1.4s linear infinite;
+  opacity: .86;
 }
 
 .label {
@@ -89,14 +92,29 @@
 }
 
 @keyframes motion {
-  0% { transform: translateY(0); }
-  50% { transform: translateY(3px); }
-  100% { transform: translateY(0); }
+  0% { transform: translateY(0) rotate(0deg); }
+  35% { transform: translateY(1.5px) rotate(.12deg); }
+  50% { transform: translateY(3px) rotate(0deg); }
+  70% { transform: translateY(1px) rotate(-.12deg); }
+  100% { transform: translateY(0) rotate(0deg); }
 }
 
 @keyframes roadAnimation {
   0% { transform: translateX(0); }
-  100% { transform: translateX(-350px); }
+  100% { transform: translateX(-390px); }
+}
+
+@media (max-width: 560px) {
+  .truckWrapper {
+    width: 224px;
+    height: 112px;
+  }
+
+  .truckBody,
+  .trucksvg {
+    width: 204px;
+    height: 89px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,4 +1,4 @@
-/* Login interno da Central Express — composição aprovada. */
+/* Login interno da Central Express. */
 .login-page {
   position: relative;
   min-height: 100vh;
@@ -6,39 +6,72 @@
   padding: 48px clamp(32px, 6vw, 96px);
   display: grid;
   place-items: center end;
-  background: #eaf1f8;
+  background: #dfe7ef;
   isolation: isolate;
 }
 
-.login-page::before {
-  content: "";
+.login-visual {
   position: absolute;
   inset: 0 auto 0 0;
-  z-index: -2;
-  width: 62%;
-  background-image: url("/central-login.webp");
+  z-index: 0;
+  width: min(68vw, 1120px);
+  pointer-events: none;
+  background-image:
+    linear-gradient(90deg, rgb(7 27 44 / 24%), rgb(7 27 44 / 8%) 56%, rgb(223 231 239 / 78%) 92%, #dfe7ef 100%),
+    url("/central-login.webp");
   background-repeat: no-repeat;
   background-position: left center;
-  background-size: auto 135%;
+  background-size: cover;
+  filter: saturate(.92) contrast(1.04) brightness(.78);
+}
+
+.login-visual::before,
+.login-visual::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  pointer-events: none;
+}
+
+.login-visual::before {
+  bottom: 28px;
+  width: min(47vw, 710px);
+  height: 8px;
+  background: #c93338;
+  clip-path: polygon(0 34%, 96% 0, 100% 44%, 0 100%);
+  box-shadow: 0 2px 8px rgb(73 19 22 / 18%);
+}
+
+.login-visual::after {
+  bottom: 16px;
+  width: min(53vw, 800px);
+  height: 11px;
+  background: #13558d;
+  clip-path: polygon(0 34%, 96% 0, 100% 42%, 0 100%);
+  box-shadow: 0 2px 8px rgb(10 45 77 / 18%);
 }
 
 .login-page::after {
   content: "";
   position: absolute;
   inset: 0;
-  z-index: -1;
+  z-index: 1;
   pointer-events: none;
-  background: linear-gradient(108deg, transparent 0 55%, rgb(234 241 248 / 14%) 55.2%, #eaf1f8 72%);
+  background:
+    linear-gradient(90deg, transparent 0 46%, rgb(223 231 239 / 8%) 57%, #dfe7ef 70%),
+    radial-gradient(circle at 64% 44%, rgb(255 255 255 / 8%), transparent 34%);
 }
 
 .login-card {
+  position: relative;
+  z-index: 2;
   width: min(100%, 500px);
   padding: 42px 40px 34px;
-  background: rgb(255 255 255 / 97%);
-  border: 1px solid rgb(207 219 232 / 78%);
-  border-radius: 24px;
-  box-shadow: 0 26px 70px rgb(20 47 75 / 16%);
-  backdrop-filter: blur(10px);
+  background: rgb(255 255 255 / 96%);
+  border: 1px solid rgb(197 211 224 / 82%);
+  border-radius: 22px;
+  box-shadow: 0 28px 72px rgb(17 39 61 / 22%);
+  backdrop-filter: blur(14px);
 }
 
 .login-logo {
@@ -46,7 +79,7 @@
   height: 128px;
   margin: 0 auto 30px;
   display: block;
-  background-color: transparent;
+  background: transparent url('https://raw.githubusercontent.com/dbsoarees-spec/Central/main/Central/public/central-express-logo.png') center / contain no-repeat;
   border-radius: 0;
 }
 
@@ -70,10 +103,15 @@
   min-height: 56px;
   padding-inline: 16px;
   color: var(--navy);
-  background: #fff;
-  border-color: #cbd7e3;
+  background: rgb(255 255 255 / 94%);
+  border-color: #c5d2df;
   border-radius: 10px;
   font-size: 14px;
+  box-shadow: inset 0 1px 2px rgb(9 31 49 / 3%);
+}
+
+.login-card input:hover {
+  border-color: #9fb3c5;
 }
 
 .login-card input::placeholder {
@@ -92,14 +130,21 @@
   background: linear-gradient(90deg, #0b5595, #064d8b);
   border-color: transparent;
   border-radius: 10px;
-  box-shadow: 0 10px 24px rgb(7 77 139 / 18%);
+  box-shadow: 0 10px 24px rgb(7 77 139 / 22%);
   font-size: 15px;
   font-weight: 780;
+  transition: transform .16s ease, box-shadow .16s ease, background .16s ease;
 }
 
-.login-card .button.primary:hover {
+.login-card .button.primary:hover:not(:disabled) {
   background: linear-gradient(90deg, #084a82, #063f72);
   border-color: transparent;
+  box-shadow: 0 13px 28px rgb(7 65 118 / 27%);
+  transform: translateY(-1px);
+}
+
+.login-card .button.primary:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .login-restricted {
@@ -130,22 +175,23 @@
   .login-page {
     place-items: center;
     padding: 32px 22px;
-    background: #dfe8f1;
+    background: #d9e2eb;
   }
 
-  .login-page::before {
+  .login-visual {
     width: 100%;
-    opacity: .36;
-    background-position: 32% center;
-    background-size: auto 120%;
+    opacity: .6;
+    background-position: 30% center;
+    filter: saturate(.85) contrast(1.04) brightness(.7);
   }
 
   .login-page::after {
-    background: rgb(234 241 248 / 30%);
+    background: rgb(221 230 238 / 42%);
   }
 
   .login-card {
     width: min(100%, 480px);
+    background: rgb(255 255 255 / 94%);
   }
 }
 
@@ -163,5 +209,17 @@
     width: 150px;
     height: 104px;
     margin-bottom: 24px;
+  }
+
+  .login-visual::before {
+    bottom: 19px;
+    width: 78vw;
+    height: 6px;
+  }
+
+  .login-visual::after {
+    bottom: 10px;
+    width: 88vw;
+    height: 8px;
   }
 }
