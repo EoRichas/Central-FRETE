@@ -1,3 +1,5 @@
+import { loadFleetTrips } from "@/lib/server/fleet-trips";
+import { calculateTripResult } from "@/lib/domain/fleet-results";
 import type {
   FleetData,
   FleetDriver,
@@ -52,6 +54,12 @@ type VehicleCostRow = {
 };
 
 type FreightRow = {
+  tripId: string | null;
+  yardCostCents: number;
+  pickupCostCents: number;
+  deliveryCostCents: number;
+  otherCostCents: number;
+  actualFuelCostCents: number | null;
   paidAt: string | null;
   proofAttachmentId: string | null;
   paymentStatus: "EM_ABERTO" | "PAGO";
@@ -103,7 +111,7 @@ export async function loadFleetData(
   freightOnly = false,
   competency?: string,
 ): Promise<FleetData> {
-  const [parameters, vehicleRows, driverRows, costRows, freightRows] =
+  const [parameters, vehicleRows, driverRows, costRows, freightRows, trips] =
     await Promise.all([
       loadParameters(),
       queryAll<VehicleRow>(
@@ -123,7 +131,9 @@ export async function loadFleetData(
          order by competency desc, id`,
       ),
       queryAll<FreightRow>(
-        `select id, vehicle_id as vehicleId, vehicle_plate as vehiclePlate,
+        `select trip_id as tripId, yard_cost_cents as yardCostCents, pickup_cost_cents as pickupCostCents,
+          delivery_cost_cents as deliveryCostCents, other_cost_cents as otherCostCents, actual_fuel_cost_cents as actualFuelCostCents,
+          id, vehicle_id as vehicleId, vehicle_plate as vehiclePlate,
           driver_id as driverId, driver_name as driverName,
           client_name as clientName, cargo_vehicle_model as cargoVehicleModel,
           cargo_plate as cargoPlate, origin, destination, origin_cep as originCep, destination_cep as destinationCep, payment_status as paymentStatus,
@@ -139,6 +149,7 @@ export async function loadFleetData(
          order by pickup_date desc, created_at desc
          `,
       ),
+      loadFleetTrips(),
     ]);
 
   const costsByVehicle = new Map<string, FleetVehicleCost[]>();
@@ -183,7 +194,7 @@ export async function loadFleetData(
     deliveryDate: row.deliveryDate,
   }));
   const vehicleRates = new Map(vehicles.map((vehicle) => [vehicle.id, vehicle.averageCostPerKmCents]));
-  const freights: FleetFreight[] = freightRows.filter((row) => !competency || row.pickupDate.slice(0, 7) === competency).map((row) => {
+  const allFreights: FleetFreight[] = freightRows.map((row) => {
     const metrics = calculateFleetFreightMetrics(
       row,
       parameters,
@@ -201,7 +212,10 @@ export async function loadFleetData(
     };
   });
 
+  const freights = allFreights.filter(row => !competency || row.pickupDate.slice(0, 7) === competency);
   return {
+    trips,
+    tripResults: trips.filter(trip => !competency || trip.operationDate.slice(0, 7) === competency).map(trip => calculateTripResult(trip, allFreights)),
     parameters,
     vehicles,
     drivers,

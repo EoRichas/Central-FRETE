@@ -7,6 +7,12 @@ import { asObject } from "@/lib/server/validation";
 type RouteContext = { params: Promise<{ id: string }> };
 
 type FreightSnapshot = {
+  tripId: string | null;
+  yardCostCents: number;
+  pickupCostCents: number;
+  deliveryCostCents: number;
+  otherCostCents: number;
+  actualFuelCostCents: number | null;
   id: string;
   vehicleId: string | null;
   vehiclePlate: string;
@@ -31,7 +37,9 @@ type FreightSnapshot = {
 
 async function freightSnapshot(id: string) {
   return queryFirst<FreightSnapshot>(
-    `select id, vehicle_id as vehicleId, vehicle_plate as vehiclePlate,
+    `select trip_id as tripId, yard_cost_cents as yardCostCents, pickup_cost_cents as pickupCostCents,
+      delivery_cost_cents as deliveryCostCents, other_cost_cents as otherCostCents, actual_fuel_cost_cents as actualFuelCostCents,
+      id, vehicle_id as vehicleId, vehicle_plate as vehiclePlate,
       driver_id as driverId, driver_name as driverName,
       client_name as clientName, cargo_vehicle_model as cargoVehicleModel,
       cargo_plate as cargoPlate, origin, destination,
@@ -73,6 +81,7 @@ export async function PATCH(request: Request, context: RouteContext) {
             billing_date = ?, operational_status = ?, priority = ?,
             freight_amount_cents = ?, distance_meters = ?, toll_cents = ?,
             driver_commission_cents = ?, return_used = ?, updated_by = ?, origin_cep = ?, destination_cep = ?,
+            trip_id = ?, yard_cost_cents = ?, pickup_cost_cents = ?, delivery_cost_cents = ?, other_cost_cents = ?, actual_fuel_cost_cents = ?,
             updated_at = to_char(timezone('UTC', now()), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
            where id = ?`,
         )
@@ -98,6 +107,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           data.returnUsed ? 1 : 0,
           user.id,
           data.originCep, data.destinationCep,
+          data.tripId, data.yardCostCents, data.pickupCostCents, data.deliveryCostCents, data.otherCostCents, data.actualFuelCostCents,
           id,
         ),
       db

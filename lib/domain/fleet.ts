@@ -1,3 +1,4 @@
+import type { FleetTrip, TripResult } from "./fleet-results.ts";
 export const FLEET_OPERATIONAL_STATUSES = [
   "SEM_PREVISAO",
   "COLETA_AGENDADA",
@@ -70,6 +71,12 @@ export type FleetDriver = {
 };
 
 export type FleetFreightBase = {
+  tripId?: string | null;
+  yardCostCents?: number;
+  pickupCostCents?: number;
+  deliveryCostCents?: number;
+  otherCostCents?: number;
+  actualFuelCostCents?: number | null;
   vehicleId: string | null;
   vehiclePlate: string;
   driverId: string | null;
@@ -92,6 +99,9 @@ export type FleetFreightBase = {
 };
 
 export type FleetFreightMetrics = {
+  directCostCents: number;
+  contributionCents: number;
+  contributionBasisPoints: number;
   fuelCostCents: number;
   costPerKmCents: number | null;
   costsConfigured: boolean;
@@ -114,6 +124,8 @@ export type FleetFreight = FleetFreightBase & FleetFreightMetrics & {
 };
 
 export type FleetSummary = {
+  directCostCents: number;
+  contributionCents: number;
   missingCostCount: number;
   freightCount: number;
   possibleMatchCount: number;
@@ -126,6 +138,8 @@ export type FleetSummary = {
 };
 
 export type FleetData = {
+  trips: FleetTrip[];
+  tripResults: TripResult[];
   parameters: FleetParameters;
   vehicles: FleetVehicle[];
   drivers: FleetDriver[];
@@ -182,15 +196,18 @@ export function averageVehicleCostPerKmCents(
 }
 
 export function calculateFleetFreightMetrics(
-  freight: Pick<FleetFreightBase, "distanceMeters" | "freightAmountCents" | "tollCents" | "driverCommissionCents">,
+  freight: Pick<FleetFreightBase, "distanceMeters" | "freightAmountCents" | "tollCents" | "driverCommissionCents"> & Partial<Pick<FleetFreightBase, "tripId" | "yardCostCents" | "pickupCostCents" | "deliveryCostCents" | "otherCostCents" | "actualFuelCostCents">>,
   parameters: Pick<FleetParameters, "fuelPriceCents" | "averageConsumptionMilliKmPerLiter">,
   vehicleCostPerKmCents: number | null,
 ): FleetFreightMetrics {
   const distanceKm = freight.distanceMeters / 1_000;
   const consumptionKmPerLiter = parameters.averageConsumptionMilliKmPerLiter / 1_000;
-  const fuelCostCents = consumptionKmPerLiter > 0
+  const estimatedFuelCostCents = consumptionKmPerLiter > 0
     ? Math.round((distanceKm / consumptionKmPerLiter) * parameters.fuelPriceCents)
     : 0;
+  const fuelCostCents = freight.tripId ? 0 : (freight.actualFuelCostCents ?? estimatedFuelCostCents);
+  const directCostCents = freight.driverCommissionCents + (freight.yardCostCents ?? 0) + (freight.pickupCostCents ?? 0) + (freight.deliveryCostCents ?? 0) + (freight.otherCostCents ?? 0);
+  const contributionCents = freight.freightAmountCents - directCostCents;
   const rateAvailable = vehicleCostPerKmCents !== null && Number.isFinite(vehicleCostPerKmCents) && vehicleCostPerKmCents >= 0;
   const allocatedCostCents = rateAvailable
     ? Math.round(distanceKm * vehicleCostPerKmCents!)
@@ -200,14 +217,17 @@ export function calculateFleetFreightMetrics(
   // Ele não bloqueia o frete e não compõe o custo total nem a margem líquida.
   const totalCostCents =
     fuelCostCents +
-    freight.tollCents +
-    freight.driverCommissionCents;
+    (freight.tripId ? 0 : freight.tollCents) +
+    directCostCents;
   const netRevenueCents = freight.freightAmountCents - totalCostCents;
   const marginBasisPoints = freight.freightAmountCents > 0
     ? Math.round((netRevenueCents * 10_000) / freight.freightAmountCents)
     : 0;
 
   return {
+    directCostCents,
+    contributionCents,
+    contributionBasisPoints: freight.freightAmountCents > 0 ? Math.round(contributionCents * 10_000 / freight.freightAmountCents) : 0,
     fuelCostCents,
     costPerKmCents: rateAvailable ? vehicleCostPerKmCents : null,
     // A base mensal não é requisito para concluir custo/margem do frete.
@@ -220,7 +240,7 @@ export function calculateFleetFreightMetrics(
 }
 
 export function calculateFleetFreightPreview(
-  draft: Pick<FleetFreightBase, "vehicleId" | "distanceMeters" | "freightAmountCents" | "tollCents" | "driverCommissionCents">,
+  draft: Pick<FleetFreightBase, "vehicleId" | "distanceMeters" | "freightAmountCents" | "tollCents" | "driverCommissionCents"> & Partial<Pick<FleetFreightBase, "tripId" | "yardCostCents" | "pickupCostCents" | "deliveryCostCents" | "otherCostCents" | "actualFuelCostCents">>,
   parameters: FleetParameters,
   vehicles: Pick<FleetVehicle, "id" | "averageCostPerKmCents">[],
 ): FleetFreightMetrics {
@@ -252,6 +272,8 @@ export function summarizeFleet(freights: FleetFreight[]): FleetSummary {
   const netRevenueCents = revenueCents - totalCostCents;
 
   return {
+    directCostCents: freights.reduce((sum, freight) => sum + freight.directCostCents, 0),
+    contributionCents: freights.reduce((sum, freight) => sum + freight.contributionCents, 0),
     missingCostCount: 0,
     freightCount: freights.length,
     possibleMatchCount: freights.filter((freight) => freight.possibleMatch).length,

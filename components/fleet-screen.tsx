@@ -1,6 +1,8 @@
 "use client";
 
-import { FleetParametersPanel, formatFleetRate } from "@/components/fleet-parameters-panel";
+import { FleetTripsPanel } from "@/components/fleet-trips-panel";
+import { FleetMonthlyPanel } from "@/components/fleet-monthly-panel";
+import { FleetParametersPanel } from "@/components/fleet-parameters-panel";
 import { currentCompetency, todaySaoPaulo } from "@/lib/domain/dates";
 import { FleetPaymentPanel } from "@/components/fleet-payment-panel";
 
@@ -29,14 +31,13 @@ import {
 } from "@/lib/domain/fleet";
 import { distanceInputToMeters, distanceToInput } from "@/lib/domain/number-input";
 import {
-  competencyLabel,
   formatDate,
   formatMoney,
   formatPercent,
   moneyInputToCents,
 } from "@/lib/format";
 
-type FleetTab = "overview" | "freights" | "assets" | "costs" | "settings";
+type FleetTab = "overview" | "freights" | "assets" | "trips" | "monthly" | "settings";
 
 function centsToInput(cents: number | null | undefined) {
   if (cents === null || cents === undefined) return "";
@@ -83,8 +84,8 @@ function FreightTable({
             <th>Cliente / carga</th>
             <th>Status</th>
             <th>Frete</th>
-            <th>Custo</th>
-            <th>Margem</th>
+            <th>Custos diretos</th>
+            <th>Margem de contribuição</th>
             <th>Retorno</th>
             {canManage && <th><span className="sr-only">Ações</span></th>}
           </tr>
@@ -123,18 +124,18 @@ function FreightTable({
                 <strong>{formatMoney(freight.freightAmountCents)}</strong>
                 <small>{formatDistance(freight.distanceMeters)}</small>
               </td>
-              <td data-label="Custo">
-                <strong>{freight.costsConfigured ? formatMoney(freight.totalCostCents) : "Base pendente"}</strong>
-                <small>Combustível: {formatMoney(freight.fuelCostCents)}</small>
-                <small>Pedágio: {formatMoney(freight.tollCents)}</small>
-                <small>Motorista: {formatMoney(freight.driverCommissionCents)}</small>
-                <small>Fixo rateado: {freight.costsConfigured ? formatMoney(freight.allocatedCostCents) : "Base pendente"}</small>
+              <td data-label="Custos diretos">
+                <strong>{formatMoney(freight.directCostCents)}</strong>
+                <small>Comissão: {formatMoney(freight.driverCommissionCents)}</small>
+                <small>Pátio: {formatMoney(freight.yardCostCents ?? 0)}</small>
+                <small>Coleta: {formatMoney(freight.pickupCostCents ?? 0)} · Entrega: {formatMoney(freight.deliveryCostCents ?? 0)}</small>
+                <small>Outros: {formatMoney(freight.otherCostCents ?? 0)}</small>
+                <small>{freight.tripId ? "Custos compartilhados na viagem" : `Diesel e pedágio avulsos: ${formatMoney(freight.fuelCostCents + freight.tollCents)}${freight.actualFuelCostCents == null ? " (diesel estimado)" : ""}`}</small>
               </td>
-              <td data-label="Margem">
-                <strong className={freight.netRevenueCents < 0 ? "negative" : "positive"}>
-                  {freight.costsConfigured ? formatMoney(freight.netRevenueCents) : "—"}
-                </strong>
-                <small>{freight.costsConfigured ? formatPercent(freight.marginBasisPoints) : "Configure o rateio da placa"}</small>
+              <td data-label="Margem de contribuição">
+                <strong className={freight.contributionCents < 0 ? "negative" : "positive"}>{formatMoney(freight.contributionCents)}</strong>
+                <small>{formatPercent(freight.contributionBasisPoints)}</small>
+                {!freight.tripId && <small>Resultado avulso: {formatMoney(freight.netRevenueCents)}</small>}
               </td>
               <td data-label="Retorno">
                 <span className={`fleet-match-badge ${freight.possibleMatch ? "opportunity" : ""}`}>
@@ -173,6 +174,12 @@ function FreightModal({ freight, fleet, onClose, onSaved }: { freight: FleetFrei
   const [freightValue, setFreightValue] = useState(centsToInput(freight?.freightAmountCents));
   const [distance, setDistance] = useState(freight ? distanceToInput(freight.distanceMeters) : "");
   const [pickupDate, setPickupDate] = useState(freight?.pickupDate ?? todaySaoPaulo());
+  const [tripId, setTripId] = useState(freight?.tripId ?? "");
+  const [yardCost, setYardCost] = useState(centsToInput(freight?.yardCostCents));
+  const [pickupCost, setPickupCost] = useState(centsToInput(freight?.pickupCostCents));
+  const [deliveryCost, setDeliveryCost] = useState(centsToInput(freight?.deliveryCostCents));
+  const [otherCost, setOtherCost] = useState(centsToInput(freight?.otherCostCents));
+  const [actualFuel, setActualFuel] = useState(centsToInput(freight?.actualFuelCostCents));
   const [toll, setToll] = useState(centsToInput(freight?.tollCents));
   const [driverCommission, setDriverCommission] = useState(centsToInput(freight?.driverCommissionCents));
   const [saving, setSaving] = useState(false);
@@ -202,7 +209,10 @@ function FreightModal({ freight, fleet, onClose, onSaved }: { freight: FleetFrei
     try {
       return calculateFleetFreightPreview(
         {
-          vehicleId,
+          vehicleId, tripId: tripId || null,
+          yardCostCents: moneyInputToCents(yardCost || "0"), pickupCostCents: moneyInputToCents(pickupCost || "0"),
+          deliveryCostCents: moneyInputToCents(deliveryCost || "0"), otherCostCents: moneyInputToCents(otherCost || "0"),
+          actualFuelCostCents: tripId || !actualFuel.trim() ? null : moneyInputToCents(actualFuel),
           distanceMeters: distanceInputToMeters(distance || "0"),
           freightAmountCents: moneyInputToCents(freightValue || "0"),
           tollCents: moneyInputToCents(toll || "0"),
@@ -212,7 +222,7 @@ function FreightModal({ freight, fleet, onClose, onSaved }: { freight: FleetFrei
         fleet.vehicles,
       );
     } catch { return null; }
-  }, [distance, driverCommission, fleet.parameters, fleet.vehicles, vehicleId, freightValue, toll]);
+  }, [distance, driverCommission, fleet.parameters, fleet.vehicles, vehicleId, freightValue, toll, tripId, yardCost, pickupCost, deliveryCost, otherCost, actualFuel]);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -220,7 +230,10 @@ function FreightModal({ freight, fleet, onClose, onSaved }: { freight: FleetFrei
     const form = new FormData(event.currentTarget);
     try {
       const payload = {
-        vehicleId: form.get("vehicleId"), driverId: form.get("driverId"), clientName: form.get("clientName"),
+        vehicleId, driverId, tripId: tripId || null,
+        yardCostCents: moneyInputToCents(yardCost || "0"), pickupCostCents: moneyInputToCents(pickupCost || "0"),
+        deliveryCostCents: moneyInputToCents(deliveryCost || "0"), otherCostCents: moneyInputToCents(otherCost || "0"),
+        actualFuelCostCents: tripId || !actualFuel.trim() ? null : moneyInputToCents(actualFuel), clientName: form.get("clientName"),
         cargoVehicleModel: form.get("cargoVehicleModel"), cargoPlate: form.get("cargoPlate"), originCep, destinationCep,
         origin: form.get("origin"), destination: form.get("destination"), pickupDate,
         deliveryDate: form.get("deliveryDate") || null, billingDate: form.get("billingDate") || null,
@@ -240,13 +253,20 @@ function FreightModal({ freight, fleet, onClose, onSaved }: { freight: FleetFrei
   const selectableDrivers = fleet.drivers.filter((driver) => driver.active || driver.id === freight?.driverId);
 
   return (
-    <Modal open wide onClose={onClose} title={editing ? "Editar frete da frota" : "Novo frete da frota"} description="Os custos e a margem são calculados automaticamente pelos parâmetros da Frota.">
+    <Modal open wide onClose={onClose} title={editing ? "Editar frete da frota" : "Novo frete da frota"} description="A margem de contribuição desconta comissão, pátio, coleta, entrega e outros custos diretos. Diesel e pedágio são apurados na viagem.">
       <form className="modal-body form-stack" onSubmit={submit}>
         <fieldset disabled={!fleet.canEditFreights} className="fleet-fieldset">
           <div className="section-divider">Identificação</div>
+          <Field label="Viagem compartilhada" hint="Selecione a mesma viagem para todos os veículos transportados juntos."><select value={tripId} onChange={event => {
+            const selected = fleet.trips.find(t => t.id === event.target.value);
+            if (selected && (Number(toll.replace(',', '.')) > 0 || actualFuel.trim()) && !window.confirm("Diesel e pedágio passarão a ser informados somente na viagem. Confira os valores da viagem antes de salvar. Continuar?")) return;
+            setTripId(event.target.value);
+            if (selected) { setVehicleId(selected.vehicleId); setDriverId(selected.driverId); setToll("0,00"); setActualFuel(""); }
+          }}><option value="">Frete avulso, sem viagem compartilhada</option>{fleet.trips.map(trip => <option key={trip.id} value={trip.id}>{trip.name} · {trip.vehiclePlate} · {formatDate(trip.operationDate)}</option>)}</select></Field>
+          {tripId && <p>Diesel, pedágio e despesas compartilhadas são lançados apenas na viagem. Informe abaixo somente os custos deste veículo transportado.</p>}
           <div className="form-grid three">
-            <Field label="Veículo da frota"><select name="vehicleId" value={vehicleId} onChange={(event) => { setVehicleId(event.target.value); const linked = fleet.drivers.find(d => d.active && d.vehicleId === event.target.value); if (linked) setDriverId(linked.id); }} required><option value="">Selecione</option>{selectableVehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.plate}</option>)}</select></Field>
-            <Field label="Motorista"><select name="driverId" value={driverId} onChange={e => setDriverId(e.target.value)} required><option value="">Selecione</option>{selectableDrivers.map((driver) => <option key={driver.id} value={driver.id}>{driver.name}</option>)}</select></Field>
+            <Field label="Veículo da frota"><select name="vehicleId" disabled={Boolean(tripId)} value={vehicleId} onChange={(event) => { setVehicleId(event.target.value); const linked = fleet.drivers.find(d => d.active && d.vehicleId === event.target.value); if (linked) setDriverId(linked.id); }} required><option value="">Selecione</option>{selectableVehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.plate}</option>)}</select></Field>
+            <Field label="Motorista"><select name="driverId" disabled={Boolean(tripId)} value={driverId} onChange={e => setDriverId(e.target.value)} required><option value="">Selecione</option>{selectableDrivers.map((driver) => <option key={driver.id} value={driver.id}>{driver.name}</option>)}</select></Field>
             <Field label="Cliente"><input name="clientName" defaultValue={freight?.clientName ?? ""} required /></Field>
           </div>
           <div className="form-grid two">
@@ -269,20 +289,21 @@ function FreightModal({ freight, fleet, onClose, onSaved }: { freight: FleetFrei
             <Field label="Valor do frete"><div className="money-field"><span>R$</span><input value={freightValue} onChange={(event) => setFreightValue(event.target.value)} inputMode="decimal" placeholder="0,00" required /></div></Field>
             <Field label="Distância" hint="Em km: 1200 ou 1.200. Para decimais, use vírgula (1200,5)."><div className="fleet-unit-field"><input value={distance} onChange={(event) => setDistance(event.target.value)} inputMode="decimal" placeholder="0" required /><span>km</span></div></Field>
           </div>
-          <div className="form-grid three"><Field label="Pedágio"><div className="money-field"><span>R$</span><input value={toll} onChange={(event) => setToll(event.target.value)} inputMode="decimal" placeholder="0,00" /></div></Field><Field label="Motorista / comissão"><div className="money-field"><span>R$</span><input value={driverCommission} onChange={(event) => setDriverCommission(event.target.value)} inputMode="decimal" placeholder="0,00" /></div></Field><label className="fleet-check-field"><input name="returnUsed" type="checkbox" defaultChecked={freight?.returnUsed ?? false} /><span>Retorno já aproveitado</span></label></div>
+          <div className="form-grid three"><Field label="Pedágio"><div className="money-field"><span>R$</span><input disabled={Boolean(tripId)} value={toll} onChange={(event) => setToll(event.target.value)} inputMode="decimal" placeholder="0,00" /></div></Field><Field label="Motorista / comissão"><div className="money-field"><span>R$</span><input value={driverCommission} onChange={(event) => setDriverCommission(event.target.value)} inputMode="decimal" placeholder="0,00" /></div></Field><label className="fleet-check-field"><input name="returnUsed" type="checkbox" defaultChecked={freight?.returnUsed ?? false} /><span>Retorno já aproveitado</span></label></div>
+          <div className="form-grid four">
+            <Field label="Pátio / recebimento (R$)"><input value={yardCost} onChange={e => setYardCost(e.target.value)} inputMode="decimal" placeholder="0,00" /></Field>
+            <Field label="Coleta (R$)"><input value={pickupCost} onChange={e => setPickupCost(e.target.value)} inputMode="decimal" placeholder="0,00" /></Field>
+            <Field label="Entrega (R$)"><input value={deliveryCost} onChange={e => setDeliveryCost(e.target.value)} inputMode="decimal" placeholder="0,00" /></Field>
+            <Field label="Outros custos diretos (R$)"><input value={otherCost} onChange={e => setOtherCost(e.target.value)} inputMode="decimal" placeholder="0,00" /></Field>
+          </div>
+          {!tripId && <Field label="Diesel realizado (R$)" hint="Deixe em branco para estimar por km. Informe o custo realizado, inclusive zero, antes do fechamento mensal."><input value={actualFuel} onChange={e => setActualFuel(e.target.value)} inputMode="decimal" placeholder="Ainda não apurado" /></Field>}
           {preview && <>
-            <div className="fleet-form-preview fleet-cost-preview" aria-label="Custos na ordem da planilha">
-              <div><span>Combustível</span><strong>{formatMoney(preview.fuelCostCents)}</strong></div>
-              <div><span>Pedágio</span><strong>{formatMoney(moneyInputToCents(toll || "0"))}</strong></div>
-              <div><span>Motorista / comissão</span><strong>{formatMoney(moneyInputToCents(driverCommission || "0"))}</strong></div>
-              <div><span>Custo fixo rateado</span><strong>{preview.costsConfigured ? formatMoney(preview.allocatedCostCents) : "Base pendente"}</strong></div>
-            </div>
             <div className="fleet-form-preview fleet-result-preview">
-              <div><span>Custo total</span><strong>{preview.costsConfigured ? formatMoney(preview.totalCostCents) : "Base pendente"}</strong></div>
-              <div><span>Margem líquida</span><strong className={preview.netRevenueCents < 0 ? "negative" : "positive"}>{preview.costsConfigured ? `${formatMoney(preview.netRevenueCents)} · ${formatPercent(preview.marginBasisPoints)}` : "—"}</strong></div>
+              <div><span>Custos diretos</span><strong>{formatMoney(preview.directCostCents)}</strong></div>
+              <div><span>Margem de contribuição</span><strong className={preview.contributionCents < 0 ? "negative" : "positive"}>{formatMoney(preview.contributionCents)} · {formatPercent(preview.contributionBasisPoints)}</strong></div>
+              {!tripId && <><div><span>Diesel {actualFuel.trim() ? "realizado" : "estimado"}</span><strong>{formatMoney(preview.fuelCostCents)}</strong></div><div><span>Resultado operacional avulso</span><strong>{formatMoney(preview.netRevenueCents)}</strong></div></>}
             </div>
-            <p className="fleet-update-note">Parâmetros: combustível {formatMoney(fleet.parameters.fuelPriceCents)}/l · consumo {(fleet.parameters.averageConsumptionMilliKmPerLiter / 1000).toLocaleString("pt-BR")} km/l · custo da placa {formatFleetRate(preview.costPerKmCents)}. O histórico é usado somente para calcular essa média.</p>
-            {!preview.costsConfigured && <p className="form-error" role="status">Configure a base mensal desta placa em Parâmetros para calcular o custo total e a margem.</p>}
+            <p className="fleet-update-note">Custos fixos da empresa são lançados no fechamento mensal. {tripId ? "O resultado da carga completa está na aba Viagens." : "O resultado avulso também desconta diesel e pedágio."}</p>
           </>}
           {error && <p className="form-error" role="alert">{error}</p>}
           <footer className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>Cancelar</button><button className="button primary" disabled={saving}>{saving ? "Salvando…" : editing ? "Salvar alterações" : "Cadastrar frete"}</button></footer>
@@ -324,41 +345,24 @@ export function FleetScreen() {
   function openVehicle(vehicle: FleetVehicle | null) { setEditingVehicle(vehicle); setVehicleModalOpen(true); }
   function openDriver(driver: FleetDriver | null) { setEditingDriver(driver); setDriverModalOpen(true); }
 
-  const allTabs: Array<{ id: FleetTab; label: string }> = [{ id: "overview", label: "Visão geral" }, { id: "freights", label: "Fretes" }, { id: "assets", label: "Veículos e motoristas" }, { id: "costs", label: "Custo rateado" }, { id: "settings", label: "Parâmetros" }];
+  const allTabs: Array<{ id: FleetTab; label: string }> = [{ id: "overview", label: "Visão geral" }, { id: "freights", label: "Fretes" }, { id: "assets", label: "Veículos e motoristas" }, { id: "trips", label: "Viagens" }, { id: "monthly", label: "Fechamento mensal" }, { id: "settings", label: "Parâmetros" }];
   const tabs = fleet?.freightOnly ? allTabs.filter((item) => item.id === "freights") : allTabs;
 
   return <>
-    <PageHeader eyebrow="Operação logística" title="Frota" description="Controle fretes, veículos, motoristas, custos por quilômetro, margem e oportunidades de retorno." actions={<><label className="compact-filter"><span>Mês da coleta</span><input type="month" value={competency} onChange={(event) => setCompetency(event.target.value || currentCompetency())} /></label>{fleet?.canEditFreights && <button className="button primary" onClick={openNewFreight}><Icons.plus /> Novo frete</button>}</>} />
+    <PageHeader eyebrow="Operação logística" title="Frota" description="Acompanhe a margem por frete, o resultado das viagens e o fechamento mensal." actions={<><label className="compact-filter"><span>{tab === "monthly" ? "Competência" : tab === "trips" ? "Mês da viagem" : "Mês da coleta"}</span><input type="month" value={competency} onChange={(event) => setCompetency(event.target.value || currentCompetency())} /></label>{fleet?.canEditFreights && <button className="button primary" onClick={openNewFreight}><Icons.plus /> Novo frete</button>}</>} />
     {success && <p className="success-banner" role="status">{success}</p>}{mutationError && <p className="form-error" role="alert">{mutationError}</p>}{api.loading && <LoadingState label="Carregando a frota…" />}{api.error && <ErrorState message={api.error} retry={api.refresh} />}
     {fleet && <div className="fleet-stack">
       {fleet.summary.missingCostCount > 0 && <p className="form-error" role="status">{fleet.summary.missingCostCount} frete(s) deste mês sem base de rateio da placa. Configure o histórico mensal em Parâmetros para concluir os custos e margens.</p>}
       <div className="fleet-tabs" role="tablist" aria-label="Áreas da Frota">{tabs.map((item) => <button key={item.id} type="button" role="tab" aria-selected={tab === item.id} className={tab === item.id ? "active" : ""} onClick={() => setTab(item.id)}>{item.label}</button>)}</div>
       {tab === "overview" && !fleet.freightOnly && <>
-        <section className="kpi-grid fleet-kpis"><article className="kpi-card"><span>Faturamento total</span><strong>{formatMoney(fleet.summary.revenueCents)}</strong><small>Soma do valor dos fretes</small></article><article className="kpi-card"><span>Custo total</span><strong>{fleet.summary.missingCostCount ? "Base pendente" : formatMoney(fleet.summary.totalCostCents)}</strong><small>Combustível, pedágio, motorista e custo fixo rateado</small></article><article className="kpi-card accent"><span>Margem líquida total</span><strong>{fleet.summary.missingCostCount ? "Base pendente" : formatMoney(fleet.summary.netRevenueCents)} <em>{fleet.summary.missingCostCount ? "" : formatPercent(fleet.summary.averageMarginBasisPoints)}</em></strong><small>Margem ponderada pelo faturamento</small></article></section>
-        <section className="fleet-opportunity-grid"><article className="panel fleet-opportunity-card"><span className="fleet-opportunity-icon"><Icons.map /></span><div><span>Possíveis encaixes</span><strong>{fleet.summary.possibleMatchCount}</strong><small>Destino compatível com nova coleta dentro de {fleet.parameters.matchWindowDays} dia{fleet.parameters.matchWindowDays === 1 ? "" : "s"}</small><button type="button" className="text-button" onClick={() => { setOpportunity("matches"); setSearch(""); setStatus(""); setPriority(""); setTab("freights"); }}>Abrir encaixes</button></div></article><article className="panel fleet-opportunity-card"><span className="fleet-opportunity-icon used"><Icons.truck /></span><div><span>Retornos em aberto</span><strong>{fleet.freights.filter(f => !f.returnUsed).length}</strong><small>{fleet.summary.returnUsedCount} retorno(s) já aproveitado(s)</small><button type="button" className="text-button" onClick={() => { setOpportunity("open"); setSearch(""); setStatus(""); setPriority(""); setTab("freights"); }}>Abrir retornos</button></div></article><article className="panel fleet-opportunity-card"><span className="fleet-opportunity-icon allocated"><Icons.wallet /></span><div><span>Custo rateado total</span><strong>{fleet.summary.missingCostCount ? "Base pendente" : formatMoney(fleet.summary.allocatedCostCents)}</strong><small>Km de cada frete × custo médio por km da sua placa</small><button type="button" className="text-button" onClick={() => setTab("costs")}>Ver rateio</button></div></article></section>
+        <section className="kpi-grid fleet-kpis"><article className="kpi-card"><span>Receita dos fretes</span><strong>{formatMoney(fleet.summary.revenueCents)}</strong><small>Soma do valor dos fretes</small></article><article className="kpi-card"><span>Custos diretos</span><strong>{fleet.summary.missingCostCount ? "Base pendente" : formatMoney(fleet.summary.directCostCents)}</strong><small>Comissões, pátio, coleta, entrega e outros custos diretos</small></article><article className="kpi-card accent"><span>Margem de contribuição total</span><strong>{fleet.summary.missingCostCount ? "Base pendente" : formatMoney(fleet.summary.contributionCents)} <em>{fleet.summary.missingCostCount ? "" : formatPercent(fleet.summary.revenueCents ? Math.round(fleet.summary.contributionCents * 10000 / fleet.summary.revenueCents) : 0)}</em></strong><small>Antes dos custos compartilhados das viagens e dos custos fixos</small></article></section>
+        <section className="fleet-opportunity-grid"><article className="panel fleet-opportunity-card"><span className="fleet-opportunity-icon"><Icons.map /></span><div><span>Possíveis encaixes</span><strong>{fleet.summary.possibleMatchCount}</strong><small>Destino compatível com nova coleta dentro de {fleet.parameters.matchWindowDays} dia{fleet.parameters.matchWindowDays === 1 ? "" : "s"}</small><button type="button" className="text-button" onClick={() => { setOpportunity("matches"); setSearch(""); setStatus(""); setPriority(""); setTab("freights"); }}>Abrir encaixes</button></div></article><article className="panel fleet-opportunity-card"><span className="fleet-opportunity-icon used"><Icons.truck /></span><div><span>Retornos em aberto</span><strong>{fleet.freights.filter(f => !f.returnUsed).length}</strong><small>{fleet.summary.returnUsedCount} retorno(s) já aproveitado(s)</small><button type="button" className="text-button" onClick={() => { setOpportunity("open"); setSearch(""); setStatus(""); setPriority(""); setTab("freights"); }}>Abrir retornos</button></div></article><article className="panel fleet-opportunity-card"><span className="fleet-opportunity-icon allocated"><Icons.wallet /></span><div><span>Viagens no mês</span><strong>{fleet.tripResults.length}</strong><small>Receita e custos de cada carga completa</small><button type="button" className="text-button" onClick={() => setTab("trips")}>Ver viagens</button></div></article></section>
         <section className="panel table-panel"><header className="fleet-panel-header"><div><span className="eyebrow">Atividade recente</span><h2>Últimos fretes</h2></div><button type="button" className="text-button" onClick={() => setTab("freights")}>Ver todos</button></header>{fleet.freights.length ? <FreightTable freights={fleet.freights.slice(0, 6)} canManage={fleet.canEditFreights || fleet.canManagePayments} canDelete={fleet.canManage} deletingId={deletingId} onEdit={openEditFreight} onDelete={deleteFreight} /> : <EmptyState title="Nenhum frete cadastrado" description="Cadastre a primeira operação da Frota para iniciar os indicadores." />}</section>
       </>}
       {tab === "freights" && <><section className="filter-panel fleet-filter-panel"><label><span>Buscar</span><div className="search-input"><Icons.search /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cliente, rota, placa ou motorista" /></div></label><label><span>Status</span><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">Todos</option>{FLEET_OPERATIONAL_STATUSES.map((item) => <option key={item} value={item}>{FLEET_OPERATIONAL_STATUS_LABELS[item]}</option>)}</select></label><label><span>Prioridade</span><select value={priority} onChange={(event) => setPriority(event.target.value)}><option value="">Todas</option>{FLEET_PRIORITIES.map((item) => <option key={item} value={item}>{FLEET_PRIORITY_LABELS[item]}</option>)}</select></label><label><span>Encaixes e retornos</span><select value={opportunity} onChange={event => setOpportunity(event.target.value)}><option value="">Todos</option><option value="matches">Possíveis encaixes</option><option value="open">Retornos em aberto</option><option value="used">Retornos aproveitados</option></select></label><div className="filter-stat"><strong>{filteredFreights.length}</strong><span>frete{filteredFreights.length === 1 ? "" : "s"}</span></div></section><section className="panel table-panel"><FreightTable freights={filteredFreights} canManage={fleet.canEditFreights || fleet.canManagePayments} canDelete={fleet.canManage} deletingId={deletingId} onEdit={openEditFreight} onDelete={deleteFreight} /></section></>}
       {tab === "assets" && !fleet.freightOnly && <div className="fleet-assets-stack"><section className="panel table-panel"><header className="fleet-panel-header"><div><span className="eyebrow">Cadastro</span><h2>Veículos da frota</h2><p>Cadastre as placas e vincule os motoristas abaixo.</p></div>{fleet.canManage && <button type="button" className="button primary" onClick={() => openVehicle(null)}><Icons.plus /> Novo veículo</button>}</header><div className="responsive-table"><table><thead><tr><th>Placa</th><th>Situação</th>{fleet.canManage && <th><span className="sr-only">Ações</span></th>}</tr></thead><tbody>{fleet.vehicles.map((vehicle) => <tr key={vehicle.id}><td data-label="Placa"><strong>{vehicle.plate}</strong></td><td data-label="Situação"><StatusBadge status={vehicle.active ? "ATIVO" : "INATIVO"} /></td>{fleet.canManage && <td data-label="Ações"><div className="table-actions"><button type="button" className="button secondary compact-button" onClick={() => openVehicle(vehicle)}>Editar</button></div></td>}</tr>)}{!fleet.vehicles.length && <tr><td colSpan={fleet.canManage ? 3 : 2} className="empty-cell">Nenhum veículo cadastrado.</td></tr>}</tbody></table></div></section><section className="panel table-panel"><header className="fleet-panel-header"><div><span className="eyebrow">Equipe</span><h2>Motoristas</h2></div>{fleet.canManage && <button type="button" className="button secondary" onClick={() => openDriver(null)}><Icons.plus /> Novo motorista</button>}</header><div className="responsive-table"><table><thead><tr><th>Nome / contato</th><th>Veículo</th><th>Situação</th>{fleet.canManage && <th><span className="sr-only">Ações</span></th>}</tr></thead><tbody>{fleet.drivers.map((driver) => <tr key={driver.id}><td data-label="Nome / contato"><strong>{driver.name}</strong><small>{driver.cpf ?? "CPF pendente"} · {driver.phone ?? "Telefone pendente"}</small><small>{driver.address}</small></td><td data-label="Veículo">{fleet.vehicles.find(v => v.id === driver.vehicleId)?.plate ?? "Sem vínculo"}</td><td data-label="Situação"><StatusBadge status={driver.active ? "ATIVO" : "INATIVO"} /></td>{fleet.canManage && <td data-label="Ações"><div className="table-actions"><button type="button" className="button secondary compact-button" onClick={() => openDriver(driver)}>Editar</button></div></td>}</tr>)}{!fleet.drivers.length && <tr><td colSpan={fleet.canManage ? 4 : 3} className="empty-cell">Nenhum motorista cadastrado.</td></tr>}</tbody></table></div></section></div>}
-      {tab === "costs" && !fleet.freightOnly && <section className="panel table-panel">
-        <header className="fleet-panel-header">
-          <div><span className="eyebrow">Rateio automático</span><h2>Custo fixo rateado por frete</h2>
-            <p>KM do frete × custo médio por KM específico do caminhão. A média vem dos custos e quilômetros mensais da placa, apresentados em Parâmetros.</p>
-            <p>Combustível é calculado separadamente. O histórico mensal não gera uma segunda despesa.</p>
-          </div>
-          <div><strong>{fleet.summary.missingCostCount ? "Base pendente" : formatMoney(fleet.summary.allocatedCostCents)}</strong>{fleet.canManage && <button type="button" className="text-button" onClick={() => setTab("settings")}>Ajustar parâmetros</button>}</div>
-        </header>
-        <div className="responsive-table"><table>
-          <thead><tr><th>Competência</th><th>Frete / rota</th><th>Placa / R$/km</th><th>Distância</th><th>Custo fixo rateado</th></tr></thead>
-          <tbody>{[...fleet.freights].sort((a,b) => b.pickupDate.localeCompare(a.pickupDate)).map((freight) => <tr key={freight.id}>
-            <td data-label="Competência">{competencyLabel(freight.pickupDate.slice(0,7))}</td>
-            <td data-label="Frete / rota"><strong>{freight.clientName}</strong><small>{freight.origin} → {freight.destination}</small></td>
-            <td data-label="Placa / R$/km"><strong>{freight.vehiclePlate}</strong><small>{formatFleetRate(freight.costPerKmCents)}</small></td>
-            <td data-label="Distância">{formatDistance(freight.distanceMeters)}</td>
-            <td data-label="Custo fixo rateado"><strong>{freight.costsConfigured ? formatMoney(freight.allocatedCostCents) : "Base pendente"}</strong></td>
-          </tr>)}{!fleet.freights.length && <tr><td colSpan={5} className="empty-cell">Nenhum frete disponível para rateio.</td></tr>}</tbody>
-        </table></div>
-      </section>}
+      {tab === "trips" && !fleet.freightOnly && <FleetTripsPanel fleet={fleet} onSaved={finishMutation} onEditFreight={openEditFreight} />}
+      {tab === "monthly" && !fleet.freightOnly && <FleetMonthlyPanel key={competency} competency={competency} />}
       {tab === "settings" && !fleet.freightOnly && <FleetParametersPanel key={fleet.parameters.updatedAt ?? "default"} fleet={fleet} onSaved={finishMutation} />}
     </div>}
     {freightModalOpen && fleet && <FreightModal key={editingFreight?.id ?? "new"} freight={editingFreight} fleet={fleet} onClose={() => setFreightModalOpen(false)} onSaved={finishMutation} />}

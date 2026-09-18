@@ -1,3 +1,4 @@
+import { resultMoney } from "@/lib/server/fleet-results-validation";
 import {
   FLEET_OPERATIONAL_STATUSES,
   FLEET_PRIORITIES,
@@ -53,7 +54,18 @@ export function booleanValue(value: unknown, label: string) {
 }
 
 export function parseFleetFreightPayload(payload: Record<string, unknown>) {
+  const tripId = optionalString(payload.tripId);
+  if (tripId && tripId.length > 80) throw new ApiError(400, "Viagem inválida.");
+  if (tripId && (Number(payload.tollCents ?? 0) !== 0 || (payload.actualFuelCostCents != null && payload.actualFuelCostCents !== ""))) {
+    throw new ApiError(400, "Lance diesel e pedágio na viagem compartilhada, uma única vez.");
+  }
   return {
+    tripId,
+    yardCostCents: resultMoney(payload.yardCostCents ?? 0, "Pátio / recebimento"),
+    pickupCostCents: resultMoney(payload.pickupCostCents ?? 0, "Coleta"),
+    deliveryCostCents: resultMoney(payload.deliveryCostCents ?? 0, "Entrega"),
+    otherCostCents: resultMoney(payload.otherCostCents ?? 0, "Outros custos diretos"),
+    actualFuelCostCents: payload.actualFuelCostCents == null || payload.actualFuelCostCents === "" ? null : resultMoney(payload.actualFuelCostCents, "Diesel realizado"),
     vehicleId: entityId(payload.vehicleId, "Veículo da frota"),
     driverId: entityId(payload.driverId, "Motorista"),
     clientName: boundedRequiredUpper(payload.clientName, "Cliente", 140),
