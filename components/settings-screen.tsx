@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { Role } from "@/lib/contracts";
+import { Icons } from "@/components/icons";
 import {
   ErrorState,
   Field,
@@ -102,6 +103,7 @@ export function SettingsScreen() {
     setMessage(null);
     try {
       await apiMutation(`/api/users/${user.id}`, { method: "DELETE" });
+      setEditingUser(null);
       usersApi.refresh();
       setMessage("Acesso excluído com sucesso.");
     } catch (userError) {
@@ -181,21 +183,15 @@ export function SettingsScreen() {
                     <td data-label="Ações"><div className="table-actions">
                       <button
                         type="button"
-                        className="button secondary compact-button"
+                        className="table-action"
+                        aria-label={`Editar acesso de ${user.name}`}
+                        title="Editar acesso"
                         onClick={() => {
                           setError(null);
                           setEditingUser(user);
                         }}
                       >
-                        Editar acesso
-                      </button>
-                      <button
-                        type="button"
-                        className="button danger compact-button"
-                        disabled={deletingUser === user.id}
-                        onClick={() => deleteUser(user)}
-                      >
-                        {deletingUser === user.id ? "Excluindo…" : "Excluir acesso"}
+                        <Icons.chevron />
                       </button>
                     </div></td>
                   </tr>
@@ -253,6 +249,14 @@ export function SettingsScreen() {
             </Field>
             {error && <p className="form-error" role="alert">{error}</p>}
             <footer className="modal-actions">
+              <button
+                type="button"
+                className="button danger"
+                disabled={deletingUser === editingUser.id || savingUser}
+                onClick={() => deleteUser(editingUser)}
+              >
+                {deletingUser === editingUser.id ? "Excluindo…" : "Excluir acesso"}
+              </button>
               <button type="button" className="button secondary" onClick={() => setEditingUser(null)}>Cancelar</button>
               <button className="button primary" disabled={savingUser}>{savingUser ? "Salvando…" : "Salvar acesso"}</button>
             </footer>

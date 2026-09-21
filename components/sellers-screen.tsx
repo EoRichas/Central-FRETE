@@ -17,6 +17,7 @@ import {
   StatusBadge,
 } from "@/components/ui";
 import { currentCompetency, todaySaoPaulo } from "@/lib/domain/dates";
+import { Icons } from "@/components/icons";
 import { apiMutation, useApi } from "@/components/use-api";
 
 
@@ -182,11 +183,13 @@ export function SellersScreen({
                         {canManage ? (
                           <button
                             type="button"
-                            className="button secondary compact-button"
+                            className="table-action"
+                            aria-label={`Editar pagamento de comissão de ${item.sellerName}`}
+                            title="Editar pagamento"
                             disabled={savingSeller === item.sellerName}
                             onClick={() => openCommissionPayment(item)}
                           >
-                            Editar pagamento
+                            <Icons.chevron />
                           </button>
                         ) : (
                           "—"

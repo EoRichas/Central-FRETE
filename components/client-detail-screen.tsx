@@ -37,6 +37,7 @@ export function ClientDetailScreen({ id }: { id: string }) {
   );
   const meApi = useApi<{ user: CurrentUser }>("/api/me");
   const [addressOpen, setAddressOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,6 +60,35 @@ export function ClientDetailScreen({ id }: { id: string }) {
         mutationError instanceof Error
           ? mutationError.message
           : "Erro ao cadastrar endereço.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveClient(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const client = api.data?.client;
+    if (!client) return;
+    setSaving(true);
+    setError(null);
+    const form = new FormData(event.currentTarget);
+    try {
+      await apiMutation(`/api/clients/${client.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          notes: form.get("notes"),
+          active: form.get("active") === "true",
+        }),
+      });
+      setEditOpen(false);
+      await api.refresh();
+    } catch (mutationError) {
+      setError(
+        mutationError instanceof Error
+          ? mutationError.message
+          : "Erro ao atualizar o cliente.",
       );
     } finally {
       setSaving(false);
@@ -111,11 +141,15 @@ export function ClientDetailScreen({ id }: { id: string }) {
             {meApi.data?.user.role === "ADMIN" && (
               <button
                 type="button"
-                className="button danger"
-                disabled={deleting}
-                onClick={deleteClient}
+                className="table-action"
+                aria-label="Editar cliente"
+                title="Editar cliente"
+                onClick={() => {
+                  setError(null);
+                  setEditOpen(true);
+                }}
               >
-                {deleting ? "Excluindo cliente…" : "Excluir cliente"}
+                <Icons.chevron />
               </button>
             )}
           </>
@@ -186,6 +220,28 @@ export function ClientDetailScreen({ id }: { id: string }) {
           </table>
         </div>
       </section>
+
+      <Modal open={editOpen} onClose={() => setEditOpen(false)} title="Editar cliente" description="Atualize a situação ou observações do cadastro.">
+        <form className="modal-body form-stack" onSubmit={saveClient}>
+          <Field label="Situação">
+            <select name="active" defaultValue={client.active ? "true" : "false"}>
+              <option value="true">Ativo</option>
+              <option value="false">Inativo</option>
+            </select>
+          </Field>
+          <Field label="Observações">
+            <textarea name="notes" rows={4} defaultValue={client.notes ?? ""} />
+          </Field>
+          {error && <p className="form-error" role="alert">{error}</p>}
+          <footer className="modal-actions">
+            <button type="button" className="button danger" disabled={deleting || saving} onClick={deleteClient}>
+              {deleting ? "Excluindo cliente…" : "Excluir cliente"}
+            </button>
+            <button type="button" className="button secondary" onClick={() => setEditOpen(false)}>Cancelar</button>
+            <button className="button primary" disabled={saving || deleting}>{saving ? "Salvando…" : "Salvar cliente"}</button>
+          </footer>
+        </form>
+      </Modal>
 
       <Modal open={addressOpen} onClose={() => setAddressOpen(false)} title="Novo endereço" description="Cadastre o endereço da empresa ou um ponto específico da operação." wide>
         <form className="modal-body form-stack" onSubmit={addAddress}>
