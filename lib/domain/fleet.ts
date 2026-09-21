@@ -147,6 +147,7 @@ export type FleetData = {
   summary: FleetSummary;
   canManage: boolean;
   canEditFreights: boolean;
+  canEditFreightFinancials: boolean;
   canManagePayments: boolean;
   freightOnly: boolean;
 };
