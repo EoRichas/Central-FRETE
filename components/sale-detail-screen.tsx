@@ -112,6 +112,7 @@ export function SaleDetailScreen({ id }: { id: string }) {
     setError(null);
     try {
       await apiMutation(`/api/payments/${paymentId}`, { method: "DELETE" });
+      setSelectedPayment(null);
       saleApi.refresh();
     } catch (mutationError) {
       setError(
