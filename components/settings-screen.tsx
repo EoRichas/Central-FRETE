@@ -17,7 +17,6 @@ type UserRow = {
   name: string;
   email: string;
   username: string | null;
-  pixDetails: string | null;
   role: Role;
   active: boolean;
   hasPassword: boolean;
@@ -146,9 +145,6 @@ export function SettingsScreen() {
               <option value="OPERACIONAL">Operacional</option>
             </select>
           </Field>
-          <Field label="PIX do vendedor" hint="Opcional; usado na aba Comissões.">
-            <input name="pixDetails" placeholder="Chave ou dados PIX" />
-          </Field>
           <button className="button secondary" disabled={savingUser}>
             {savingUser ? "Adicionando…" : "Criar acesso"}
           </button>
@@ -214,7 +210,7 @@ export function SettingsScreen() {
         open={editingUser !== null}
         onClose={() => setEditingUser(null)}
         title="Editar acesso"
-        description="Altere login, perfil, situação, PIX ou redefina a senha."
+        description="Altere login, perfil, situação ou redefina a senha."
       >
         {editingUser && (
           <form
@@ -251,9 +247,6 @@ export function SettingsScreen() {
                 <option value="true">Ativo</option>
                 <option value="false">Inativo</option>
               </select>
-            </Field>
-            <Field label="PIX do vendedor">
-              <input name="pixDetails" defaultValue={editingUser.pixDetails ?? ""} placeholder="Chave ou dados PIX" />
             </Field>
             <Field label="Nova senha" hint="Deixe em branco para manter a senha atual.">
               <input name="password" type="password" minLength={6} autoComplete="new-password" />
