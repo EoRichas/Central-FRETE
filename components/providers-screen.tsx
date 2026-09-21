@@ -82,6 +82,7 @@ export function ProvidersScreen() {
     setError(null);
     try {
       await apiMutation(`/api/providers/${provider.id}`, { method: "DELETE" });
+      closeModal();
       api.refresh();
     } catch (deleteError) {
       setError(
@@ -155,18 +156,12 @@ export function ProvidersScreen() {
                         <div className="table-actions">
                           <button
                             type="button"
-                            className="button secondary compact-button"
+                            className="table-action"
+                            aria-label={`Editar prestador ${provider.name}`}
+                            title="Editar prestador"
                             onClick={() => openEdit(provider)}
                           >
-                            Editar
-                          </button>
-                          <button
-                            type="button"
-                            className="button danger compact-button"
-                            disabled={deletingId === provider.id}
-                            onClick={() => deleteProvider(provider)}
-                          >
-                            {deletingId === provider.id ? "Excluindo…" : "Excluir"}
+                            <Icons.chevron />
                           </button>
                         </div>
                       )}
@@ -227,6 +222,16 @@ export function ProvidersScreen() {
             </p>
           )}
           <footer className="modal-actions">
+            {editingProvider && (
+              <button
+                type="button"
+                className="button danger"
+                disabled={deletingId === editingProvider.id || saving}
+                onClick={() => deleteProvider(editingProvider)}
+              >
+                {deletingId === editingProvider.id ? "Excluindo…" : "Excluir prestador"}
+              </button>
+            )}
             <button
               type="button"
               className="button secondary"
