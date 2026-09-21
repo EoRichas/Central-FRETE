@@ -5,6 +5,7 @@ import { useState } from "react";
 import type {
   CostRecord,
   CurrentUser,
+  PaymentRecord,
   SaleRecord,
 } from "@/lib/contracts";
 import {
@@ -55,6 +56,7 @@ export function SaleDetailScreen({ id }: { id: string }) {
   const saleApi = useApi<{ sale: SaleRecord }>(`/api/sales/${id}`);
   const meApi = useApi<{ user: CurrentUser }>("/api/me");
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState<PaymentRecord | null>(null);
   const [providerSlot, setProviderSlot] = useState<number | null>(null);
   const [providerStatus, setProviderStatus] = useState<"EM_ABERTO" | "PAGO">(
     "EM_ABERTO",
@@ -90,6 +92,7 @@ export function SaleDetailScreen({ id }: { id: string }) {
         body: form,
       });
       setPaymentOpen(false);
+      setSelectedPayment(null);
       saleApi.refresh();
     } catch (mutationError) {
       setError(
@@ -380,7 +383,7 @@ export function SaleDetailScreen({ id }: { id: string }) {
                   <td data-label="Situação"><StatusBadge status={payment.status} /></td>
                   <td data-label="Observação">{payment.notes ?? "—"}{payment.proofName && <> · <a href={`/api/payments/${payment.id}/proof`} target="_blank" rel="noreferrer">Comprovante</a></>}</td>
                   <td data-label="Valor" className={payment.type === "ESTORNO" ? "negative" : "positive"}><strong>{payment.type === "ESTORNO" ? "− " : ""}{formatMoney(payment.amountCents)}</strong></td>
-                  <td data-label="Ações">{canManagePayments && payment.canDelete && <div className="table-actions"><button type="button" className="button danger compact-button" aria-label="Excluir recebimento" title="Excluir recebimento" onClick={() => deletePayment(payment.id)}>Excluir</button></div>}</td>
+                  <td data-label="Ações">{canManagePayments && payment.canDelete && <div className="table-actions"><button type="button" className="table-action" aria-label="Gerenciar recebimento" title="Gerenciar recebimento" onClick={() => setSelectedPayment(payment)}><Icons.chevron /></button></div>}</td>
                 </tr>
               )) : <tr><td colSpan={7} className="empty-cell">Nenhum recebimento registrado.</td></tr>}
             </tbody>
@@ -392,6 +395,25 @@ export function SaleDetailScreen({ id }: { id: string }) {
           <span>Total em aberto <strong>{formatMoney(sale.financial.balanceCents)}</strong></span>
         </footer>
       </section>
+
+      <Modal open={selectedPayment !== null} onClose={() => setSelectedPayment(null)} title="Gerenciar recebimento" description="Consulte o lançamento e, se necessário, exclua-o.">
+        {selectedPayment && (
+          <div className="modal-body form-stack">
+            <div className="details-list">
+              <div><dt>Data</dt><dd>{formatDate(selectedPayment.occurredAt)}</dd></div>
+              <div><dt>Forma</dt><dd>{selectedPayment.paymentMethod}</dd></div>
+              <div><dt>Situação</dt><dd>{selectedPayment.status}</dd></div>
+              <div><dt>Valor</dt><dd>{formatMoney(selectedPayment.amountCents)}</dd></div>
+              <div className="full"><dt>Observação</dt><dd>{selectedPayment.notes ?? "—"}</dd></div>
+            </div>
+            {error && <p className="form-error" role="alert">{error}</p>}
+            <footer className="modal-actions">
+              <button type="button" className="button danger" onClick={() => deletePayment(selectedPayment.id)}>Excluir recebimento</button>
+              <button type="button" className="button secondary" onClick={() => setSelectedPayment(null)}>Fechar</button>
+            </footer>
+          </div>
+        )}
+      </Modal>
 
       <Modal open={paymentOpen} onClose={() => setPaymentOpen(false)} title="Registrar recebimento" description="Somente lançamentos confirmados afetam o caixa e o saldo.">
         <form className="modal-body form-stack" onSubmit={registerPayment}>
