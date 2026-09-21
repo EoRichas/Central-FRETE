@@ -272,8 +272,8 @@ export function SaleDetailScreen({ id }: { id: string }) {
               Voltar
             </Link>
             {canEditSale && (
-              <Link className="button secondary" href={`/vendas/${sale.id}/editar`}>
-                Editar venda
+              <Link className="table-action" href={`/vendas/${sale.id}/editar`} aria-label="Editar venda" title="Editar venda">
+                <Icons.chevron />
               </Link>
             )}
             {canManagePayments && (
@@ -334,7 +334,7 @@ export function SaleDetailScreen({ id }: { id: string }) {
             <td data-label="Situação">{cost ? <StatusBadge status={slot ? cost.paymentStatus : cost.confirmed ? "PAGO" : "EM_ABERTO"} /> : "—"}</td>
             <td data-label="Data">{formatDate(slot ? cost?.paidAt : cost?.occurredOn)}</td>
             <td data-label="Valor"><strong>{cost ? formatMoney(cost.amountCents) : "—"}</strong></td>
-            <td data-label="Ações">{slot && canManageProviders ? <button type="button" className="button secondary compact-button" onClick={() => openProviderCost(slot, cost)}>{cost ? "Editar / baixar" : "Cadastrar"}</button> : cost && canManageOperationCosts && isEditableOperationCostCategory(cost.category) ? <button type="button" className="button secondary compact-button" onClick={() => openOperationCost(cost)}>Editar / baixar</button> : null}</td>
+            <td data-label="Ações">{slot && canManageProviders ? (cost ? <button type="button" className="table-action" aria-label={`Editar ${label}`} title={`Editar ${label}`} onClick={() => openProviderCost(slot, cost)}><Icons.chevron /></button> : <button type="button" className="button secondary compact-button" onClick={() => openProviderCost(slot, cost)}>Cadastrar</button>) : cost && canManageOperationCosts && isEditableOperationCostCategory(cost.category) ? <button type="button" className="table-action" aria-label={`Editar ${label}`} title={`Editar ${label}`} onClick={() => openOperationCost(cost)}><Icons.chevron /></button> : null}</td>
           </tr>)}</tbody>
         </table></div>
       </section>
