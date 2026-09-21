@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { Role } from "@/lib/contracts";
+import { Icons } from "@/components/icons";
 import {
   ErrorState,
   Field,
@@ -190,7 +191,7 @@ export function SettingsScreen() {
                           setEditingUser(user);
                         }}
                       >
-                        <span aria-hidden="true">›</span>
+                        <Icons.chevron />
                       </button>
                     </div></td>
                   </tr>
