@@ -1,37 +1,21 @@
 # Continuidade da Central Frete
 
-Análise do histórico compartilhado em https://chatgpt.com/share/6aa0784c-453c-83e9-a3ae-f05a9b7a5a23 e conferência de GitHub, código e deploys do Render. A conversa contém decisões antigas posteriormente corrigidas; prevalecem as regras finais abaixo.
+## Estado do código
 
-## Estado verificado
+A base desta alteração é a `main` no commit `130454c`, que contém o PR #48 com a imagem limpa de login, margem por frete, resultado por viagem e fechamento mensal.
 
-- Repositório: EoRichas/Central-FRETE. O PR #13 foi integrado à main no commit `8577f526a49e1fdeeab7b1577bdb84422ac87c21`.
-- O deploy desse commit falhou na verificação TypeScript. O Render continua com o commit anterior `df6c704d2d036406e3d04a13e6e3fd43bb048eea` em estado live.
-- Causa registrada nos logs: `lib/server/billing.ts`, acesso a `state.nextUnpaid` sem considerar o retorno usado quando o licenciamento está desativado.
-- Correção local: verificar a existência de `nextUnpaid` e manter a disponibilidade de pagamento falsa quando não houver competência. Sem mudar valor, credenciais ou datas.
-- Verificação local após a correção: `npm run build` passou; os 13 testes de `node --import tsx --test tests/billing.test.ts` passaram; ESLint do arquivo e `git diff --check` passaram.
-- O comando antigo com apenas `--experimental-strip-types` falha ao resolver os imports `@/` introduzidos nos testes posteriores. Nesta análise foi utilizado o carregador tsx já instalado. A suíte completa de integração não foi reexecutada.
-- A correção está na branch local `fix/billing-overview-build`; não foi enviada ao GitHub ou publicada nesta análise.
+Em 21/09/2026 foi solicitada a retirada integral do certificado digital e da cobrança vinculada ao acesso. As regras anteriores de mensalidade, carência, validade e bloqueio deixam de fazer parte do aplicativo. A negociação comercial passa a ser conduzida fora do sistema.
 
-## Decisões preservadas
+O código remove a tela de certificado, as rotas de cobrança, a integração com Mercado Pago, a emissão do PDF e o agendador de reconciliação e e-mail. O login continua exigindo sessão válida, usuário ativo e perfil autorizado.
 
-- Uma única empresa. Permanecer no Render, preparando futura migração para Hostinger.
-- Mensalidade real de R$149,99, todo dia 05, primeira competência outubro/2026. Setembro é gratuito e não equivale a pagamento fictício.
-- Pagamento na Central disponível de 30/09/2026 em diante para outubro. Dia 05 inteiro permitido; bloqueio operacional a partir de 06/10, em Brasília, se houver pendência. Administrador e Financeiro mantêm acesso à regularização.
-- Pix mensal e assinatura automática são opções diferentes. Depois de quitar a competência, não oferecer pagamento repetido. Com assinatura vinculada, Pix fica indisponível para evitar débito duplicado.
-- A licença antecipada inicia sua validade no dia 05. O aviso dos cinco dias não substitui a restrição de checkout do PR #13.
-- O histórico corrigiu a orientação dos 27 dias grátis: não tratar esse período por adesão como gratuidade global de setembro. A configuração final solicitada foi plano sem teste grátis, dia 05, sem proporcional. A primeira cobrança efetiva ainda exige conferência no Mercado Pago; esta análise não acessou a conta do provedor.
-- Resend e Google Routes pago deixam de ser a solução pretendida. Google Apps Script para Gmail e distância permanece pendente de implementação. O código atual ainda chama os provedores antigos.
+## Operação
 
-## Funcionalidades e pendências verificadas no código
+As alterações de fretes, viagens, fechamento mensal, recebimentos e comprovantes continuam disponíveis. O faturamento dos fretes não é a cobrança da licença do aplicativo.
 
-- O painel da Frota contém rateio do escritório por mês, proporcional aos quilômetros, e perfil OPERACIONAL com permissão para editar fretes.
-- Motoristas são devolvidos pelo servidor sem veículo vinculado; a migração remove vínculos anteriores. Ainda há campo de vínculo e lógica antiga na interface que merecem limpeza posterior; não foram alterados nesta correção.
-- O botão global de nova venda foi removido do AppShell.
-- Em produção, a reconciliação de assinatura ainda exige `MERCADO_PAGO_SUBSCRIPTION_ID` e `BILLING_PAYER_EMAIL` corretos. Apenas possuir um plano não ativa automaticamente esse vínculo.
-- Não há endpoint próprio de cancelamento de assinatura no módulo atual. A discussão sobre cartão não comprova implementação de cancelamento/desvinculação pela Central.
-- O histórico registra pagamento de teste de R$1 aprovado no Mercado Pago, mas sem baixa no banco da Central. O código ainda compara `live_mode` estritamente. Não considerar o fluxo completo de confirmação, licença e certificado homologado.
-- Os valores atuais das variáveis do Render não foram lidos: o plugin disponível não oferece essa consulta. O retorno a produção e a resolução do HTTP401 foram informados no histórico pelo usuário, sem nova verificação de credenciais nesta análise.
+As tabelas antigas de licenciamento são preservadas como histórico privado e não são consultadas pelo aplicativo. A migração histórica `003_fleet_billing.sql` também cria estruturas da Frota, por isso permanece intacta.
 
-## Próximo passo imediato
+## Conclusão externa
 
-Enviar a correção de compilação para revisão e publicar somente após a autorização aplicável. Confirmar que o Render coloca o novo commit em estado live; só então verificar a janela de pagamento no site. Depois tratar a confirmação automática real e, em seguida, a adaptação para Apps Script, uma etapa por vez.
+A remoção do código não cancela automaticamente inscrições, planos, preferências de checkout ou notificações configuradas no Mercado Pago. O encerramento externo deve ser conferido na conta responsável. Consulte [Retirada do certificado digital](retirada-certificado-digital.md).
+
+O estado do deploy e das configurações externas precisa ser conferido na entrega; a existência deste documento não comprova publicação em produção.
