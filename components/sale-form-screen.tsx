@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import type {
-  ClientAddressRecord,
   ClientRecord,
   CostRecord,
   CurrentUser,
@@ -47,19 +46,6 @@ function centsToInput(cents: number) {
   return (cents / 100).toFixed(2).replace(".", ",");
 }
 
-function addressText(address: ClientAddressRecord | undefined) {
-  if (!address) return "";
-  return [
-    address.street,
-    address.number,
-    address.complement,
-    address.district,
-    `${address.city}/${address.state}`,
-    address.cep,
-  ]
-    .filter(Boolean)
-    .join(", ");
-}
 
 function emptyCostDrafts(): CostDraft[] {
   return FIXED_COST_ROWS.map((row) => ({
@@ -112,8 +98,6 @@ export function SaleFormScreen({ initialSale }: { initialSale?: SaleRecord }) {
   const meApi = useApi<{ user: CurrentUser }>("/api/me");
   const [sellerName, setSellerName] = useState(initialSale?.sellerName ?? "");
   const [clientId, setClientId] = useState(initialSale?.clientId ?? "");
-  const [pickupAddressId, setPickupAddressId] = useState("");
-  const [deliveryAddressId, setDeliveryAddressId] = useState("");
   const [pickupAddress, setPickupAddress] = useState(
     initialSale?.pickupAddressSnapshot ?? "",
   );
@@ -140,12 +124,18 @@ export function SaleFormScreen({ initialSale }: { initialSale?: SaleRecord }) {
       ? (initialSale.commissionBasisPoints / 100).toFixed(2).replace(".", ",")
       : "7",
   );
+  const [clientSearch, setClientSearch] = useState("");
   const [clientModal, setClientModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const selectedClient = clientsApi.data?.clients.find(
-    (client) => client.id === clientId,
+  const filteredClients = (clientsApi.data?.clients ?? []).filter((client) =>
+    !clientSearch.trim() ||
+    [client.legalName, client.tradeName, client.cpfCnpj]
+      .filter(Boolean)
+      .some((value) =>
+        value!.toLocaleUpperCase("pt-BR").includes(clientSearch.trim().toLocaleUpperCase("pt-BR")),
+      ),
   );
 
   const sellerNameValue =
@@ -228,18 +218,8 @@ export function SaleFormScreen({ initialSale }: { initialSale?: SaleRecord }) {
         initialProviderName: form.get("initialProviderName"),
         origin: form.get("origin"),
         destination: form.get("destination"),
-        pickupAddressSnapshot:
-          addressText(
-            selectedClient?.addresses.find(
-              (address) => address.id === pickupAddressId,
-            ),
-          ) || pickupAddress,
-        deliveryAddressSnapshot:
-          addressText(
-            selectedClient?.addresses.find(
-              (address) => address.id === deliveryAddressId,
-            ),
-          ) || deliveryAddress,
+        pickupAddressSnapshot: pickupAddress,
+        deliveryAddressSnapshot: deliveryAddress,
         operationalDeadlineDays: operationalDeadlineDays || null,
         originYardEntryDate: originYardEntryDate || null,
         deliveryDeadline: destinationArrivalDate || null,
@@ -296,12 +276,6 @@ export function SaleFormScreen({ initialSale }: { initialSale?: SaleRecord }) {
     }
   }
 
-  const pickupOptions = selectedClient?.addresses.filter(
-    (address) => address.type === "EMPRESA" || address.type === "COLETA",
-  );
-  const deliveryOptions = selectedClient?.addresses.filter(
-    (address) => address.type === "EMPRESA" || address.type === "ENTREGA",
-  );
   const paymentMethod = initialSale?.installments[0]?.paymentMethod ?? "PIX";
   const today = todaySaoPaulo();
 
@@ -326,28 +300,24 @@ export function SaleFormScreen({ initialSale }: { initialSale?: SaleRecord }) {
       />
       <form className="form-page" onSubmit={submit}>
         <section className="form-section">
-          <header><span>01</span><div><h2>Cliente</h2><p>O endereço da empresa pode ser usado tanto na coleta quanto na entrega.</p></div></header>
-          <div className="form-grid three">
-            <Field label="Cliente">
-              <select value={clientId} onChange={(event) => { setClientId(event.target.value); setPickupAddressId(""); setDeliveryAddressId(""); setPickupAddress(""); setDeliveryAddress(""); }}>
-                <option value="">Cliente não informado</option>
-                {clientsApi.data?.clients.map((client) => <option key={client.id} value={client.id}>{client.legalName}</option>)}
-              </select>
-            </Field>
+          <header><span>01</span><div><h2>Cliente</h2><p>Busque um cliente já cadastrado ou faça um cadastro rápido.</p></div></header>
+          <div className="form-grid two">
+            <div className="form-stack">
+              <Field label="Buscar cliente cadastrado">
+                <input
+                  value={clientSearch}
+                  onChange={(event) => setClientSearch(event.target.value)}
+                  placeholder="Nome, razão social ou CPF/CNPJ"
+                />
+              </Field>
+              <Field label="Cliente">
+                <select value={clientId} onChange={(event) => setClientId(event.target.value)}>
+                  <option value="">Cliente não informado</option>
+                  {filteredClients.map((client) => <option key={client.id} value={client.id}>{client.legalName}</option>)}
+                </select>
+              </Field>
+            </div>
             <div className="field-action"><span>Cadastro rápido</span><button type="button" className="button secondary" onClick={() => setClientModal(true)}><Icons.plus /> Novo cliente</button></div>
-            {selectedClient && <div className="client-inline"><strong>{selectedClient.legalName}</strong><span>{selectedClient.cpfCnpj || "SEM DOCUMENTO"}</span><small>{selectedClient.contacts[0]?.name || "SEM CONTATO"} · {selectedClient.contacts[0]?.phone || "SEM TELEFONE"}</small></div>}
-            <Field label="Endereço de coleta cadastrado">
-              <select value={pickupAddressId} onChange={(event) => setPickupAddressId(event.target.value)}>
-                <option value="">Informar manualmente</option>
-                {pickupOptions?.map((address) => <option key={address.id} value={address.id}>{address.type} · {address.label || addressText(address)}</option>)}
-              </select>
-            </Field>
-            <Field label="Endereço de entrega cadastrado">
-              <select value={deliveryAddressId} onChange={(event) => setDeliveryAddressId(event.target.value)}>
-                <option value="">Informar manualmente</option>
-                {deliveryOptions?.map((address) => <option key={address.id} value={address.id}>{address.type} · {address.label || addressText(address)}</option>)}
-              </select>
-            </Field>
           </div>
         </section>
 
@@ -372,12 +342,12 @@ export function SaleFormScreen({ initialSale }: { initialSale?: SaleRecord }) {
               <div className="route-side">
                 <span className="route-side-label">Origem</span>
                 <Field label="Cidade / UF"><input name="origin" defaultValue={initialSale?.origin ?? ""} required /></Field>
-                <Field label="Endereço completo de coleta"><input value={pickupAddressId ? addressText(selectedClient?.addresses.find((address) => address.id === pickupAddressId)) : pickupAddress} onChange={(event) => setPickupAddress(event.target.value)} readOnly={Boolean(pickupAddressId)} /></Field>
+                <Field label="Endereço completo de coleta"><input value={pickupAddress} onChange={(event) => setPickupAddress(event.target.value)} /></Field>
               </div>
               <div className="route-side destination">
                 <span className="route-side-label">Destino</span>
                 <Field label="Cidade / UF"><input name="destination" defaultValue={initialSale?.destination ?? ""} required /></Field>
-                <Field label="Endereço completo de entrega"><input value={deliveryAddressId ? addressText(selectedClient?.addresses.find((address) => address.id === deliveryAddressId)) : deliveryAddress} onChange={(event) => setDeliveryAddress(event.target.value)} readOnly={Boolean(deliveryAddressId)} /></Field>
+                <Field label="Endereço completo de entrega"><input value={deliveryAddress} onChange={(event) => setDeliveryAddress(event.target.value)} /></Field>
               </div>
             </div>
           </div>
