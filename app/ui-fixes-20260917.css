@@ -99,111 +99,62 @@
   backdrop-filter: blur(8px);
 }
 
-/* Ações de tabela: Editar e Excluir ficam sempre visíveis com ícone e texto. */
+/* Ações de edição: um único botão compacto com seta, como na referência aprovada. */
 td[data-label="Ações"] {
-  width: auto !important;
-  min-width: 184px !important;
+  width: 54px !important;
+  min-width: 54px !important;
 }
 
-.table-actions,
-.table-actions:has(.button.danger) {
+.table-actions {
   min-width: 0 !important;
   display: flex !important;
-  flex-direction: row !important;
   align-items: center !important;
   justify-content: flex-end !important;
-  gap: 8px !important;
-  flex-wrap: wrap;
+  gap: 6px !important;
+  flex-wrap: nowrap !important;
   overflow: visible !important;
 }
 
-.table-actions .button.secondary.compact-button,
-.table-actions .button.danger.compact-button {
-  width: auto !important;
-  min-width: 82px !important;
-  height: 36px !important;
-  min-height: 36px !important;
-  padding: 0 12px !important;
-  gap: 6px !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  border-radius: 9px !important;
-  font-size: 12px !important;
-  font-weight: 720 !important;
-  line-height: 1 !important;
-  opacity: 1 !important;
+.table-action {
+  width: 31px !important;
+  min-width: 31px !important;
+  height: 31px !important;
+  min-height: 31px !important;
+  padding: 0 !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  flex: 0 0 31px !important;
+  color: #fff !important;
+  background: var(--teal) !important;
+  border: 1px solid var(--teal) !important;
+  border-radius: 6px !important;
+  box-shadow: none !important;
   transform: none !important;
-  box-shadow: 0 2px 7px rgb(15 49 70 / 7%) !important;
+  transition: background .15s ease, border-color .15s ease !important;
 }
 
-.table-actions .button.secondary.compact-button {
-  color: #0f5f7a !important;
-  background: #eef7fb !important;
-  border-color: #b8d7e3 !important;
-}
-
-.table-actions .button.secondary.compact-button:hover:not(:disabled),
-.table-actions .button.secondary.compact-button:focus-visible {
-  color: #0b4d63 !important;
-  background: #deeff6 !important;
-  border-color: #96c3d3 !important;
-  box-shadow: 0 6px 15px rgb(21 78 94 / 12%) !important;
-  transform: translateY(-1px) !important;
-}
-
-.table-actions .button.danger.compact-button {
-  color: #9f1f1f !important;
-  background: #fff1f1 !important;
-  border-color: #e3b7b7 !important;
-}
-
-.table-actions .button.danger.compact-button:hover:not(:disabled),
-.table-actions .button.danger.compact-button:focus-visible {
+.table-action:hover:not(:disabled),
+.table-action:focus-visible {
   color: #fff !important;
-  background: #b42318 !important;
-  border-color: #8e1c14 !important;
-  box-shadow: 0 6px 15px rgb(148 27 19 / 20%) !important;
-  transform: translateY(-1px) !important;
+  background: #066c7e !important;
+  border-color: #066c7e !important;
+  transform: none !important;
 }
 
-.table-actions .button.secondary.compact-button::before,
-.table-actions .button.danger.compact-button::before {
-  width: 14px !important;
-  height: 14px !important;
-  flex: 0 0 14px !important;
+.table-action:disabled {
+  opacity: .45 !important;
+  cursor: not-allowed !important;
 }
 
-.table-actions .button.secondary.compact-button::after,
-.table-actions .button.danger.compact-button::after {
-  display: none !important;
-  content: none !important;
+.table-action svg {
+  width: 15px !important;
+  height: 15px !important;
 }
 
-html[data-theme="dark"] .table-actions .button.secondary.compact-button {
-  color: #d8e5ec !important;
-  background: #18384b !important;
-  border-color: #416b7c !important;
-}
-
-html[data-theme="dark"] .table-actions .button.secondary.compact-button:hover:not(:disabled),
-html[data-theme="dark"] .table-actions .button.secondary.compact-button:focus-visible {
-  color: #9debf0 !important;
-  background: #20475c !important;
-  border-color: #5a8393 !important;
-}
-
-html[data-theme="dark"] .table-actions .button.danger.compact-button {
-  color: #ffd7d9 !important;
-  background: #49272c !important;
-  border-color: #8a5a60 !important;
-}
-
-html[data-theme="dark"] .table-actions .button.danger.compact-button:hover:not(:disabled),
-html[data-theme="dark"] .table-actions .button.danger.compact-button:focus-visible {
+html[data-theme="dark"] .table-action {
   color: #fff !important;
-  background: #b93c40 !important;
-  border-color: #d76d72 !important;
+  background: #14869a !important;
+  border-color: #2bb2c5 !important;
 }
 
 @media (max-width: 980px) {
@@ -248,13 +199,8 @@ html[data-theme="dark"] .table-actions .button.danger.compact-button:focus-visib
     min-width: 0 !important;
   }
 
-  .table-actions,
-  .table-actions:has(.button.danger) {
+  .table-actions {
     justify-content: flex-end !important;
   }
 
-  .table-actions .button.secondary.compact-button,
-  .table-actions .button.danger.compact-button {
-    min-width: 76px !important;
-  }
 }
