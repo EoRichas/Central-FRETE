@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type {
   CostRecord,
@@ -53,7 +52,6 @@ function formatFileSize(bytes: number) {
 }
 
 export function SaleDetailScreen({ id }: { id: string }) {
-  const router = useRouter();
   const saleApi = useApi<{ sale: SaleRecord }>(`/api/sales/${id}`);
   const meApi = useApi<{ user: CurrentUser }>("/api/me");
   const [paymentOpen, setPaymentOpen] = useState(false);
@@ -67,7 +65,6 @@ export function SaleDetailScreen({ id }: { id: string }) {
   >("EM_ABERTO");
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const sale = saleApi.data?.sale;
   const user = meApi.data?.user;
@@ -76,7 +73,6 @@ export function SaleDetailScreen({ id }: { id: string }) {
   const canManagePayments = canManageProviders;
   const canManageOperationCosts = canManageProviders;
   const canEditSale = user?.role === "ADMIN";
-  const canDeleteSale = user?.role === "ADMIN";
   const canAttach =
     user?.role === "ADMIN" || user?.role === "FINANCEIRO" || user?.role === "VENDEDOR";
 
@@ -235,27 +231,6 @@ export function SaleDetailScreen({ id }: { id: string }) {
     }
   }
 
-  async function deleteSale() {
-    if (!sale) return;
-    const confirmed = window.confirm(
-      `Excluir definitivamente a venda ${sale.saleNumber}? Esta ação removerá custos, recebimentos e anexos vinculados.`,
-    );
-    if (!confirmed) return;
-    setDeleting(true);
-    setError(null);
-    try {
-      await apiMutation(`/api/sales/${sale.id}`, { method: "DELETE" });
-      router.replace("/vendas");
-      router.refresh();
-    } catch (deleteError) {
-      setError(
-        deleteError instanceof Error
-          ? deleteError.message
-          : "Erro ao excluir a venda.",
-      );
-      setDeleting(false);
-    }
-  }
 
   if (saleApi.loading) return <LoadingState label="Carregando a venda…" />;
   if (saleApi.error) {
@@ -300,16 +275,6 @@ export function SaleDetailScreen({ id }: { id: string }) {
               <Link className="button secondary" href={`/vendas/${sale.id}/editar`}>
                 Editar venda
               </Link>
-            )}
-            {canDeleteSale && (
-              <button
-                type="button"
-                className="button danger"
-                disabled={deleting}
-                onClick={deleteSale}
-              >
-                {deleting ? "Excluindo venda…" : "Excluir venda"}
-              </button>
             )}
             {canManagePayments && (
               <button
