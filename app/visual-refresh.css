@@ -50,76 +50,7 @@
   transform: scale(1.18);
 }
 
-/* Prévia visual: exclusão inspirada no modelo Uiverse */
-.button.danger {
-  position: relative;
-  width: 44px;
-  min-width: 44px;
-  height: 44px;
-  min-height: 44px;
-  padding: 0;
-  overflow: hidden;
-  color: transparent;
-  background: #141414;
-  border: 0;
-  border-radius: 50%;
-  box-shadow: 0 3px 16px rgb(0 0 0 / 14%);
-  font-size: 0;
-  transition: width .3s ease, border-radius .3s ease, background .3s ease, transform .15s ease;
-}
-
-.button.danger::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 13px;
-  height: 16px;
-  transform: translate(-50%, -50%);
-  background: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 448 512'%3E%3Cpath fill='white' d='M135.2 17.7L128 32H32C14.3 32 0 46.3 0 64S14.3 96 32 96H416c17.7 0 32-14.3 32-32s-14.3-32-32-32H320l-7.2-14.3C307.4 6.8 296.3 0 284.2 0H163.8c-12.1 0-23.2 6.8-28.6 17.7zM416 128H32L53.2 467c1.6 25.3 22.6 45 47.9 45H346.9c25.3 0 46.3-19.7 47.9-45L416 128z'/%3E%3C/svg%3E");
-  transition: width .3s ease, height .3s ease, transform .3s ease, opacity .2s ease;
-}
-
-.button.danger::before {
-  content: "Excluir";
-  position: absolute;
-  left: 50%;
-  top: -18px;
-  transform: translateX(-50%);
-  color: #fff;
-  opacity: 0;
-  font-size: 2px;
-  font-weight: 750;
-  white-space: nowrap;
-  transition: top .3s ease, opacity .3s ease, font-size .3s ease;
-}
-
-.button.danger:hover:not(:disabled) {
-  width: 128px;
-  color: transparent;
-  background: rgb(255, 69, 69);
-  border-radius: 50px;
-}
-
-.button.danger:hover:not(:disabled)::after {
-  width: 18px;
-  height: 21px;
-  transform: translate(-50%, 65%);
-}
-
-.button.danger:hover:not(:disabled)::before {
-  top: 8px;
-  opacity: 1;
-  font-size: 12px;
-}
-
-.button.danger:active:not(:disabled) {
-  transform: scale(.95);
-}
-
-.button.danger:disabled {
-  opacity: .45;
-}
+/* Exclusões usam o padrão estático definido em action-refinements.css. */
 
 /* Segunda etapa: identidade visual mais premium e consistente */
 .topbar {
@@ -426,9 +357,6 @@ tbody tr:hover td:first-child {
 @media (max-width: 700px) {
   .main-nav a:hover svg { transform: none; }
   .main-nav a:hover span { opacity: 1; transform: none; }
-  .button.danger:hover:not(:disabled) { width: 44px; }
-  .button.danger:hover:not(:disabled)::before { display: none; }
-  .button.danger:hover:not(:disabled)::after { width: 13px; height: 16px; transform: translate(-50%, -50%); }
   .button.primary:hover:not(:disabled),
   .button.secondary:hover:not(:disabled),
   .client-list-row:hover,
