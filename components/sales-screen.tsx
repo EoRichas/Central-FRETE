@@ -18,7 +18,6 @@ export function SalesScreen({
   initialFinancialStatus: string;
 }) {
   const [competency, setCompetency] = useState(initialCompetency);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [financialStatus, setFinancialStatus] = useState(initialFinancialStatus);
@@ -45,14 +44,6 @@ export function SalesScreen({
   const totalFreight = sales.reduce((sum, sale) => sum + sale.freightAmountCents, 0);
   const totalBalance = sales.reduce((sum, sale) => sum + sale.financial.balanceCents, 0);
 
-  async function deleteSale(sale: SaleRecord) {
-    if (!window.confirm(`Excluir definitivamente a venda ${sale.saleNumber}? Custos, recebimentos e anexos vinculados serão removidos.`)) return;
-    setDeletingId(sale.id); setMutationError(null);
-    try { await apiMutation(`/api/sales/${sale.id}`, { method: "DELETE" }); refresh(); }
-    catch (e) { setMutationError(e instanceof Error ? e.message : "Erro ao excluir venda."); }
-    finally { setDeletingId(null); }
-  }
-
   return (
     <>
       <PageHeader eyebrow="Operação" title="Vendas e fretes" description="Consulte o ciclo operacional e a cobrança de cada frete em uma única visão." actions={<><a className="button secondary" href={`/api/exports/sales.csv?competency=${competency}`}><Icons.receipt /> Exportar Excel</a><Link className="button primary" href="/vendas/nova"><Icons.plus /> Nova venda</Link></>} />
@@ -70,7 +61,7 @@ export function SalesScreen({
       {sales.length > 0 && (
         <section className="panel table-panel">
           <div className="table-summary"><div><strong>{sales.length}</strong><span>registros filtrados</span></div><div><strong>{formatMoney(totalFreight)}</strong><span>valor dos fretes</span></div><div><strong>{formatMoney(totalBalance)}</strong><span>saldo em haver</span></div></div>
-          <div className="responsive-table"><table><thead><tr><th>Venda</th><th>Cliente / rota</th><th>Operação</th><th>Vencimento</th><th>Frete</th><th>Recebido</th><th>Saldo</th><th>Situação</th><th><span className="sr-only">Ações</span></th></tr></thead><tbody>{sales.map((sale) => <tr key={sale.id}><td data-label="Venda"><strong>{sale.saleNumber}</strong><small>{formatDate(sale.saleDate)} · {sale.sellerName}</small></td><td data-label="Cliente / rota"><strong>{sale.clientName ?? "CLIENTE NÃO INFORMADO"}</strong><small>{sale.origin} → {sale.destination}</small></td><td data-label="Operação"><StatusBadge status={sale.operationalStatus} /></td><td data-label="Vencimento">{formatDate(sale.financialDueDate)}</td><td data-label="Frete"><strong>{formatMoney(sale.freightAmountCents)}</strong></td><td data-label="Recebido" className="positive">{formatMoney(sale.financial.totalReceivedCents)}</td><td data-label="Saldo"><strong>{formatMoney(sale.financial.balanceCents)}</strong></td><td data-label="Situação"><StatusBadge status={sale.financial.status} partial={sale.financial.isPartial} /></td><td data-label="Ações"><div className="table-actions"><Link className="table-action" href={`/vendas/${sale.id}`} aria-label={`Abrir venda ${sale.saleNumber}`}><Icons.chevron /></Link>{data?.canDelete && <button type="button" className="button danger compact-button" aria-label={`Excluir venda ${sale.saleNumber}`} title={`Excluir venda ${sale.saleNumber}`} disabled={deletingId !== null} onClick={() => deleteSale(sale)}>Excluir</button>}</div></td></tr>)}</tbody></table></div>
+          <div className="responsive-table"><table><thead><tr><th>Venda</th><th>Cliente / rota</th><th>Operação</th><th>Vencimento</th><th>Frete</th><th>Recebido</th><th>Saldo</th><th>Situação</th><th><span className="sr-only">Ações</span></th></tr></thead><tbody>{sales.map((sale) => <tr key={sale.id}><td data-label="Venda"><strong>{sale.saleNumber}</strong><small>{formatDate(sale.saleDate)} · {sale.sellerName}</small></td><td data-label="Cliente / rota"><strong>{sale.clientName ?? "CLIENTE NÃO INFORMADO"}</strong><small>{sale.origin} → {sale.destination}</small></td><td data-label="Operação"><StatusBadge status={sale.operationalStatus} /></td><td data-label="Vencimento">{formatDate(sale.financialDueDate)}</td><td data-label="Frete"><strong>{formatMoney(sale.freightAmountCents)}</strong></td><td data-label="Recebido" className="positive">{formatMoney(sale.financial.totalReceivedCents)}</td><td data-label="Saldo"><strong>{formatMoney(sale.financial.balanceCents)}</strong></td><td data-label="Situação"><StatusBadge status={sale.financial.status} partial={sale.financial.isPartial} /></td><td data-label="Ações"><div className="table-actions"><Link className="table-action" href={`/vendas/${sale.id}`} aria-label={`Abrir venda ${sale.saleNumber}`}><Icons.chevron /></Link></div></td></tr>)}</tbody></table></div>
         </section>
       )}
     </>
