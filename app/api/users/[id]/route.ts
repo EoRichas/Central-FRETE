@@ -50,7 +50,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const name = requiredUpper(payload.name, "Nome");
     const role = enumValue(payload.role, "Perfil", ASSIGNABLE_ROLES);
     const active = activeValue(payload.active);
-    const pixDetails = String(payload.pixDetails ?? "").trim() || null;
+    const pixDetails = previous.pixDetails;
 
     if (id === actor.id && (!active || role !== "ADMIN")) {
       throw new ApiError(
