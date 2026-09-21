@@ -84,6 +84,10 @@ export async function PATCH(request: Request, context: RouteContext) {
           priority: previous.priority,
           distanceMeters: previous.distanceMeters,
           returnUsed: Boolean(previous.returnUsed),
+          tollCents: previous.tripId ? previous.tollCents : submitted.tollCents,
+          actualFuelCostCents: previous.tripId
+            ? previous.actualFuelCostCents
+            : submitted.actualFuelCostCents,
         }
       : submitted;
     const { vehicle, driver } = await resolveFleetReferences(
