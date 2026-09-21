@@ -2,8 +2,10 @@
 import { useState } from 'react';
 import { apiMutation, useApi } from '@/components/use-api';
 import { Field, LoadingState, ErrorState } from '@/components/ui';
-import { calculateMonthlyResult, MONTHLY_ENTRY_LABELS, type MonthlyReport } from '@/lib/domain/fleet-results';
+import { calculateMonthlyResult, MONTHLY_ENTRY_LABELS, type MonthlyEntry, type MonthlyReport } from '@/lib/domain/fleet-results';
 import { competencyLabel, formatMoney, moneyInputToCents } from '@/lib/format';
+import { Icons } from '@/components/icons';
+import { Modal } from '@/components/ui';
 
 export function FleetMonthlyPanel({ competency }: { competency: string }) {
   const api = useApi<MonthlyReport>(`/api/fleet/monthly?competency=${competency}`);
@@ -12,6 +14,7 @@ export function FleetMonthlyPanel({ competency }: { competency: string }) {
   const [success, setSuccess] = useState('');
   const [reviewed, setReviewed] = useState(false);
   const [reason, setReason] = useState('');
+  const [selectedEntry, setSelectedEntry] = useState<MonthlyEntry | null>(null);
   const report = api.data;
   const closed = report?.history.find(h => !h.reopenedAt);
   const source = closed?.snapshot ?? report?.current;
@@ -21,7 +24,7 @@ export function FleetMonthlyPanel({ competency }: { competency: string }) {
     setBusy(true); setError(''); setSuccess('');
     try {
       await apiMutation('/api/fleet/monthly', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...payload, competency }) });
-      setSuccess('Operação concluída.'); setReviewed(false); api.refresh(); return true;
+      setSuccess('Operação concluída.'); setReviewed(false); setSelectedEntry(null); api.refresh(); return true;
     } catch (e) { setError(e instanceof Error ? e.message : 'Não foi possível concluir.'); return false; }
     finally { setBusy(false); }
   }
@@ -51,10 +54,23 @@ export function FleetMonthlyPanel({ competency }: { competency: string }) {
       {source.trips.map(t => <tr key={t.id}><td data-label="Viagem">{t.name}</td><td data-label="Receita">Incluída nos fretes faturados</td><td data-label="Custos">{formatMoney(t.costCents)}</td></tr>)}
     </tbody></table></div></details>
     <section className="panel table-panel"><header className="fleet-panel-header"><div><h3>Lançamentos complementares</h3><p>Inclua aluguel, salários fixos, seguros, despesas administrativas, tributos e demais valores ainda não registrados nos fretes ou viagens. Não repita o diesel, os pedágios ou as comissões já incluídos.</p></div></header>
-      <div className="responsive-table"><table><thead><tr><th>Tipo</th><th>Descrição</th><th>Valor</th><th>Ações</th></tr></thead><tbody>{source.entries.map(e => <tr key={e.id}><td data-label="Tipo">{MONTHLY_ENTRY_LABELS[e.kind]}</td><td data-label="Descrição">{e.description}</td><td data-label="Valor">{formatMoney(e.amountCents)}</td><td data-label="Ações">{!closed && report.canManage && <button className="button danger" disabled={busy} onClick={() => { if (window.confirm('Excluir este lançamento?')) void mutate({ action: 'DELETE_ENTRY', id: e.id }); }}>Excluir</button>}</td></tr>)}{!source.entries.length && <tr><td colSpan={4}>Nenhum lançamento complementar.</td></tr>}</tbody></table></div>
+      <div className="responsive-table"><table><thead><tr><th>Tipo</th><th>Descrição</th><th>Valor</th><th>Ações</th></tr></thead><tbody>{source.entries.map(e => <tr key={e.id}><td data-label="Tipo">{MONTHLY_ENTRY_LABELS[e.kind]}</td><td data-label="Descrição">{e.description}</td><td data-label="Valor">{formatMoney(e.amountCents)}</td><td data-label="Ações">{!closed && report.canManage && <div className="table-actions"><button type="button" className="table-action" aria-label={`Gerenciar lançamento ${e.description}`} title="Gerenciar lançamento" disabled={busy} onClick={() => setSelectedEntry(e)}><Icons.chevron /></button></div>}</td></tr>)}{!source.entries.length && <tr><td colSpan={4}>Nenhum lançamento complementar.</td></tr>}</tbody></table></div>
       {!closed && report.canManage && <form className="modal-body form-stack" onSubmit={addEntry}><div className="form-grid three"><Field label="Tipo"><select name="kind">{Object.entries(MONTHLY_ENTRY_LABELS).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></Field><Field label="Descrição"><input name="description" required maxLength={200} /></Field><Field label="Valor (R$)"><input name="amount" inputMode="decimal" required placeholder="0,00" /></Field></div><button className="button secondary" disabled={busy}>Adicionar lançamento</button></form>}
     </section>
     {report.canManage && <section className="panel modal-body form-stack">{closed ? <><Field label="Motivo da reabertura"><textarea value={reason} onChange={e => setReason(e.target.value)} minLength={5} maxLength={1000} /></Field><button className="button secondary" disabled={busy || reason.trim().length < 5} onClick={() => mutate({ action: 'REOPEN', id: closed.id, reason })}>Reabrir mês</button></> : <><label className="fleet-check-field"><input type="checkbox" checked={reviewed} onChange={e => setReviewed(e.target.checked)} /><span>Conferi todas as receitas, custos variáveis e custos fixos, sem duplicidades, inclusive valores de outras áreas da empresa.</span></label><button className="button primary" disabled={busy || !reviewed || totals.pendingFuelCount > 0} onClick={() => mutate({ action: 'CLOSE', reviewed })}>Fechar mês</button></>}</section>}
     {!!report.history.length && <details className="panel"><summary>Histórico de fechamentos ({report.history.length})</summary>{report.history.map(h => <p key={h.id}>{new Date(h.closedAt).toLocaleString('pt-BR')} · {h.closedByName} · Resultado: {formatMoney(calculateMonthlyResult(h.snapshot).resultCents)}{h.reopenedAt ? ` · Reaberto: ${h.reopenReason}` : ' · Fechamento vigente'}</p>)}</details>}
+    <Modal open={selectedEntry !== null} onClose={() => setSelectedEntry(null)} title="Gerenciar lançamento" description="A exclusão fica concentrada dentro desta ação.">
+      {selectedEntry && <div className="modal-body form-stack">
+        <div className="details-list">
+          <div><dt>Tipo</dt><dd>{MONTHLY_ENTRY_LABELS[selectedEntry.kind]}</dd></div>
+          <div><dt>Valor</dt><dd>{formatMoney(selectedEntry.amountCents)}</dd></div>
+          <div className="full"><dt>Descrição</dt><dd>{selectedEntry.description}</dd></div>
+        </div>
+        <footer className="modal-actions">
+          <button type="button" className="button danger" disabled={busy} onClick={() => { if (window.confirm('Excluir este lançamento?')) void mutate({ action: 'DELETE_ENTRY', id: selectedEntry.id }); }}>Excluir lançamento</button>
+          <button type="button" className="button secondary" onClick={() => setSelectedEntry(null)}>Fechar</button>
+        </footer>
+      </div>}
+    </Modal>
   </section>;
 }
