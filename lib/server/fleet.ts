@@ -108,6 +108,7 @@ export async function loadFleetData(
   canManage: boolean,
   canManagePayments = false,
   canEditFreights = canManage,
+  canEditFreightFinancials = false,
   freightOnly = false,
   competency?: string,
 ): Promise<FleetData> {
@@ -223,6 +224,7 @@ export async function loadFleetData(
     summary: summarizeFleet(freights),
     canManage,
     canEditFreights,
+    canEditFreightFinancials,
     canManagePayments,
     freightOnly,
   };
