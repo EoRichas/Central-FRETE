@@ -108,9 +108,9 @@ export async function loadFleetData(
   canManage: boolean,
   canManagePayments = false,
   canEditFreights = canManage,
-  canEditFreightFinancials = false,
   freightOnly = false,
   competency?: string,
+  canEditFreightFinancials = false,
 ): Promise<FleetData> {
   const [parameters, vehicleRows, driverRows, costRows, freightRows, trips] =
     await Promise.all([
