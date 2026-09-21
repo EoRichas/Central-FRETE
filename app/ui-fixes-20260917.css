@@ -124,20 +124,21 @@ td[data-label="Ações"] {
   display: inline-grid !important;
   place-items: center !important;
   flex: 0 0 31px !important;
-  color: #fff !important;
-  background: var(--teal) !important;
-  border: 1px solid var(--teal) !important;
+  color: var(--teal) !important;
+  background: #fff !important;
+  border: 1px solid var(--line) !important;
   border-radius: 6px !important;
   box-shadow: none !important;
   transform: none !important;
-  transition: background .15s ease, border-color .15s ease !important;
+  transition: color .15s ease, background .15s ease, border-color .15s ease, box-shadow .15s ease !important;
 }
 
 .table-action:hover:not(:disabled),
 .table-action:focus-visible {
   color: #fff !important;
-  background: #066c7e !important;
-  border-color: #066c7e !important;
+  background: var(--teal) !important;
+  border-color: var(--teal) !important;
+  box-shadow: 0 4px 10px rgb(8 123 143 / 16%) !important;
   transform: none !important;
 }
 
@@ -152,6 +153,13 @@ td[data-label="Ações"] {
 }
 
 html[data-theme="dark"] .table-action {
+  color: #7fd8e5 !important;
+  background: #102f40 !important;
+  border-color: #31586a !important;
+}
+
+html[data-theme="dark"] .table-action:hover:not(:disabled),
+html[data-theme="dark"] .table-action:focus-visible {
   color: #fff !important;
   background: #14869a !important;
   border-color: #2bb2c5 !important;
