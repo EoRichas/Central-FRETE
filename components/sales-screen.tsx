@@ -8,7 +8,7 @@ import { OPERATIONAL_STATUS_OPTIONS } from "@/lib/domain/operations";
 import { formatDate, formatMoney } from "@/lib/format";
 import { Icons } from "@/components/icons";
 import { EmptyState, ErrorState, LoadingState, PageHeader, StatusBadge } from "@/components/ui";
-import { apiMutation, useApi } from "@/components/use-api";
+import { useApi } from "@/components/use-api";
 
 export function SalesScreen({
   initialCompetency,
@@ -18,7 +18,6 @@ export function SalesScreen({
   initialFinancialStatus: string;
 }) {
   const [competency, setCompetency] = useState(initialCompetency);
-  const [mutationError, setMutationError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [financialStatus, setFinancialStatus] = useState(initialFinancialStatus);
   const [operationalStatus, setOperationalStatus] = useState("");
@@ -31,7 +30,7 @@ export function SalesScreen({
     if (operationalStatus) params.set("operationalStatus", operationalStatus);
     return `/api/sales?${params}`;
   }, [competency, query, financialStatus, operationalStatus]);
-  const { data, loading, error, refresh } = useApi<{ sales: SaleRecord[]; count: number; canDelete: boolean }>(url);
+  const { data, loading, error, refresh } = useApi<{ sales: SaleRecord[]; count: number }>(url);
   const sales = useMemo(() => {
     const values = [...(data?.sales ?? [])];
     return values.sort((a, b) => {
@@ -54,7 +53,6 @@ export function SalesScreen({
         <label><span>Status operacional</span><select value={operationalStatus} onChange={(event) => setOperationalStatus(event.target.value)}><option value="">Todos</option>{OPERATIONAL_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
         <label><span>Ordenar</span><select value={sort} onChange={(event) => setSort(event.target.value)}><option value="date-desc">Mais recentes</option><option value="date-asc">Mais antigas</option><option value="value-desc">Maior valor</option><option value="value-asc">Menor valor</option></select></label>
       </section>
-      {mutationError && <p className="form-error" role="alert">{mutationError}</p>}
       {loading && <LoadingState label="Consultando vendas…" />}
       {error && <ErrorState message={error} retry={refresh} />}
       {!loading && !error && sales.length === 0 && <EmptyState title="Nenhuma venda encontrada" description="Ajuste os filtros ou cadastre a primeira venda." href="/vendas/nova" action="Nova venda" />}
