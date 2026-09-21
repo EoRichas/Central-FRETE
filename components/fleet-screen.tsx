@@ -161,6 +161,7 @@ function FreightTable({
 
 function FreightModal({ freight, fleet, onClose, onSaved }: { freight: FleetFreight | null; fleet: FleetData; onClose: () => void; onSaved: (message: string) => void; }) {
   const editing = Boolean(freight);
+  const financialOnly = fleet.canEditFreightFinancials && !fleet.canEditFreights;
   const firstVehicle = fleet.vehicles.find((vehicle) => vehicle.active);
   const firstDriver = fleet.drivers.find((driver) => driver.active && driver.vehicleId === firstVehicle?.id) ?? fleet.drivers.find(driver => driver.active);
   const [driverId, setDriverId] = useState(freight?.driverId ?? firstDriver?.id ?? "");
@@ -233,15 +234,24 @@ function FreightModal({ freight, fleet, onClose, onSaved }: { freight: FleetFrei
         vehicleId, driverId, tripId: tripId || null,
         yardCostCents: moneyInputToCents(yardCost || "0"), pickupCostCents: moneyInputToCents(pickupCost || "0"),
         deliveryCostCents: moneyInputToCents(deliveryCost || "0"), otherCostCents: moneyInputToCents(otherCost || "0"),
-        actualFuelCostCents: tripId || !actualFuel.trim() ? null : moneyInputToCents(actualFuel), clientName: form.get("clientName"),
-        cargoVehicleModel: form.get("cargoVehicleModel"), cargoPlate: form.get("cargoPlate"), originCep, destinationCep,
-        origin: form.get("origin"), destination: form.get("destination"), pickupDate,
-        deliveryDate: form.get("deliveryDate") || null, billingDate: form.get("billingDate") || null,
-        operationalStatus: form.get("operationalStatus"), priority: form.get("priority"),
+        actualFuelCostCents: tripId || !actualFuel.trim() ? null : moneyInputToCents(actualFuel),
+        clientName: financialOnly ? freight!.clientName : form.get("clientName"),
+        cargoVehicleModel: financialOnly ? freight!.cargoVehicleModel : form.get("cargoVehicleModel"),
+        cargoPlate: financialOnly ? freight!.cargoPlate : form.get("cargoPlate"),
+        originCep: financialOnly ? freight!.originCep : originCep,
+        destinationCep: financialOnly ? freight!.destinationCep : destinationCep,
+        origin: financialOnly ? freight!.origin : form.get("origin"),
+        destination: financialOnly ? freight!.destination : form.get("destination"),
+        pickupDate: financialOnly ? freight!.pickupDate : pickupDate,
+        deliveryDate: financialOnly ? freight!.deliveryDate : form.get("deliveryDate") || null,
+        billingDate: financialOnly ? freight!.billingDate : form.get("billingDate") || null,
+        operationalStatus: financialOnly ? freight!.operationalStatus : form.get("operationalStatus"),
+        priority: financialOnly ? freight!.priority : form.get("priority"),
         freightAmountCents: moneyInputToCents(freightValue || "0"),
-        distanceMeters: distanceInputToMeters(distance || "0"),
-        tollCents: moneyInputToCents(toll || "0"), driverCommissionCents: moneyInputToCents(driverCommission || "0"),
-        returnUsed: form.get("returnUsed") === "on",
+        distanceMeters: financialOnly ? freight!.distanceMeters : distanceInputToMeters(distance || "0"),
+        tollCents: moneyInputToCents(toll || "0"),
+        driverCommissionCents: moneyInputToCents(driverCommission || "0"),
+        returnUsed: financialOnly ? freight!.returnUsed : form.get("returnUsed") === "on",
       };
       await apiMutation(editing ? `/api/fleet/freights/${freight!.id}` : "/api/fleet/freights", { method: editing ? "PATCH" : "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
       onSaved(editing ? "Frete atualizado." : "Frete cadastrado.");
@@ -255,7 +265,9 @@ function FreightModal({ freight, fleet, onClose, onSaved }: { freight: FleetFrei
   return (
     <Modal open wide onClose={onClose} title={editing ? "Editar frete da frota" : "Novo frete da frota"} description="A margem de contribuição desconta comissão, pátio, coleta, entrega e outros custos diretos. Diesel e pedágio são apurados na viagem.">
       <form className="modal-body form-stack" onSubmit={submit}>
-        <fieldset disabled={!fleet.canEditFreights} className="fleet-fieldset">
+        <fieldset disabled={!(fleet.canEditFreights || fleet.canEditFreightFinancials)} className="fleet-fieldset">
+          {financialOnly && <p className="fleet-update-note">Perfil Financeiro: somente os valores do frete e dos custos podem ser alterados. Dados operacionais permanecem bloqueados.</p>}
+          <fieldset disabled={financialOnly} className="fleet-fieldset">
           <div className="section-divider">Identificação</div>
           <Field label="Viagem compartilhada" hint="Selecione a mesma viagem para todos os veículos transportados juntos."><select value={tripId} onChange={event => {
             const selected = fleet.trips.find(t => t.id === event.target.value);
@@ -282,14 +294,15 @@ function FreightModal({ freight, fleet, onClose, onSaved }: { freight: FleetFrei
           {routeNotice && <p role="status">{routeNotice}</p>}
           <div className="form-grid two"><Field label="Origem"><input name="origin" value={origin} onChange={e => setOrigin(e.target.value)} maxLength={180} required /></Field><Field label="Destino"><input name="destination" value={destination} onChange={e => setDestination(e.target.value)} maxLength={180} required /></Field></div>
           <div className="form-grid three"><Field label="Data da coleta"><input name="pickupDate" type="date" value={pickupDate} onChange={(event) => setPickupDate(event.target.value)} required /></Field><Field label="Data da entrega"><input name="deliveryDate" type="date" defaultValue={freight?.deliveryDate ?? ""} /></Field><Field label="Data do faturamento"><input name="billingDate" type="date" defaultValue={freight?.billingDate ?? ""} /></Field></div>
+          </fieldset>
           <div className="section-divider">Operação e valores</div>
           <div className="form-grid four">
-            <Field label="Status operacional"><select name="operationalStatus" defaultValue={freight?.operationalStatus ?? "SEM_PREVISAO"}>{FLEET_OPERATIONAL_STATUSES.map((status) => <option key={status} value={status}>{FLEET_OPERATIONAL_STATUS_LABELS[status]}</option>)}</select></Field>
-            <Field label="Prioridade"><select name="priority" defaultValue={freight?.priority ?? "NORMAL"}>{FLEET_PRIORITIES.map((priority) => <option key={priority} value={priority}>{FLEET_PRIORITY_LABELS[priority]}</option>)}</select></Field>
+            <Field label="Status operacional"><select name="operationalStatus" disabled={financialOnly} defaultValue={freight?.operationalStatus ?? "SEM_PREVISAO"}>{FLEET_OPERATIONAL_STATUSES.map((status) => <option key={status} value={status}>{FLEET_OPERATIONAL_STATUS_LABELS[status]}</option>)}</select></Field>
+            <Field label="Prioridade"><select name="priority" disabled={financialOnly} defaultValue={freight?.priority ?? "NORMAL"}>{FLEET_PRIORITIES.map((priority) => <option key={priority} value={priority}>{FLEET_PRIORITY_LABELS[priority]}</option>)}</select></Field>
             <Field label="Valor do frete"><div className="money-field"><span>R$</span><input value={freightValue} onChange={(event) => setFreightValue(event.target.value)} inputMode="decimal" placeholder="0,00" required /></div></Field>
-            <Field label="Distância" hint="Em km: 1200 ou 1.200. Para decimais, use vírgula (1200,5)."><div className="fleet-unit-field"><input value={distance} onChange={(event) => setDistance(event.target.value)} inputMode="decimal" placeholder="0" required /><span>km</span></div></Field>
+            <Field label="Distância" hint="Em km: 1200 ou 1.200. Para decimais, use vírgula (1200,5)."><div className="fleet-unit-field"><input disabled={financialOnly} value={distance} onChange={(event) => setDistance(event.target.value)} inputMode="decimal" placeholder="0" required /><span>km</span></div></Field>
           </div>
-          <div className="form-grid three"><Field label="Pedágio"><div className="money-field"><span>R$</span><input disabled={Boolean(tripId)} value={toll} onChange={(event) => setToll(event.target.value)} inputMode="decimal" placeholder="0,00" /></div></Field><Field label="Motorista / comissão"><div className="money-field"><span>R$</span><input value={driverCommission} onChange={(event) => setDriverCommission(event.target.value)} inputMode="decimal" placeholder="0,00" /></div></Field><label className="fleet-check-field"><input name="returnUsed" type="checkbox" defaultChecked={freight?.returnUsed ?? false} /><span>Retorno já aproveitado</span></label></div>
+          <div className="form-grid three"><Field label="Pedágio"><div className="money-field"><span>R$</span><input disabled={Boolean(tripId)} value={toll} onChange={(event) => setToll(event.target.value)} inputMode="decimal" placeholder="0,00" /></div></Field><Field label="Motorista / comissão"><div className="money-field"><span>R$</span><input value={driverCommission} onChange={(event) => setDriverCommission(event.target.value)} inputMode="decimal" placeholder="0,00" /></div></Field><label className="fleet-check-field"><input name="returnUsed" type="checkbox" disabled={financialOnly} defaultChecked={freight?.returnUsed ?? false} /><span>Retorno já aproveitado</span></label></div>
           <div className="form-grid four">
             <Field label="Pátio / recebimento (R$)"><input value={yardCost} onChange={e => setYardCost(e.target.value)} inputMode="decimal" placeholder="0,00" /></Field>
             <Field label="Coleta (R$)"><input value={pickupCost} onChange={e => setPickupCost(e.target.value)} inputMode="decimal" placeholder="0,00" /></Field>
