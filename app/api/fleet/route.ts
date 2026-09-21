@@ -18,6 +18,7 @@ export async function GET(request: Request) {
       isManager || isOperational,
       isOperational,
       competency,
+      user.role === "FINANCEIRO",
     );
     return Response.json({ fleet });
   } catch (error) {

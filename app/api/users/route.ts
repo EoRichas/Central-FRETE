@@ -59,7 +59,7 @@ export async function POST(request: Request) {
     } catch (error) {
       throw new ApiError(400, error instanceof Error ? error.message : "Senha inválida.");
     }
-    const pixDetails = String(payload.pixDetails ?? "").trim() || null;
+    const pixDetails = null;
     const id = crypto.randomUUID();
     const email = `${username}@centralfrete.local`;
     const db = await getD1();
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
         id,
         actor.id,
         actor.email,
-        JSON.stringify({ username, name, role, pixDetails }),
+        JSON.stringify({ username, name, role }),
         request.headers.get("x-request-id") ?? crypto.randomUUID(),
       ),
     ]);

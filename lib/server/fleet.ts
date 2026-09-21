@@ -110,6 +110,7 @@ export async function loadFleetData(
   canEditFreights = canManage,
   freightOnly = false,
   competency?: string,
+  canEditFreightFinancials = false,
 ): Promise<FleetData> {
   const [parameters, vehicleRows, driverRows, costRows, freightRows, trips] =
     await Promise.all([
@@ -223,6 +224,7 @@ export async function loadFleetData(
     summary: summarizeFleet(freights),
     canManage,
     canEditFreights,
+    canEditFreightFinancials,
     canManagePayments,
     freightOnly,
   };

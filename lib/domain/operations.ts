@@ -99,13 +99,21 @@ export const OPERATION_PAYMENT_CATEGORIES = [
 
 export const PAYMENT_CONTROL_COST_CATEGORIES = [
   ...OPERATION_PAYMENT_CATEGORIES,
-  "ICMS",
-  "SEGURO_ALLIANZ",
   "PATIO_ORIGEM",
   "PATIO_DESTINO",
 ] as const;
 
 export const EDITABLE_OPERATION_COST_CATEGORIES = PAYMENT_CONTROL_COST_CATEGORIES;
+
+export const DIRECT_PAID_OPERATION_COST_CATEGORIES = [
+  "SEGURO_ALLIANZ",
+  ...ICMS_COST_CATEGORIES,
+] as const;
+
+export function isDirectPaidOperationCostCategory(category: string) {
+  return DIRECT_PAID_OPERATION_COST_CATEGORIES.some((item) => item === category);
+}
+
 
 export function isOperationPaymentCategory(category: string) {
   return OPERATION_PAYMENT_CATEGORIES.some((item) => item === category);

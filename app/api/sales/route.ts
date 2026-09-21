@@ -3,6 +3,7 @@ import { currentCompetency, isCompetency } from "@/lib/domain/dates";
 import {
   COST_CATEGORIES,
   normalizeCostCategory,
+  isDirectPaidOperationCostCategory,
   OPERATIONAL_STATUSES,
 } from "@/lib/domain/operations";
 import { ApiError, getD1, jsonError, queryFirst } from "@/lib/server/d1";
@@ -129,7 +130,7 @@ export async function POST(request: Request) {
           1,
           9_000_000_000_000,
         ),
-        confirmed: user.role === "ADMIN",
+        confirmed: user.role === "ADMIN" || isDirectPaidOperationCostCategory(category),
         providerSlot,
         paymentStatus:
           category === "PRESTADOR_SERVICO" ? "EM_ABERTO" : "NAO_APLICAVEL",

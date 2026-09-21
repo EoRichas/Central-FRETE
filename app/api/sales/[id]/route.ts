@@ -3,6 +3,7 @@ import {
   COST_CATEGORIES,
   isIcmsCostCategory,
   isEditableOperationCostCategory,
+  isDirectPaidOperationCostCategory,
   normalizeCostCategory,
   OPERATIONAL_STATUSES,
 } from "@/lib/domain/operations";
@@ -256,8 +257,9 @@ export async function PATCH(request: Request, context: RouteContext) {
           ? dateOnly(cost.occurredOn, `Data da despesa ${index + 1}`)
           : null,
         amountCents,
-        confirmed:
-          user.role === "ADMIN"
+        confirmed: isDirectPaidOperationCostCategory(category)
+          ? true
+          : user.role === "ADMIN"
             ? Boolean(cost.confirmed)
             : availableConfirmed > 0,
         providerSlot,

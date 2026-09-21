@@ -23,6 +23,8 @@ type FreightSnapshot = {
   cargoPlate: string | null;
   origin: string;
   destination: string;
+  originCep: string | null;
+  destinationCep: string | null;
   pickupDate: string;
   deliveryDate: string | null;
   billingDate: string | null;
@@ -43,6 +45,7 @@ async function freightSnapshot(id: string) {
       driver_id as driverId, driver_name as driverName,
       client_name as clientName, cargo_vehicle_model as cargoVehicleModel,
       cargo_plate as cargoPlate, origin, destination,
+      origin_cep as originCep, destination_cep as destinationCep,
       pickup_date as pickupDate, delivery_date as deliveryDate,
       billing_date as billingDate, operational_status as operationalStatus,
       priority, freight_amount_cents as freightAmountCents,
@@ -56,11 +59,37 @@ async function freightSnapshot(id: string) {
 
 export async function PATCH(request: Request, context: RouteContext) {
   try {
-    const user = await authorize(request, ["ADMIN", "GERENCIA", "OPERACIONAL"]);
+    const user = await authorize(request, ["ADMIN", "GERENCIA", "OPERACIONAL", "FINANCEIRO"]);
     const { id } = await context.params;
     const previous = await freightSnapshot(id);
     if (!previous) throw new ApiError(404, "Frete da frota não encontrado.");
-    const data = parseFleetFreightPayload(asObject(await request.json()));
+    const submitted = parseFleetFreightPayload(asObject(await request.json()));
+    const data = user.role === "FINANCEIRO"
+      ? {
+          ...submitted,
+          vehicleId: previous.vehicleId ?? submitted.vehicleId,
+          driverId: previous.driverId ?? submitted.driverId,
+          tripId: previous.tripId,
+          clientName: previous.clientName,
+          cargoVehicleModel: previous.cargoVehicleModel,
+          cargoPlate: previous.cargoPlate,
+          origin: previous.origin,
+          destination: previous.destination,
+          originCep: previous.originCep,
+          destinationCep: previous.destinationCep,
+          pickupDate: previous.pickupDate,
+          deliveryDate: previous.deliveryDate,
+          billingDate: previous.billingDate,
+          operationalStatus: previous.operationalStatus,
+          priority: previous.priority,
+          distanceMeters: previous.distanceMeters,
+          returnUsed: Boolean(previous.returnUsed),
+          tollCents: previous.tripId ? previous.tollCents : submitted.tollCents,
+          actualFuelCostCents: previous.tripId
+            ? previous.actualFuelCostCents
+            : submitted.actualFuelCostCents,
+        }
+      : submitted;
     const { vehicle, driver } = await resolveFleetReferences(
       data.vehicleId,
       data.driverId,
