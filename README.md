@@ -94,3 +94,10 @@ Para validar regras financeiras, consultas PostgreSQL, migração e configuraç�
 npm test
 npm run lint
 ```
+
+## Acesso ao sistema
+
+O acesso depende da sessão, do usuário ativo e das permissões do perfil. Não há
+certificado digital ou bloqueio por mensalidade. A retirada da integração de
+cobrança e as verificações externas estão documentadas em
+[Retirada do certificado digital](docs/retirada-certificado-digital.md).
