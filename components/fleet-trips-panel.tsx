@@ -6,9 +6,10 @@ import type { FleetData, FleetFreight } from '@/lib/domain/fleet';
 import type { FleetTrip } from '@/lib/domain/fleet-results';
 import { formatDate, formatMoney, moneyInputToCents } from '@/lib/format';
 import { todaySaoPaulo } from '@/lib/domain/dates';
+import { Icons } from '@/components/icons';
 
-function TripModal({ trip, fleet, onClose, onSaved }: {
-  trip: FleetTrip | null; fleet: FleetData; onClose: () => void; onSaved: (message: string) => void;
+function TripModal({ trip, fleet, onClose, onSaved, onDelete }: {
+  trip: FleetTrip | null; fleet: FleetData; onClose: () => void; onSaved: (message: string) => void; onDelete: (trip: FleetTrip) => Promise<void>;
 }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -44,7 +45,7 @@ function TripModal({ trip, fleet, onClose, onSaved }: {
       <Field label="Observações sobre os custos"><textarea name="notes" maxLength={2000} defaultValue={trip?.notes} /></Field>
       {!!members.length && <p>{members.length} frete(s) vinculado(s). Para trocar o caminhão ou o motorista, primeiro desvincule esses fretes.</p>}
       {error && <p className="form-error" role="alert">{error}</p>}
-      <footer className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>Cancelar</button><button className="button primary" disabled={saving}>{saving ? 'Salvando…' : 'Salvar viagem'}</button></footer>
+      <footer className="modal-actions">{trip && <button type="button" className="button danger" disabled={saving || members.length > 0} onClick={() => void onDelete(trip)}>Excluir viagem</button>}<button type="button" className="button secondary" onClick={onClose}>Cancelar</button><button className="button primary" disabled={saving}>{saving ? 'Salvando…' : 'Salvar viagem'}</button></footer>
     </form>
   </Modal>;
 }
@@ -54,13 +55,11 @@ export function FleetTripsPanel({ fleet, onSaved, onEditFreight }: {
   const [editing, setEditing] = useState<FleetTrip | null>(null);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState('');
-  const [deleting, setDeleting] = useState<string | null>(null);
   async function remove(trip: FleetTrip) {
     if (!window.confirm(`Excluir a viagem ${trip.name}? Só é possível excluir viagens sem fretes vinculados.`)) return;
-    setDeleting(trip.id); setError('');
-    try { await apiMutation(`/api/fleet/trips/${trip.id}`, { method: 'DELETE' }); onSaved('Viagem excluída.'); }
+    setError('');
+    try { await apiMutation(`/api/fleet/trips/${trip.id}`, { method: 'DELETE' }); setOpen(false); onSaved('Viagem excluída.'); }
     catch (e) { setError(e instanceof Error ? e.message : 'Não foi possível excluir.'); }
-    finally { setDeleting(null); }
   }
   return <section className="fleet-stack">
     <header className="fleet-panel-header"><div><h2>Resultado operacional da viagem</h2><p>Receita de todos os veículos transportados menos custos diretos e compartilhados. Sem rateio de custo fixo.</p></div>
@@ -70,16 +69,16 @@ export function FleetTripsPanel({ fleet, onSaved, onEditFreight }: {
     {!fleet.tripResults.length && <div className="panel inline-empty">Nenhuma viagem neste mês. Crie a viagem e selecione-a no cadastro de cada frete transportado.</div>}
     {fleet.tripResults.map(trip => <article className="panel table-panel" key={trip.id}>
       <header className="fleet-panel-header"><div><h3>{trip.name}</h3><p>{formatDate(trip.operationDate)} · {trip.vehiclePlate} · {trip.driverName} · {trip.freights.length} veículo(s) transportado(s)</p></div>
-        {fleet.canManage && <div className="table-actions"><button className="button secondary" onClick={() => { setEditing(trip); setOpen(true); }}>Editar viagem</button><button className="button danger" disabled={deleting === trip.id || trip.freights.length > 0} onClick={() => remove(trip)}>Excluir</button></div>}
+        {fleet.canManage && <div className="table-actions"><button type="button" className="table-action" aria-label={`Editar viagem ${trip.name}`} title="Editar viagem" onClick={() => { setEditing(trip); setOpen(true); }}><Icons.chevron /></button></div>}
       </header>
       <div className="fleet-form-preview"><div><span>Receita</span><strong>{formatMoney(trip.revenueCents)}</strong></div><div><span>Comissões e despesas diretas</span><strong>{formatMoney(trip.directCostCents)}</strong></div><div><span>Custos da viagem</span><strong>{formatMoney(trip.sharedCostCents)}</strong></div><div><span>Resultado operacional</span><strong className={trip.resultCents < 0 ? 'negative' : 'positive'}>{formatMoney(trip.resultCents)}</strong></div></div>
       <p className="fleet-update-note">Diesel: {formatMoney(trip.fuelCostCents)} · Pedágio: {formatMoney(trip.tollCents)} · Outros: {formatMoney(trip.otherCostCents)}</p>
       {trip.notes && <p className="fleet-update-note">{trip.notes}</p>}
       <div className="responsive-table"><table><thead><tr><th>Cliente / veículo transportado</th><th>Receita</th><th>Margem de contribuição</th><th>Ações</th></tr></thead><tbody>
-        {trip.freights.map(f => <tr key={f.id}><td data-label="Cliente / veículo transportado"><strong>{f.clientName}</strong><small>{f.cargoVehicleModel} {f.cargoPlate}</small></td><td data-label="Receita">{formatMoney(f.freightAmountCents)}</td><td data-label="Margem de contribuição">{formatMoney(f.contributionCents)}</td><td data-label="Ações">{fleet.canEditFreights && <button className="button secondary" onClick={() => onEditFreight(f)}>Editar frete</button>}</td></tr>)}
+        {trip.freights.map(f => <tr key={f.id}><td data-label="Cliente / veículo transportado"><strong>{f.clientName}</strong><small>{f.cargoVehicleModel} {f.cargoPlate}</small></td><td data-label="Receita">{formatMoney(f.freightAmountCents)}</td><td data-label="Margem de contribuição">{formatMoney(f.contributionCents)}</td><td data-label="Ações">{fleet.canEditFreights && <button type="button" className="table-action" aria-label={`Editar frete de ${f.clientName}`} title="Editar frete" onClick={() => onEditFreight(f)}><Icons.chevron /></button>}</td></tr>)}
         {!trip.freights.length && <tr><td colSpan={4}>Vincule os veículos transportados selecionando esta viagem no cadastro dos fretes.</td></tr>}
       </tbody></table></div>
     </article>)}
-    {open && <TripModal key={editing?.id ?? 'new'} trip={editing} fleet={fleet} onClose={() => setOpen(false)} onSaved={message => { setOpen(false); onSaved(message); }} />}
+    {open && <TripModal key={editing?.id ?? 'new'} trip={editing} fleet={fleet} onClose={() => setOpen(false)} onSaved={message => { setOpen(false); onSaved(message); }} onDelete={remove} />}
   </section>;
 }
