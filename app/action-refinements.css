@@ -14,30 +14,6 @@
   display: none;
 }
 
-/* Certificado digital: documento/caderno com a mesma animação dos demais itens. */
-.main-nav a[href="/certificado"] svg {
-  display: none;
-}
-
-.main-nav a[href="/certificado"]::before {
-  content: "";
-  width: 19px;
-  height: 19px;
-  flex: 0 0 19px;
-  background: currentColor;
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' d='M6 3h12a2 2 0 0 1 2 2v16H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm2 0v18M11 8h6M11 12h6M11 16h4'/%3E%3C/svg%3E") center / contain no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' d='M6 3h12a2 2 0 0 1 2 2v16H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm2 0v18M11 8h6M11 12h6M11 16h4'/%3E%3C/svg%3E") center / contain no-repeat;
-  transition: transform .18s ease;
-}
-
-.main-nav a[href="/certificado"]:hover::before {
-  transform: translateX(76px) scale(1.22);
-}
-
-.sidebar-collapsed .main-nav a[href="/certificado"]:hover::before {
-  transform: scale(1.18);
-}
-
 /* Botões comuns: melhora acabamento sem substituir interações existentes. */
 .button {
   min-height: 40px;
@@ -322,10 +298,6 @@ html[data-theme="dark"] .table-actions .button.danger.compact-button:focus-visib
 }
 
 @media (max-width: 700px) {
-  .main-nav a[href="/certificado"]:hover::before {
-    transform: none;
-  }
-
   td[data-label="Ações"] {
     width: auto;
     min-width: 0;

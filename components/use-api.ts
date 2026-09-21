@@ -21,7 +21,6 @@ export function useApi<T>(url: string) {
     fetch(url, { cache: "no-store", signal: controller.signal })
       .then(async (response) => {
         const payload = (await response.json()) as T & { error?: string };
-        if (response.status === 402) window.location.assign("/certificado");
         if (!response.ok) throw new Error(payload.error || "Erro ao carregar.");
         return payload;
       })
@@ -45,7 +44,6 @@ export async function apiMutation<T>(
 ): Promise<T> {
   const response = await fetch(url, init);
   const payload = (await response.json()) as T & { error?: string };
-  if (response.status === 402) window.location.assign("/certificado");
   if (!response.ok) throw new Error(payload.error || "Não foi possível concluir.");
   return payload;
 }

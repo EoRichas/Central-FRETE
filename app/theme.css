@@ -328,16 +328,6 @@ html[data-theme="dark"] td {
   border-color: var(--line);
 }
 
-html[data-theme="dark"] .license-alert {
-  color: #f3dfae;
-  background: #31260f;
-  border-color: #5d4918;
-}
-
-html[data-theme="dark"] .license-alert a {
-  color: #ffe29a;
-}
-
 html[data-theme="dark"] .sidebar-user {
   border-top-color: rgb(255 255 255 / 10%);
 }

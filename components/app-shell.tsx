@@ -32,7 +32,6 @@ const navigation: Array<{
   { href: "/financeiro", label: "Financeiro", icon: Icons.wallet, roles: ["ADMIN", "GERENCIA", "FINANCEIRO"] },
   { href: "/vendedores", label: "Comissões", icon: Icons.users, roles: ["ADMIN", "GERENCIA", "VENDEDOR", "FINANCEIRO"] },
   { href: "/relatorios", label: "Relatórios", icon: Icons.chart, roles: ["ADMIN", "GERENCIA", "FINANCEIRO"] },
-  { href: "/certificado", label: "Certificado digital", icon: Icons.wallet, roles: ["ADMIN", "FINANCEIRO"] },
   { href: "/configuracoes", label: "Configurações", icon: Icons.settings, roles: ["ADMIN"] },
 ];
 
@@ -74,7 +73,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [darkMode, setDarkMode] = useState(false);
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [userLoaded, setUserLoaded] = useState(false);
-  const [license, setLicense] = useState<{ blocked: boolean; alert: string | null }>({blocked: false, alert: null});
 
   useEffect(() => {
     setDarkMode(document.documentElement.dataset.theme === "dark");
@@ -88,7 +86,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         if (response.status === 401 || response.status === 403) { window.location.assign(`/login?return_to=${encodeURIComponent(pathname)}`); return; }
         if (!response.ok) throw new Error("Sessão indisponível");
         const payload = await response.json();
-        if (!stopped) { setUser(payload.user); setLicense(payload.license); setUserLoaded(true); }
+        if (!stopped) { setUser(payload.user); setUserLoaded(true); }
       } catch { if (!stopped) { setUser(null); setUserLoaded(true); } }
     }
     void refresh();
@@ -119,7 +117,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   const visibleNavigation = user
-    ? navigation.filter((item) => item.roles.includes(user.role) && (!license.blocked || item.href === "/certificado"))
+    ? navigation.filter((item) => item.roles.includes(user.role))
     : navigation;
   const currentLabel = navigation.find(
     (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
@@ -191,8 +189,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
         <main className="page-content">
-          {license.alert && user?.role === "ADMIN" && <div className="license-alert" role="status">{license.alert} <Link href="/certificado">Ver mensalidade</Link></div>}
-          {!userLoaded ? <TruckLoader label="Carregando sessão…" /> : !user ? <section className="panel"><p>Não foi possível verificar sua sessão. Atualize a página.</p></section> : license.blocked && pathname !== "/certificado" ? <section className="panel billing-card"><h2>Acesso suspenso</h2><p>A licença mensal está pendente. Seus dados estão preservados.</p>{["ADMIN", "FINANCEIRO"].includes(user.role) ? <Link className="button primary" href="/certificado">Regularizar pagamento</Link> : <p>Solicite a regularização ao Administrador ou Financeiro.</p>}</section> : !allowed ? (
+          {!userLoaded ? <TruckLoader label="Carregando sessão…" /> : !user ? <section className="panel"><p>Não foi possível verificar sua sessão. Atualize a página.</p></section> : !allowed ? (
             <section className="panel">
               <span className="eyebrow">Acesso restrito</span>
               <h2>Seu perfil não permite abrir esta tela.</h2>

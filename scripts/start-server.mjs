@@ -1,4 +1,3 @@
-import { startBillingScheduler } from "./billing-scheduler.mjs";
 import { spawn } from "node:child_process";
 import { migrateDatabase } from "./migrate-postgres.mjs";
 import { readRuntimeConfig } from "./runtime-config.mjs";
@@ -56,9 +55,8 @@ try {
     { stdio: "inherit", env: process.env },
   );
 
-  const stopScheduler = startBillingScheduler();
   for (const signal of ["SIGINT", "SIGTERM"]) {
-    process.once(signal, () => { stopScheduler(); server.kill(signal); });
+    process.once(signal, () => { server.kill(signal); });
   }
 
   server.once("error", (error) => {
@@ -67,7 +65,6 @@ try {
   });
 
   server.once("exit", (code, signal) => {
-    stopScheduler();
     if (signal) process.kill(process.pid, signal);
     else process.exitCode = code ?? 1;
   });
