@@ -13,6 +13,7 @@ export async function migrateDatabase(configuration) {
     "005_detach_driver_vehicle.sql",
     "006_fleet_vehicle_cost_average_flag.sql",
     "008_fleet_results.sql",
+    "009_direct_paid_operation_costs.sql",
   ];
   const migrations = await Promise.all(
     migrationFiles.map((file) =>
