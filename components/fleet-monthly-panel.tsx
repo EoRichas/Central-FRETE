@@ -1,11 +1,10 @@
 "use client";
 import { useState } from 'react';
 import { apiMutation, useApi } from '@/components/use-api';
-import { Field, LoadingState, ErrorState } from '@/components/ui';
+import { Field, LoadingState, ErrorState, Modal } from '@/components/ui';
 import { calculateMonthlyResult, MONTHLY_ENTRY_LABELS, type MonthlyEntry, type MonthlyReport } from '@/lib/domain/fleet-results';
 import { competencyLabel, formatMoney, moneyInputToCents } from '@/lib/format';
 import { Icons } from '@/components/icons';
-import { Modal } from '@/components/ui';
 
 export function FleetMonthlyPanel({ competency }: { competency: string }) {
   const api = useApi<MonthlyReport>(`/api/fleet/monthly?competency=${competency}`);
