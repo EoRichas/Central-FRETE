@@ -75,10 +75,10 @@ function databaseError(error: unknown, query: string): ApiError {
   if (code === "23505") return new ApiError(409, "Já existe um registro com os dados informados.");
   if (code === "23503") return new ApiError(409, "O registro possui vínculos e não pode ser alterado dessa forma.");
   if (code === "42P01") {
-    return new ApiError(503, "As tabelas ainda não foram criadas. Execute npm run migrate antes de iniciar o sistema.");
+    return new ApiError(503, "As tabelas necessárias ainda não estão disponíveis.");
   }
 
-  return new ApiError(503, `Falha ao acessar o banco de dados: ${message}`);
+  return new ApiError(503, "Falha ao acessar o banco de dados.");
 }
 
 async function execute<T>(sql: string, params: unknown[] = []): Promise<QueryResult<T>> {
@@ -187,8 +187,13 @@ class SupabaseStorageBucket {
       body,
     });
     if (!response.ok) {
-      const message = await response.text();
-      throw new ApiError(503, `Falha ao salvar comprovante no Supabase Storage: ${message}`);
+      const providerMessage = await response.text();
+      console.error("central_frete_storage_put_error", {
+        status: response.status,
+        path,
+        providerMessage,
+      });
+      throw new ApiError(503, "Falha ao salvar comprovante no armazenamento.");
     }
   }
 
@@ -200,7 +205,11 @@ class SupabaseStorageBucket {
     });
     if (response.status === 404) return null;
     if (!response.ok || !response.body) {
-      throw new ApiError(503, "Falha ao ler comprovante no Supabase Storage.");
+      console.error("central_frete_storage_get_error", {
+        status: response.status,
+        path,
+      });
+      throw new ApiError(503, "Falha ao ler comprovante no armazenamento.");
     }
     return new SupabaseStorageObject(response.body, response.headers.get("content-type"));
   }
@@ -213,7 +222,11 @@ class SupabaseStorageBucket {
       body: JSON.stringify({ prefixes: [path] }),
     });
     if (!response.ok && response.status !== 404) {
-      throw new ApiError(503, "Falha ao remover comprovante do Supabase Storage.");
+      console.error("central_frete_storage_delete_error", {
+        status: response.status,
+        path,
+      });
+      throw new ApiError(503, "Falha ao remover comprovante do armazenamento.");
     }
   }
 }
