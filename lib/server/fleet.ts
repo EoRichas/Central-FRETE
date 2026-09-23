@@ -1,3 +1,5 @@
+import { allocateTripCost } from "@/lib/domain/trip-allocation";
+import { cargoVehiclesOrLegacy } from "@/lib/domain/cargo-vehicles";
 import { loadFleetTrips } from "@/lib/server/fleet-trips";
 import { calculateTripResult } from "@/lib/domain/fleet-results";
 import type {
@@ -60,6 +62,9 @@ type FreightRow = {
   deliveryCostCents: number;
   otherCostCents: number;
   actualFuelCostCents: number | null;
+  cargoVehicles: import("@/lib/domain/cargo-vehicles").CargoVehicle[] | null;
+  fuelLitersMilli: number | null;
+  fuelPumpAmountCents: number | null;
   paidAt: string | null;
   proofAttachmentId: string | null;
   paymentStatus: "EM_ABERTO" | "PAGO";
@@ -133,7 +138,8 @@ export async function loadFleetData(
       ),
       queryAll<FreightRow>(
         `select trip_id as tripId, yard_cost_cents as yardCostCents, pickup_cost_cents as pickupCostCents,
-          delivery_cost_cents as deliveryCostCents, other_cost_cents as otherCostCents, actual_fuel_cost_cents as actualFuelCostCents,
+          delivery_cost_cents as deliveryCostCents, other_cost_cents as otherCostCents, actual_fuel_cost_cents as actualFuelCostCents, cargo_vehicles as cargoVehicles,
+          fuel_liters_milli as fuelLitersMilli, fuel_pump_amount_cents as fuelPumpAmountCents,
           id, vehicle_id as vehicleId, vehicle_plate as vehiclePlate,
           driver_id as driverId, driver_name as driverName,
           client_name as clientName, cargo_vehicle_model as cargoVehicleModel,
@@ -196,13 +202,19 @@ export async function loadFleetData(
   }));
   const vehicleRates = new Map(vehicles.map((vehicle) => [vehicle.id, vehicle.averageCostPerKmCents]));
   const allFreights: FleetFreight[] = freightRows.map((row) => {
+    const trip = trips.find(t => t.id === row.tripId);
+    const memberIds = freightRows.filter(f => f.tripId === row.tripId).map(f => f.id);
     const metrics = calculateFleetFreightMetrics(
       row,
       parameters,
       (row.vehicleId ? vehicleRates.get(row.vehicleId) : null) ?? null,
+      trip ? { fuelCents: allocateTripCost(trip.fuelCostCents, memberIds, row.id),
+        tollCents: allocateTripCost(trip.tollCents, memberIds, row.id),
+        otherCents: allocateTripCost(trip.otherCostCents, memberIds, row.id) } : undefined,
     );
     return {
       ...row,
+      cargoVehicles: cargoVehiclesOrLegacy(row.cargoVehicles, row.cargoVehicleModel, row.cargoPlate),
       returnUsed: Boolean(row.returnUsed),
       ...metrics,
       possibleMatch: hasPossibleFleetMatch(

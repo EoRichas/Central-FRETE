@@ -11,8 +11,10 @@ import type {
 import {
   costCategoryLabel,
   isEditableOperationCostCategory,
+  isOperationPaymentCategory,
   FIXED_COST_ROWS,
   normalizeCostCategory,
+  ORIGIN_LOCATION_TYPE_LABELS,
 } from "@/lib/domain/operations";
 import {
   formatDate,
@@ -190,7 +192,7 @@ export function SaleDetailScreen({ id }: { id: string }) {
         body: JSON.stringify({
           costId: operationCost.id,
           description: form.get("description"),
-          pixDetails: isEditableOperationCostCategory(operationCost.category)
+          pixDetails: isOperationPaymentCategory(operationCost.category)
             ? form.get("pixDetails")
             : operationCost.pixDetails,
           occurredOn: form.get("occurredOn") || null,
@@ -275,6 +277,7 @@ export function SaleDetailScreen({ id }: { id: string }) {
             <Link className="button secondary" href="/vendas">
               Voltar
             </Link>
+            <Link className="button secondary" href={`/vendas/${sale.id}/os`}>Visualizar OS</Link>
             {canEditSale && (
               <Link className="table-action" href={`/vendas/${sale.id}/editar`} aria-label="Editar venda" title="Editar venda">
                 <Icons.chevron />
@@ -306,8 +309,10 @@ export function SaleDetailScreen({ id }: { id: string }) {
         <article className="panel detail-card">
           <header><div><span className="eyebrow">Cadastro</span><h2>Dados da operação</h2></div></header>
           <dl className="details-list">
+            <div className="full"><dt>Veículos transportados ({sale.cargoVehicles.length})</dt><dd>{sale.cargoVehicles.map((v, i) => <div key={i}>{i + 1}. {[v.model, v.plate, v.identification].filter(Boolean).join(" · ") || "Não informado"}</div>)}</dd></div>
             <div><dt>Cliente</dt><dd>{sale.clientName ?? "CLIENTE NÃO INFORMADO"}</dd></div>
             <div><dt>Prestador inicial</dt><dd>{sale.initialProviderName ?? "—"}</dd></div>
+            <div><dt>Local da origem</dt><dd>{sale.originLocationType ? ORIGIN_LOCATION_TYPE_LABELS[sale.originLocationType] : "—"}</dd></div>
             <div><dt>Coleta</dt><dd>{sale.pickupAddressSnapshot ?? sale.origin}</dd></div>
             <div><dt>Entrega</dt><dd>{sale.deliveryAddressSnapshot ?? sale.destination}</dd></div>
             <div><dt>Prazo operacional</dt><dd>{sale.operationalDeadlineDays ? `${sale.operationalDeadlineDays} dias` : "—"}</dd></div>
@@ -437,7 +442,7 @@ export function SaleDetailScreen({ id }: { id: string }) {
         {operationCost && (
           <form key={operationCost.id} className="modal-body form-stack" onSubmit={saveOperationCost}>
             <Field label="Referência"><input name="description" defaultValue={operationCost.description ?? ""} /></Field>
-            {isEditableOperationCostCategory(operationCost.category) && (
+            {isOperationPaymentCategory(operationCost.category) && (
               <Field label="Dados PIX" hint="Informe a chave PIX, o tipo da chave e o titular para o pagamento da coleta ou entrega.">
                 <textarea name="pixDetails" rows={3} defaultValue={operationCost.pixDetails ?? ""} placeholder="Ex.: CHAVE: 11 99999-9999 · TIPO: TELEFONE · TITULAR: EMPRESA" />
               </Field>

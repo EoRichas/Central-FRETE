@@ -9,7 +9,7 @@ import {
 import { getSale } from "@/lib/server/repository";
 import {
   EDITABLE_OPERATION_COST_CATEGORIES,
-  isEditableOperationCostCategory,
+  isOperationPaymentCategory,
 } from "@/lib/domain/operations";
 import {
   asObject,
@@ -80,7 +80,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       : null;
     const description = upper(payload.description);
     const pixDetails =
-      isEditableOperationCostCategory(previous.category) &&
+      isOperationPaymentCategory(previous.category) &&
       Object.prototype.hasOwnProperty.call(payload, "pixDetails")
         ? optionalString(payload.pixDetails)
         : previous.pixDetails;

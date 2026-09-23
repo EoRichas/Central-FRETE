@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-export function useApi<T>(url: string) {
+export function useApi<T>(url: string | null) {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -12,6 +12,10 @@ export function useApi<T>(url: string) {
 
   useEffect(() => {
     const controller = new AbortController();
+    if (url === null) {
+      Promise.resolve().then(() => { if (!controller.signal.aborted) { setData(null); setError(null); setLoading(false); } });
+      return () => controller.abort();
+    }
     Promise.resolve().then(() => {
       if (!controller.signal.aborted) {
         setLoading(true);

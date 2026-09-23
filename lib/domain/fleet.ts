@@ -1,3 +1,5 @@
+import type { CargoVehicle } from "@/lib/domain/cargo-vehicles";
+import type { TripCostShare } from "./trip-allocation.ts";
 import type { FleetTrip, TripResult } from "./fleet-results.ts";
 export const FLEET_OPERATIONAL_STATUSES = [
   "SEM_PREVISAO",
@@ -71,6 +73,9 @@ export type FleetDriver = {
 };
 
 export type FleetFreightBase = {
+  cargoVehicles?: CargoVehicle[];
+  fuelLitersMilli?: number | null;
+  fuelPumpAmountCents?: number | null;
   tripId?: string | null;
   yardCostCents?: number;
   pickupCostCents?: number;
@@ -102,6 +107,10 @@ export type FleetFreightMetrics = {
   directCostCents: number;
   contributionCents: number;
   contributionBasisPoints: number;
+  estimatedFuelCostCents: number;
+  fuelCostSource: "REALIZADO" | "ESTIMADO" | "VIAGEM_HISTORICA";
+  historicalFuelShareCents: number;
+  sharedTransportCostCents: number;
   fuelCostCents: number;
   costPerKmCents: number | null;
   costsConfigured: boolean;
@@ -200,13 +209,16 @@ export function calculateFleetFreightMetrics(
   freight: Pick<FleetFreightBase, "distanceMeters" | "freightAmountCents" | "tollCents" | "driverCommissionCents"> & Partial<Pick<FleetFreightBase, "tripId" | "yardCostCents" | "pickupCostCents" | "deliveryCostCents" | "otherCostCents" | "actualFuelCostCents">>,
   parameters: Pick<FleetParameters, "fuelPriceCents" | "averageConsumptionMilliKmPerLiter">,
   vehicleCostPerKmCents: number | null,
+  tripShare?: TripCostShare,
 ): FleetFreightMetrics {
   const distanceKm = freight.distanceMeters / 1_000;
   const consumptionKmPerLiter = parameters.averageConsumptionMilliKmPerLiter / 1_000;
   const estimatedFuelCostCents = consumptionKmPerLiter > 0
     ? Math.round((distanceKm / consumptionKmPerLiter) * parameters.fuelPriceCents)
     : 0;
-  const fuelCostCents = freight.tripId ? 0 : (freight.actualFuelCostCents ?? estimatedFuelCostCents);
+  const fuelCostCents = freight.actualFuelCostCents ?? (freight.tripId ? tripShare?.fuelCents ?? 0 : estimatedFuelCostCents);
+  const fuelCostSource = freight.actualFuelCostCents != null ? "REALIZADO" : freight.tripId ? "VIAGEM_HISTORICA" : "ESTIMADO";
+  const sharedTransportCostCents = freight.tripId ? (tripShare?.tollCents ?? 0) + (tripShare?.otherCents ?? 0) : 0;
   const directCostCents = freight.driverCommissionCents + (freight.yardCostCents ?? 0) + (freight.pickupCostCents ?? 0) + (freight.deliveryCostCents ?? 0) + (freight.otherCostCents ?? 0);
   const contributionCents = freight.freightAmountCents - directCostCents;
   const rateAvailable = vehicleCostPerKmCents !== null && Number.isFinite(vehicleCostPerKmCents) && vehicleCostPerKmCents >= 0;
@@ -217,7 +229,7 @@ export function calculateFleetFreightMetrics(
   // O rateio é uma informação independente da placa.
   // Ele não bloqueia o frete e não compõe o custo total nem a margem líquida.
   const totalCostCents =
-    fuelCostCents +
+    fuelCostCents + sharedTransportCostCents +
     (freight.tripId ? 0 : freight.tollCents) +
     directCostCents;
   const netRevenueCents = freight.freightAmountCents - totalCostCents;
@@ -230,6 +242,8 @@ export function calculateFleetFreightMetrics(
     contributionCents,
     contributionBasisPoints: freight.freightAmountCents > 0 ? Math.round(contributionCents * 10_000 / freight.freightAmountCents) : 0,
     fuelCostCents,
+    estimatedFuelCostCents, fuelCostSource, sharedTransportCostCents,
+    historicalFuelShareCents: tripShare?.fuelCents ?? 0,
     costPerKmCents: rateAvailable ? vehicleCostPerKmCents : null,
     // A base mensal não é requisito para concluir custo/margem do frete.
     costsConfigured: true,
@@ -244,9 +258,10 @@ export function calculateFleetFreightPreview(
   draft: Pick<FleetFreightBase, "vehicleId" | "distanceMeters" | "freightAmountCents" | "tollCents" | "driverCommissionCents"> & Partial<Pick<FleetFreightBase, "tripId" | "yardCostCents" | "pickupCostCents" | "deliveryCostCents" | "otherCostCents" | "actualFuelCostCents">>,
   parameters: FleetParameters,
   vehicles: Pick<FleetVehicle, "id" | "averageCostPerKmCents">[],
+  tripShare?: TripCostShare,
 ): FleetFreightMetrics {
   const rate = vehicles.find((vehicle) => vehicle.id === draft.vehicleId)?.averageCostPerKmCents ?? null;
-  return calculateFleetFreightMetrics(draft, parameters, rate);
+  return calculateFleetFreightMetrics(draft, parameters, rate, tripShare);
 }
 
 export function hasPossibleFleetMatch(

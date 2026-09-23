@@ -1,3 +1,4 @@
+import { cargoVehiclesOrLegacy } from "@/lib/domain/cargo-vehicles";
 import type {
   CostRecord,
   DashboardData,
@@ -40,6 +41,7 @@ function placeholders(count: number) {
 }
 
 export type SaleFilters = {
+  id?: string;
   competency?: string;
   query?: string;
   operationalStatus?: string;
@@ -55,6 +57,7 @@ export async function listSales(
 ): Promise<SaleRecord[]> {
   const where: string[] = [];
   const params: unknown[] = [];
+  if (filters.id) { where.push("s.id = ?"); params.push(filters.id); }
   if (filters.competency) {
     where.push("s.competency = ?");
     params.push(filters.competency);
@@ -72,9 +75,10 @@ export async function listSales(
     where.push(`(
       upper(s.sale_number) like ? or upper(coalesce(c.legal_name, '')) like ? or
       coalesce(c.cpf_cnpj, '') like ? or upper(coalesce(s.vehicle, '')) like ? or
-      upper(coalesce(s.plate, '')) like ? or upper(s.origin) like ? or upper(s.destination) like ?
+      upper(coalesce(s.plate, '')) like ? or upper(s.origin) like ? or upper(s.destination) like ? or
+      upper(coalesce(case when f.id is not null then f.cargo_vehicles else s.cargo_vehicles end, '[]'::jsonb)::text) like ?
     )`);
-    params.push(term, term, term, term, term, term, term);
+    params.push(term, term, term, term, term, term, term, term);
   }
   if (user.role === "VENDEDOR") {
     where.push("(s.seller_id = ? or upper(s.seller_name) = upper(?))");
@@ -86,11 +90,13 @@ export async function listSales(
   params.push(limit, offset);
   const sales = await queryAll<SaleRow>(
     `select
-      s.id, s.sale_number as saleNumber, s.sale_date as saleDate,
+      s.id, s.fleet_freight_id as fleetFreightId, s.payment_condition as paymentCondition,
+      case when f.id is not null then f.cargo_vehicles else s.cargo_vehicles end as cargoVehicles, s.sale_number as saleNumber, s.sale_date as saleDate,
       s.competency, s.seller_id as sellerId, s.seller_name as sellerName,
       s.client_id as clientId, c.legal_name as clientName,
-      c.cpf_cnpj as clientDocument, s.vehicle, s.plate,
+      c.cpf_cnpj as clientDocument, case when f.id is not null then f.cargo_vehicle_model else s.vehicle end as vehicle, case when f.id is not null then f.cargo_plate else s.plate end as plate,
       s.initial_provider_name as initialProviderName, s.origin, s.destination,
+      s.origin_location_type as originLocationType,
       s.pickup_address_snapshot as pickupAddressSnapshot,
       s.delivery_address_snapshot as deliveryAddressSnapshot,
       s.operational_deadline_days as operationalDeadlineDays,
@@ -104,8 +110,9 @@ export async function listSales(
       s.costs_pending as costsPending, s.source_row as sourceRow
     from freight_sales s
     left join clients c on c.id = s.client_id
+    left join fleet_freights f on f.id = s.fleet_freight_id
     ${where.length ? `where ${where.join(" and ")}` : ""}
-    order by s.sale_date desc, cast(s.sale_number as integer) desc
+    order by s.sale_date desc, case when s.sale_number ~ '^[0-9]{4}-[0-9]+$' then split_part(s.sale_number,'-',2)::numeric when s.sale_number ~ '^[0-9]+$' then s.sale_number::numeric else 0 end desc, s.id desc
     limit ? offset ?`,
     params,
   );
@@ -183,6 +190,7 @@ export async function listSales(
     });
     return {
       ...row,
+      cargoVehicles: cargoVehiclesOrLegacy(row.cargoVehicles, row.vehicle, row.plate),
       costsPending: Boolean(row.costsPending),
       costs: saleCosts,
       payments,
@@ -204,7 +212,7 @@ export async function getSale(
   user: CurrentUser,
   id: string,
 ): Promise<SaleRecord | null> {
-  const sales = await listSales(user, { limit: 500 });
+  const sales = await listSales(user, { id, limit: 1 });
   return sales.find((sale) => sale.id === id) ?? null;
 }
 

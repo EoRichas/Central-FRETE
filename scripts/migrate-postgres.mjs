@@ -14,6 +14,8 @@ export async function migrateDatabase(configuration) {
     "006_fleet_vehicle_cost_average_flag.sql",
     "008_fleet_results.sql",
     "009_direct_paid_operation_costs.sql",
+    "010_fleet_cargo_sales_orders.sql",
+    "011_sale_origin_location_type.sql",
   ];
   const migrations = await Promise.all(
     migrationFiles.map((file) =>

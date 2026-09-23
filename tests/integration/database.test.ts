@@ -33,7 +33,7 @@ mock.module('../../lib/server/d1.ts', { namedExports: {
 
 before(async () => {
  await pg.exec('CREATE ROLE anon; CREATE ROLE authenticated;');
- for (let pass = 0; pass < 2; pass++) for (const file of ['001_central_frete_postgres.sql', '002_fleet.sql', '003_fleet_billing.sql', '004_operational_role.sql', '005_detach_driver_vehicle.sql', '006_fleet_vehicle_cost_average_flag.sql', '008_fleet_results.sql']) await pg.exec(await readFile(new URL(`../../database/${file}`, import.meta.url), 'utf8'));
+ for (let pass = 0; pass < 2; pass++) for (const file of ['001_central_frete_postgres.sql', '002_fleet.sql', '003_fleet_billing.sql', '004_operational_role.sql', '005_detach_driver_vehicle.sql', '006_fleet_vehicle_cost_average_flag.sql', '008_fleet_results.sql', '009_direct_paid_operation_costs.sql', '010_fleet_cargo_sales_orders.sql', '011_sale_origin_location_type.sql']) await pg.exec(await readFile(new URL(`../../database/${file}`, import.meta.url), 'utf8'));
  await pg.exec("INSERT INTO users(id,email,name,role) VALUES ('admin','admin@example.test','Admin','ADMIN'),('finance','finance@example.test','Finance','FINANCEIRO'),('seller','seller@example.test','Seller','VENDEDOR');");
  process.env.CENTRAL_FRETE_SESSION_SECRET = 'test-secret-never-use-in-production-1234';
 });
@@ -142,6 +142,34 @@ test('vendedor anexa na própria venda sem ganhar permissão para confirmar paga
  assert.equal(other.status,404,await other.clone().text());
  const paid = await payments.POST(await request('/api/sales/own/payments','seller','POST',{amountCents:1000}), {params:Promise.resolve({id:'own'})});
  assert.equal(paid.status,403);
+});
+
+test('vendedor consulta prestadores e despesas de nota fiscal e outras despesas podem ser editadas', async () => {
+ await pg.exec("insert into providers(id,name,reference_name,yard_address,document,active) values ('provider-read','PRESTADOR TESTE','REFERENCIA TESTE','RUA DO PATIO','12345678000199',1)");
+ const providers=await import('../../app/api/providers/route.ts');
+ const providerId=await import('../../app/api/providers/[id]/route.ts');
+ const listed=await providers.GET(await request('/api/providers','seller'));
+ assert.equal(listed.status,200,await listed.clone().text());
+ assert.equal((await listed.json()).providers.some((item:{id:string})=>item.id==='provider-read'),true);
+ const denied=await providerId.PATCH(await request('/api/providers/provider-read','seller','PATCH',{companyName:'ALTERADO',referenceName:'ALTERADO',yardAddress:'ALTERADO',active:true}),{params:Promise.resolve({id:'provider-read'})});
+ assert.equal(denied.status,403);
+
+ const sales=await import('../../app/api/sales/route.ts');
+ const operationCosts=await import('../../app/api/sales/[id]/operation-costs/route.ts');
+ const response=await sales.POST(await request('/api/sales','seller','POST',{...salePayload,saleDate:'2030-09-23',financialDueDate:'2030-09-30',costs:[
+   {category:'NOTA_FISCAL_IMPOSTO',description:'IMPOSTO DA NOTA',amountCents:1200,occurredOn:'2030-09-23'},
+   {category:'OUTRAS_DESPESAS',description:'DESPESA EXTRA',amountCents:800,occurredOn:'2030-09-23'},
+ ]}));
+ assert.equal(response.status,201,await response.clone().text());
+ const sale=await response.json();
+ const costs=await queryAll("select id,category from freight_costs where sale_id=? order by category",[sale.id]) as Array<{id:string;category:string}>;
+ assert.deepEqual(costs.map(cost=>cost.category),['NOTA_FISCAL_IMPOSTO','OUTRAS_DESPESAS']);
+ for (const cost of costs) {
+   const edited=await operationCosts.PATCH(await request(`/api/sales/${sale.id}/operation-costs`,'finance','PATCH',{costId:cost.id,description:`EDITADO ${cost.category}`,amountCents:cost.category==='NOTA_FISCAL_IMPOSTO'?1500:900,status:'EM_ABERTO'}),{params:Promise.resolve({id:sale.id})});
+   assert.equal(edited.status,200,await edited.clone().text());
+ }
+ const updated=await queryAll("select category,amount_cents,description from freight_costs where sale_id=? order by category",[sale.id]) as Array<{category:string;amount_cents:number;description:string}>;
+ assert.deepEqual(updated.map(cost=>[cost.category,cost.amount_cents,cost.description]),[['NOTA_FISCAL_IMPOSTO',1500,'EDITADO NOTA_FISCAL_IMPOSTO'],['OUTRAS_DESPESAS',900,'EDITADO OUTRAS_DESPESAS']]);
 });
 
 test('Frota salva e reabre 1200 km, usa média da placa e mantém histórico ao filtrar mês', async () => {
@@ -290,7 +318,8 @@ test('viagem agrupa dois veículos, conta diesel uma vez e fecha o mês com hist
  assert.equal(result.directCostCents,47000);
  assert.equal(result.sharedCostCents,45000);
  assert.equal(result.resultCents,158000);
- assert.equal(result.freights[0].fuelCostCents,0);
+ assert.equal(result.freights[0].fuelCostCents,15000);
+ assert.equal(result.freights.reduce((sum,f)=>sum+f.netRevenueCents,0),result.resultCents);
  assert.equal(result.freights.find(f => f.id === f1.id)!.contributionCents,79000);
  // Costs cannot be entered again on an individual freight in a shared trip.
  assert.equal((await freightsApi.POST(await request('/api/fleet/freights','admin','POST',{...base,tollCents:1000}))).status,400);
@@ -345,4 +374,131 @@ test('viagem agrupa dois veículos, conta diesel uma vez e fecha o mês com hist
  assert.equal(security.length,3); assert.ok(security.every(t => (t as {rowsecurity:boolean}).rowsecurity));
  const grants = await queryAll("select * from information_schema.role_table_grants where grantee in ('anon','authenticated') and table_name in ('fleet_trips','company_monthly_entries','company_monthly_closings')");
  assert.equal(grants.length,0);
+});
+
+const salePayload = { saleDate:'2026-09-23',financialDueDate:'2026-09-30',freightAmountCents:180000,commissionBasisPoints:700,
+ operationalStatus:'CONFIRMAR',sellerName:'SELLER',origin:'ORIGEM TESTE',originLocationType:'PATIO',destination:'DESTINO TESTE',paymentMethod:'PIX',
+ cargoVehicles:[{model:'MODELO A',plate:'AAA1A11',identification:'CHASSI-1'},{model:'MODELO B',plate:null,identification:'CHASSI-2'}],
+ paymentCondition:'À vista',notes:'Prazo após embarque',operationalDeadlineDays:8,costs:[] };
+
+test('numeração anual nasce na transação, rejeita manual, preserva legado e reinicia por ano',async()=>{
+ const api=await import('../../app/api/sales/route.ts');
+ const response=await api.POST(await request('/api/sales','seller','POST',salePayload));
+ assert.equal(response.status,201,await response.clone().text());
+ const first=await response.json();assert.equal(first.saleNumber,'2026-1');
+ const responses=await Promise.all(Array.from({length:8},async()=>api.POST(await request('/api/sales','seller','POST',salePayload))));
+ const rows=await Promise.all(responses.map(async r=>{assert.equal(r.status,201,await r.clone().text());return r.json();}));
+ assert.equal(new Set(rows.map(r=>r.saleNumber)).size,8);
+ assert.equal((await api.POST(await request('/api/sales','seller','POST',{...salePayload,saleNumber:'2026-999'}))).status,400);
+ assert.equal((await api.POST(await request('/api/sales','seller','POST',{...salePayload,saleDate:'2026-02-30'}))).status,400);
+ const nextYear=await api.POST(await request('/api/sales','seller','POST',{...salePayload,saleDate:'2027-01-01'}));
+ assert.equal((await nextYear.json()).saleNumber,'2027-1');
+ const edit=await import('../../app/api/sales/[id]/route.ts');
+ assert.equal((await edit.PATCH(await request('/api/sales/x','admin','PATCH',{...salePayload,saleNumber:'WRONG'}),{params:Promise.resolve({id:first.id})})).status,400);
+ await assert.rejects(pg.query("update freight_sales set sale_number='WRONG' where id=$1",[first.id]));
+ assert.equal((await queryFirst("select sale_number from freight_sales where id='own'") as {sale_number:string}).sale_number,'1');
+ const {getSale,listSales}=await import('../../lib/server/repository.ts');
+ const user={id:'seller',name:'Seller',email:'seller@example.test',role:'VENDEDOR' as const};
+ assert.equal((await getSale(user,first.id))!.cargoVehicles.length,2);
+ assert.ok((await listSales(user)).length>=10); // annual numbers no longer fail an integer cast
+ await pg.query('delete from freight_sales where id=$1',[rows[7].id]);
+ const afterDelete=await api.POST(await request('/api/sales','seller','POST',salePayload));
+ assert.equal((await afterDelete.json()).saleNumber,'2026-10');
+});
+
+test('falha após gerar número reverte venda e contador no PostgreSQL',async()=>{
+ const {getD1}=await import('../../lib/server/d1.ts');const db=await getD1();
+ const before=await queryFirst('select last_value from sale_number_counters where year=2026');
+ await assert.rejects(db.batch([
+   db.prepare(`insert into freight_sales(id,sale_number,sale_date,competency,seller_name,origin,destination,financial_due_date,operational_status,freight_amount_cents,commission_basis_points,created_by)
+     values('rollback-sale',null,'2026-09-23','2026-09','SELLER','A','B','2026-09-30','CONFIRMAR',100,0,'admin')`),
+   db.prepare("insert into receivable_installments(id,sale_id,installment_number,installment_count,due_date,payment_method,expected_amount_cents) values('bad','rollback-sale',0,1,'2026-09-30','PIX',100)"),
+ ]));
+ assert.equal(await queryFirst("select id from freight_sales where id='rollback-sale'"),null);
+ assert.deepEqual(await queryFirst('select last_value from sale_number_counters where year=2026'),before);
+});
+
+test('múltiplos veículos e combustível persistem; financeiro não altera a carga; zero real substitui estimativa',async()=>{
+ const create=await import('../../app/api/fleet/freights/route.ts');
+ const patch=await import('../../app/api/fleet/freights/[id]/route.ts');
+ const {loadFleetData}=await import('../../lib/server/fleet.ts');
+ const {loadMonthlyReport}=await import('../../lib/server/monthly-results.ts');
+ const {calculateMonthlyResult}=await import('../../lib/domain/fleet-results.ts');
+ const payload={vehicleId:'results-truck',driverId:'results-driver',clientName:'CLIENTE CARGA',origin:'A',destination:'B',pickupDate:'2028-01-10',billingDate:'2028-01-11',operationalStatus:'FATURADO',priority:'NORMAL',freightAmountCents:100000,distanceMeters:100000,tollCents:1000,driverCommissionCents:2000,returnUsed:false,
+ cargoVehicles:salePayload.cargoVehicles,fuelLitersMilli:125500,fuelPumpAmountCents:75174,actualFuelCostCents:70000};
+ const response=await create.POST(await request('/api/fleet/freights','admin','POST',payload));assert.equal(response.status,201,await response.clone().text());const {id}=await response.json();
+ let freight=(await loadFleetData(true,true,true,false,'2028-01')).freights.find(f=>f.id===id)!;
+ assert.equal(freight.cargoVehicles!.length,2);assert.equal(freight.fuelLitersMilli,125500);assert.equal(freight.fuelPumpAmountCents,75174);
+ assert.equal(freight.actualFuelCostCents,70000);assert.equal(freight.fuelCostCents,70000);assert.equal(freight.fuelCostSource,'REALIZADO');assert.equal(freight.netRevenueCents,27000);
+ assert.equal(calculateMonthlyResult((await loadMonthlyReport('2028-01')).current).resultCents,27000);
+ for(const invalid of [{cargoVehicles:[]},{cargoVehicles:[{model:42}]},{cargoVehicles:[{model:'X'.repeat(81)}]},{fuelLitersMilli:-1},{fuelLitersMilli:1.5},{fuelPumpAmountCents:true},{actualFuelCostCents:-1}]) {
+   assert.equal((await create.POST(await request('/api/fleet/freights','admin','POST',{...payload,...invalid}))).status,400);
+ }
+ const edited=await patch.PATCH(await request('/api/fleet/freights/x','finance','PATCH',{...payload,actualFuelCostCents:0,cargoVehicles:[{model:'NÃO PERMITIDO'}],clientName:'ERRADO'}),{params:Promise.resolve({id})});
+ assert.equal(edited.status,200,await edited.clone().text());
+ freight=(await loadFleetData(true,true,true,false,'2028-01')).freights.find(f=>f.id===id)!;
+ assert.equal(freight.cargoVehicles![0].model,'MODELO A');assert.equal(freight.clientName,'CLIENTE CARGA');assert.equal(freight.fuelCostCents,0);
+ assert.equal(calculateMonthlyResult((await loadMonthlyReport('2028-01')).current).resultCents,97000);
+ // Partial legacy PATCH does not erase new fields.
+ const oldClient=await patch.PATCH(await request('/api/fleet/freights/x','admin','PATCH',{driverCommissionCents:2500}),{params:Promise.resolve({id})});assert.equal(oldClient.status,200,await oldClient.clone().text());
+ freight=(await loadFleetData(true,true,true,false,'2028-01')).freights.find(f=>f.id===id)!;assert.equal(freight.fuelLitersMilli,125500);assert.equal(freight.cargoVehicles!.length,2);
+});
+
+test('combustível real substitui a parcela histórica sem duplicar na viagem nem no fechamento',async()=>{
+ const {loadFleetData}=await import('../../lib/server/fleet.ts');
+ const {loadMonthlyReport}=await import('../../lib/server/monthly-results.ts');
+ const edit=await import('../../app/api/fleet/freights/[id]/route.ts');
+ let fleet=await loadFleetData(true,true,true,false,'2026-11');
+ const trip=fleet.tripResults[0];const f=trip.freights[0];
+ const before=(await loadMonthlyReport('2026-11')).current;
+ const oldTrip=before.trips.find(t=>t.id===trip.id)!;
+ const res=await edit.PATCH(await request('/api/fleet/freights/x','admin','PATCH',{actualFuelCostCents:12345,fuelLitersMilli:20123,fuelPumpAmountCents:615}),{params:Promise.resolve({id:f.id})});assert.equal(res.status,200,await res.clone().text());
+ fleet=await loadFleetData(true,true,true,false,'2026-11');
+ const updated=fleet.tripResults.find(t=>t.id===trip.id)!;
+ assert.equal(updated.sharedCostCents,trip.sharedCostCents-f.historicalFuelShareCents+12345);
+ assert.equal(updated.freights.reduce((sum,freight)=>sum+freight.netRevenueCents,0),updated.resultCents);
+ const after=(await loadMonthlyReport('2026-11')).current;
+ assert.equal(after.trips.find(t=>t.id===trip.id)!.costCents,oldTrip.costCents-f.historicalFuelShareCents+12345);
+ assert.ok(after.freights.filter(row=>updated.freights.some(f=>f.id===row.id)).every(row=>row.standaloneCostCents===0));
+});
+
+test('OS tem vínculo único, versões imutáveis, autorização e PDF com identidade Central',async()=>{
+ const sales=await import('../../app/api/sales/route.ts');const edit=await import('../../app/api/sales/[id]/route.ts');
+ const orders=await import('../../app/api/sales/[id]/service-order/route.ts');
+ const {PDFDocument}=await import('pdf-lib');
+ const response=await sales.POST(await request('/api/sales','seller','POST',salePayload));assert.equal(response.status,201,await response.clone().text());const sale=await response.json();
+ const context={params:Promise.resolve({id:sale.id})};
+ assert.equal((await orders.POST(await request('/api/sales/x/service-order','operator','POST'),context)).status,403);
+ assert.equal((await orders.POST(await request('/api/sales/other/service-order','seller','POST'),{params:Promise.resolve({id:'other'})})).status,404);
+ assert.equal((await orders.GET(await request('/api/sales/x/service-order?format=pdf','seller'),context)).status,404);
+ const emitted=await orders.POST(await request('/api/sales/x/service-order','seller','POST'),context);assert.equal(emitted.status,200,await emitted.clone().text());
+ const initial=await emitted.json();assert.equal(initial.latest.version,1);assert.equal(initial.latest.snapshot.saleId,sale.id);assert.equal(initial.latest.snapshot.cargoVehicles.length,2);
+ assert.equal(initial.latest.snapshot.originLocationType,'PATIO');
+ assert.equal(initial.latest.snapshot.issuer.name,'Central Express');assert.equal(initial.stale,false);
+ await Promise.all(Array.from({length:4},async()=>orders.POST(await request('/api/sales/x/service-order','seller','POST'),context)));
+ assert.equal((await queryAll('select * from service_orders where sale_id=?',[sale.id])).length,1);
+ assert.equal((await orders.GET(await request('/api/sales/x/service-order','seller'),context).then(r=>r.json())).versions.length,1);
+ const edited=await edit.PATCH(await request('/api/sales/x','admin','PATCH',{...salePayload,notes:'INFORMAÇÃO ATUALIZADA'}),context);assert.equal(edited.status,200,await edited.clone().text());
+ const stale=await orders.GET(await request('/api/sales/x/service-order','seller'),context).then(r=>r.json());assert.equal(stale.stale,true);assert.equal(stale.latest.snapshot.notes,initial.latest.snapshot.notes);
+ const issued=await orders.POST(await request('/api/sales/x/service-order','seller','POST'),context).then(r=>r.json());assert.equal(issued.latest.version,2);assert.equal(issued.latest.snapshot.notes,'INFORMAÇÃO ATUALIZADA');
+ const pdf=await orders.GET(await request('/api/sales/x/service-order?format=pdf&version=1','seller'),context);assert.equal(pdf.status,200,await pdf.clone().text());assert.equal(pdf.headers.get('Content-Type'),'application/pdf');
+ const bytes=new Uint8Array(await pdf.arrayBuffer());const document=await PDFDocument.load(bytes);assert.match(document.getTitle()!,/Central Express/);assert.ok(document.getPageCount()>=1);
+ if (process.env.CENTRAL_QA_OUTPUT) { const {mkdir,writeFile}=await import('node:fs/promises'); await mkdir(process.env.CENTRAL_QA_OUTPUT,{recursive:true}); await writeFile(`${process.env.CENTRAL_QA_OUTPUT}/service-order.pdf`,bytes); }
+ assert.equal((await orders.GET(await request('/api/sales/x/service-order?format=pdf&version=-1','seller'),context)).status,400);
+ assert.equal((await edit.DELETE(await request('/api/sales/x','admin','DELETE'),context)).status,409);
+});
+
+test('OS consulta todos os veículos do frete vinculado e detecta edição da carga',async()=>{
+ const sales=await import('../../app/api/sales/route.ts');const orders=await import('../../app/api/sales/[id]/service-order/route.ts');
+ const f=await queryFirst("select id from fleet_freights where client_name='CLIENTE CARGA'") as {id:string};
+ const payload={...salePayload,fleetFreightId:f.id,cargoVehicles:[{model:'IGNORADO'}]};
+ assert.equal((await sales.POST(await request('/api/sales','seller','POST',payload))).status,403);
+ const response=await sales.POST(await request('/api/sales','admin','POST',payload));assert.equal(response.status,201,await response.clone().text());const sale=await response.json();
+ const context={params:Promise.resolve({id:sale.id})};
+ const first=await orders.POST(await request('/api/sales/x/service-order','admin','POST'),context).then(r=>r.json());assert.equal(first.latest.snapshot.cargoVehicles.length,2);assert.equal(first.latest.snapshot.cargoVehicles[0].model,'MODELO A');
+ await pg.query("update fleet_freights set cargo_vehicles=$1::jsonb where id=$2",[JSON.stringify([{model:'ATUALIZADO',plate:null,identification:null}]),f.id]);
+ const report=await orders.GET(await request('/api/sales/x/service-order','admin'),context).then(r=>r.json());assert.equal(report.stale,true);assert.equal(report.latest.snapshot.cargoVehicles[0].model,'MODELO A');
+ const duplicate=await sales.POST(await request('/api/sales','admin','POST',payload));assert.notEqual(duplicate.status,201);
+ const tables=await queryAll("select tablename,rowsecurity from pg_tables where tablename in ('sale_number_counters','service_orders','service_order_versions')");assert.equal(tables.length,3);assert.ok(tables.every(t=>(t as {rowsecurity:boolean}).rowsecurity));
+ assert.equal((await queryAll("select * from information_schema.role_table_grants where grantee in ('anon','authenticated') and table_name in ('sale_number_counters','service_orders','service_order_versions')")).length,0);
 });
