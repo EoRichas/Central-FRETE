@@ -13,6 +13,20 @@ export const OPERATIONAL_STATUSES = OPERATIONAL_STATUS_OPTIONS.map(
 
 export type OperationalStatus = (typeof OPERATIONAL_STATUSES)[number];
 
+export const ORIGIN_LOCATION_TYPES = [
+  "PATIO",
+  "PORTA",
+  "PONTO_DE_ENCONTRO",
+] as const;
+
+export type OriginLocationType = (typeof ORIGIN_LOCATION_TYPES)[number];
+
+export const ORIGIN_LOCATION_TYPE_LABELS: Record<OriginLocationType, string> = {
+  PATIO: "PÁTIO",
+  PORTA: "PORTA",
+  PONTO_DE_ENCONTRO: "PONTO DE ENCONTRO",
+};
+
 export const FIXED_COST_ROWS = [
   {
     key: "NOTA_FISCAL_IMPOSTO",
@@ -103,7 +117,13 @@ export const PAYMENT_CONTROL_COST_CATEGORIES = [
   "PATIO_DESTINO",
 ] as const;
 
-export const EDITABLE_OPERATION_COST_CATEGORIES = PAYMENT_CONTROL_COST_CATEGORIES;
+// Custos editáveis no detalhe da venda. A edição permanece restrita ao
+// Administrador e ao Financeiro no endpoint; o vendedor apenas consulta.
+export const EDITABLE_OPERATION_COST_CATEGORIES = [
+  ...PAYMENT_CONTROL_COST_CATEGORIES,
+  "NOTA_FISCAL_IMPOSTO",
+  "OUTRAS_DESPESAS",
+] as const;
 
 export const DIRECT_PAID_OPERATION_COST_CATEGORIES = [
   "SEGURO_ALLIANZ",

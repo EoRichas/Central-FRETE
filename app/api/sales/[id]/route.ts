@@ -1,3 +1,4 @@
+import { parseSaleCargo } from "@/lib/server/sale-cargo";
 import { authorize } from "@/lib/server/auth";
 import {
   COST_CATEGORIES,
@@ -6,6 +7,7 @@ import {
   isDirectPaidOperationCostCategory,
   normalizeCostCategory,
   OPERATIONAL_STATUSES,
+  ORIGIN_LOCATION_TYPES,
 } from "@/lib/domain/operations";
 import {
   ApiError,
@@ -21,8 +23,6 @@ import {
   dateOnly,
   enumValue,
   integerInRange,
-  normalizePlate,
-  requiredString,
   requiredUpper,
   upper,
 } from "@/lib/server/validation";
@@ -57,6 +57,7 @@ export async function DELETE(request: Request, context: RouteContext) {
     const sale = await getSale(user, id);
     if (!sale) throw new ApiError(404, "Venda não encontrada.");
 
+    if (await queryFirst('select id from service_orders where sale_id=?', [id])) throw new ApiError(409, 'Esta venda possui OS emitida e deve ser preservada.');
     const [attachments, paymentProofs] = await Promise.all([
       queryAll<{ storageKey: string }>(
         `select storage_key as storageKey from sale_attachments where sale_id = ?`,
@@ -128,13 +129,21 @@ export async function PATCH(request: Request, context: RouteContext) {
     const sale = await getSale(user, id);
     if (!sale) throw new ApiError(404, "Venda não encontrada.");
     const payload = asObject(await request.json());
-    const saleNumber = requiredString(payload.saleNumber, "Número da venda");
+    if (payload.saleNumber !== undefined && payload.saleNumber !== sale.saleNumber) throw new ApiError(400, 'O número da venda não pode ser alterado.');
+    const saleNumber = sale.saleNumber;
+    const cargo = await parseSaleCargo(payload, user, sale);
     const saleDate = dateOnly(payload.saleDate, "Data da venda");
+    if (new Date(`${saleDate}T12:00:00Z`).toISOString().slice(0,10) !== saleDate) throw new ApiError(400,"Data da venda inválida.");
     const competency = saleDate.slice(0, 7);
     const financialDueDate = dateOnly(
       payload.financialDueDate,
       "Data de vencimento",
     );
+    const originLocationType = payload.originLocationType === undefined
+      ? sale.originLocationType
+      : payload.originLocationType == null || payload.originLocationType === ""
+        ? null
+        : enumValue(payload.originLocationType, "Tipo de local de origem", ORIGIN_LOCATION_TYPES);
     const freightAmountCents = integerInRange(
       payload.freightAmountCents,
       "Valor do frete em centavos",
@@ -307,12 +316,12 @@ export async function PATCH(request: Request, context: RouteContext) {
           `update freight_sales set
             sale_number = ?, sale_date = ?, competency = ?, seller_id = ?,
             seller_name = ?, client_id = ?, vehicle = ?, plate = ?,
-            initial_provider_name = ?, origin = ?, destination = ?,
+            initial_provider_name = ?, origin = ?, origin_location_type = ?, destination = ?,
             pickup_address_snapshot = ?, delivery_address_snapshot = ?,
             operational_deadline_days = ?, origin_yard_entry_date = ?,
             delivery_deadline = ?, financial_due_date = ?,
             operational_status = ?, notes = ?, freight_amount_cents = ?,
-            commission_basis_points = ?, costs_pending = ?,
+            commission_basis_points = ?, costs_pending = ?, cargo_vehicles = ?::jsonb, fleet_freight_id = ?, payment_condition = ?,
             updated_at = to_char(timezone('UTC', now()), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
           where id = ?`,
         )
@@ -323,10 +332,11 @@ export async function PATCH(request: Request, context: RouteContext) {
           sellerId,
           sellerName,
           clientId,
-          upper(payload.vehicle),
-          normalizePlate(payload.plate),
+          cargo.cargoVehicles[0].model,
+          cargo.cargoVehicles[0].plate,
           upper(payload.initialProviderName),
           requiredUpper(payload.origin, "Origem"),
+          originLocationType,
           requiredUpper(payload.destination, "Destino"),
           upper(payload.pickupAddressSnapshot),
           upper(payload.deliveryAddressSnapshot),
@@ -341,6 +351,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           freightAmountCents,
           commissionBasisPoints,
           costsPending ? 1 : 0,
+          JSON.stringify(cargo.cargoVehicles), cargo.fleetFreightId, cargo.paymentCondition,
           id,
         ),
       db.prepare("delete from freight_costs where sale_id = ?").bind(id),

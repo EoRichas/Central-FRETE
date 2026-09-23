@@ -1,3 +1,4 @@
+import { parseSaleCargo } from "@/lib/server/sale-cargo";
 import { authorize } from "@/lib/server/auth";
 import { currentCompetency, isCompetency } from "@/lib/domain/dates";
 import {
@@ -5,6 +6,7 @@ import {
   normalizeCostCategory,
   isDirectPaidOperationCostCategory,
   OPERATIONAL_STATUSES,
+  ORIGIN_LOCATION_TYPES,
 } from "@/lib/domain/operations";
 import { ApiError, getD1, jsonError, queryFirst } from "@/lib/server/d1";
 import { listSales } from "@/lib/server/repository";
@@ -13,8 +15,6 @@ import {
   dateOnly,
   enumValue,
   integerInRange,
-  normalizePlate,
-  requiredString,
   requiredUpper,
   upper,
 } from "@/lib/server/validation";
@@ -54,12 +54,17 @@ export async function POST(request: Request) {
   try {
     const user = await authorize(request, ["ADMIN", "VENDEDOR"]);
     const payload = asObject(await request.json());
-    const saleNumber = requiredString(payload.saleNumber, "Número da venda");
+    if (payload.saleNumber != null && payload.saleNumber !== '') throw new ApiError(400, 'O número da venda é gerado automaticamente.');
+    const cargo = await parseSaleCargo(payload, user);
     const saleDate = dateOnly(payload.saleDate, "Data da venda");
+    if (new Date(`${saleDate}T12:00:00Z`).toISOString().slice(0,10) !== saleDate) throw new ApiError(400,"Data da venda inválida.");
     const financialDueDate = dateOnly(
       payload.financialDueDate,
       "Data de vencimento",
     );
+    const originLocationType = payload.originLocationType == null || payload.originLocationType === ""
+      ? null
+      : enumValue(payload.originLocationType, "Tipo de local de origem", ORIGIN_LOCATION_TYPES);
     const competency = saleDate.slice(0, 7);
     const freightAmountCents = integerInRange(
       payload.freightAmountCents,
@@ -171,25 +176,26 @@ export async function POST(request: Request) {
         .prepare(
           `insert into freight_sales (
             id, sale_number, sale_date, competency, seller_id, seller_name,
-            client_id, vehicle, plate, initial_provider_name, origin, destination,
+            client_id, vehicle, plate, initial_provider_name, origin, origin_location_type, destination,
             pickup_address_snapshot, delivery_address_snapshot,
             operational_deadline_days, origin_yard_entry_date, delivery_deadline,
             financial_due_date, operational_status, notes, freight_amount_cents,
-            commission_basis_points, costs_pending, created_by
-          ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            commission_basis_points, costs_pending, created_by, cargo_vehicles, fleet_freight_id, payment_condition
+          ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?) returning sale_number as saleNumber`,
         )
         .bind(
           saleId,
-          saleNumber,
+          null,
           saleDate,
           competency,
           sellerId,
           sellerName,
           clientId,
-          upper(payload.vehicle),
-          normalizePlate(payload.plate),
+          cargo.cargoVehicles[0].model,
+          cargo.cargoVehicles[0].plate,
           upper(payload.initialProviderName),
           requiredUpper(payload.origin, "Origem"),
+          originLocationType,
           requiredUpper(payload.destination, "Destino"),
           upper(payload.pickupAddressSnapshot),
           upper(payload.deliveryAddressSnapshot),
@@ -205,6 +211,7 @@ export async function POST(request: Request) {
           commissionBasisPoints,
           costsPending ? 1 : 0,
           user.id,
+          JSON.stringify(cargo.cargoVehicles), cargo.fleetFreightId, cargo.paymentCondition,
         ),
       db
         .prepare(
@@ -284,7 +291,7 @@ export async function POST(request: Request) {
           `insert into audit_logs (
             id, entity_type, entity_id, action, actor_user_id, actor_email,
             new_value, request_id
-          ) values (?, 'FREIGHT_SALE', ?, 'CREATED', ?, ?, ?, ?)`,
+          ) values (?, 'FREIGHT_SALE', ?, 'CREATED', ?, ?, (?::jsonb || jsonb_build_object('saleNumber',(select sale_number from freight_sales where id=?)))::text, ?)`,
         )
         .bind(
           crypto.randomUUID(),
@@ -292,18 +299,19 @@ export async function POST(request: Request) {
           user.id,
           user.email,
           JSON.stringify({
-            saleNumber,
+            numbering: "AUTOMATIC_ANNUAL",
             freightAmountCents,
             commissionBasisPoints,
             costCount: costs.length,
             advanceCents,
           }),
+          saleId,
           request.headers.get("x-request-id") ?? crypto.randomUUID(),
         ),
     );
 
-    await db.batch(statements);
-    return Response.json({ id: saleId }, { status: 201 });
+    const result = await db.batch<{ saleNumber: string }>(statements);
+    return Response.json({ id: saleId, saleNumber: result[0].results[0].saleNumber }, { status: 201 });
   } catch (error) {
     if (error instanceof Error && error.message.includes("UNIQUE constraint")) {
       return Response.json(

@@ -1,5 +1,7 @@
 "use client";
 
+import { CargoVehiclesEditor } from "@/components/cargo-vehicles-editor";
+import { cargoVehiclesOrLegacy } from "@/lib/domain/cargo-vehicles";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -14,6 +16,8 @@ import {
   calculateDestinationArrivalDate,
   FIXED_COST_ROWS,
   normalizeCostCategory,
+  ORIGIN_LOCATION_TYPES,
+  ORIGIN_LOCATION_TYPE_LABELS,
   OPERATIONAL_STATUS_OPTIONS,
 } from "@/lib/domain/operations";
 import { formatMoney, moneyInputToCents } from "@/lib/format";
@@ -94,8 +98,11 @@ export function SaleEditScreen({ id }: { id: string }) {
 export function SaleFormScreen({ initialSale }: { initialSale?: SaleRecord }) {
   const router = useRouter();
   const editing = Boolean(initialSale);
+  const [cargoVehicles, setCargoVehicles] = useState(() => cargoVehiclesOrLegacy(initialSale?.cargoVehicles, initialSale?.vehicle ?? null, initialSale?.plate ?? null));
+  const [fleetFreightId, setFleetFreightId] = useState(initialSale?.fleetFreightId ?? '');
   const clientsApi = useApi<{ clients: ClientRecord[] }>("/api/clients");
   const meApi = useApi<{ user: CurrentUser }>("/api/me");
+  const fleetOptions = useApi<{freights: {id:string;label:string}[]}>(meApi.data?.user.role === "ADMIN" ? "/api/sales/fleet-options" : null);
   const [sellerName, setSellerName] = useState(initialSale?.sellerName ?? "");
   const [clientId, setClientId] = useState(initialSale?.clientId ?? "");
   const [pickupAddress, setPickupAddress] = useState(
@@ -209,14 +216,14 @@ export function SaleFormScreen({ initialSale }: { initialSale?: SaleRecord }) {
     const form = new FormData(event.currentTarget);
     try {
       const payload = {
-        saleNumber: form.get("saleNumber"),
+        cargoVehicles, fleetFreightId: fleetFreightId || null,
+        paymentCondition: form.get("paymentCondition"),
         saleDate: form.get("saleDate"),
         sellerName: form.get("sellerName"),
         clientId: clientId || null,
-        vehicle: form.get("vehicle"),
-        plate: form.get("plate"),
         initialProviderName: form.get("initialProviderName"),
         origin: form.get("origin"),
+        originLocationType: form.get("originLocationType") || null,
         destination: form.get("destination"),
         pickupAddressSnapshot: pickupAddress,
         deliveryAddressSnapshot: deliveryAddress,
@@ -325,15 +332,16 @@ export function SaleFormScreen({ initialSale }: { initialSale?: SaleRecord }) {
           <header><span>02</span><div><h2>Operação</h2><p>Use somente os estágios operacionais definidos para a Central Express.</p></div></header>
           <div className="operation-section-grid">
             <div className="form-grid four operation-identification-grid">
-              <Field label="Número da venda"><input name="saleNumber" defaultValue={initialSale?.saleNumber ?? ""} required /></Field>
+              <Field label="Número da venda" hint="Gerado ao registrar, por ano da data da venda."><input value={initialSale?.saleNumber ?? "Automático ao salvar"} readOnly /></Field>
               <Field label="Data da venda"><input name="saleDate" type="date" defaultValue={initialSale?.saleDate ?? today} required /></Field>
               <Field label="Vendedor"><input name="sellerName" value={sellerNameValue} onChange={(event) => setSellerName(event.target.value)} readOnly={meApi.data?.user.role === "VENDEDOR"} required /></Field>
               <Field label="Status operacional"><select name="operationalStatus" defaultValue={initialSale?.operationalStatus ?? "CONFIRMAR"}>{OPERATIONAL_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></Field>
-              <Field label="Veículo"><input name="vehicle" defaultValue={initialSale?.vehicle ?? ""} /></Field>
-              <Field label="Placa"><input name="plate" maxLength={8} defaultValue={initialSale?.plate ?? ""} /></Field>
               <Field label="Prestador inicial"><input name="initialProviderName" defaultValue={initialSale?.initialProviderName ?? ""} /></Field>
               <Field label="Prazo operacional (dias)"><input type="number" min={1} max={365} inputMode="numeric" value={operationalDeadlineDays} onChange={(event) => { const value = event.target.value; setOperationalDeadlineDays(value); const calculated = calculateDestinationArrivalDate(originYardEntryDate, value); if (calculated) setDestinationArrivalDate(calculated); }} /></Field>
             </div>
+            {meApi.data?.user.role === 'ADMIN' && <Field label="Operação da Frota (opcional)" hint="Quando vinculada, a venda e a OS consultam os veículos diretamente no frete."><select value={fleetFreightId} onChange={e => setFleetFreightId(e.target.value)}><option value="">Sem vínculo com a Frota</option>{initialSale?.fleetFreightId && <option value={initialSale.fleetFreightId}>Operação vinculada</option>}{fleetOptions.data?.freights.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}</select>{fleetOptions.error && <span role="alert">{fleetOptions.error}</span>}</Field>}
+            {fleetFreightId ? <p className="fleet-update-note">Os veículos transportados serão consultados na operação da Frota vinculada.</p> : <CargoVehiclesEditor vehicles={cargoVehicles} onChange={setCargoVehicles} />}
+            <Field label="Condição de pagamento"><input name="paymentCondition" maxLength={200} defaultValue={initialSale?.paymentCondition ?? ''} placeholder="Ex.: à vista ou conforme vencimento" /></Field>
             <div className="operation-timing-grid">
               <Field label="Entrada no pátio de origem"><input type="date" value={originYardEntryDate} onChange={(event) => { const value = event.target.value; setOriginYardEntryDate(value); const calculated = calculateDestinationArrivalDate(value, operationalDeadlineDays); if (calculated) setDestinationArrivalDate(calculated); }} /></Field>
               <Field label="Chegada prevista no destino" hint="Calculada pela entrada + prazo; pode ser ajustada."><input type="date" value={destinationArrivalDate} onChange={(event) => setDestinationArrivalDate(event.target.value)} /></Field>
@@ -343,6 +351,12 @@ export function SaleFormScreen({ initialSale }: { initialSale?: SaleRecord }) {
                 <span className="route-side-label">Origem</span>
                 <Field label="Cidade / UF"><input name="origin" defaultValue={initialSale?.origin ?? ""} required /></Field>
                 <Field label="Endereço completo de coleta"><input value={pickupAddress} onChange={(event) => setPickupAddress(event.target.value)} /></Field>
+                <Field label="Tipo de local de origem" hint="Informe onde o veículo deverá ser encontrado.">
+                  <select name="originLocationType" defaultValue={initialSale?.originLocationType ?? ""} required>
+                    <option value="">Selecione o local</option>
+                    {ORIGIN_LOCATION_TYPES.map((type) => <option key={type} value={type}>{ORIGIN_LOCATION_TYPE_LABELS[type]}</option>)}
+                  </select>
+                </Field>
               </div>
               <div className="route-side destination">
                 <span className="route-side-label">Destino</span>

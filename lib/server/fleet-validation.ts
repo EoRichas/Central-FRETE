@@ -1,3 +1,4 @@
+import { parseCargoVehicles, nullableInteger } from "@/lib/server/cargo-validation";
 import { resultMoney } from "@/lib/server/fleet-results-validation";
 import {
   FLEET_OPERATIONAL_STATUSES,
@@ -14,7 +15,6 @@ import {
   optionalString,
   requiredString,
   requiredUpper,
-  upper,
 } from "@/lib/server/validation";
 
 import { validCpf } from "@/lib/domain/identity";
@@ -24,14 +24,6 @@ const MAX_MONEY_CENTS = 9_000_000_000_000;
 function boundedRequiredUpper(value: unknown, label: string, maxLength: number) {
   const normalized = requiredUpper(value, label);
   if (normalized.length > maxLength) {
-    throw new ApiError(400, `${label} deve possuir no máximo ${maxLength} caracteres.`);
-  }
-  return normalized;
-}
-
-function boundedOptionalUpper(value: unknown, label: string, maxLength: number) {
-  const normalized = upper(value);
-  if (normalized && normalized.length > maxLength) {
     throw new ApiError(400, `${label} deve possuir no máximo ${maxLength} caracteres.`);
   }
   return normalized;
@@ -56,10 +48,14 @@ export function booleanValue(value: unknown, label: string) {
 export function parseFleetFreightPayload(payload: Record<string, unknown>) {
   const tripId = optionalString(payload.tripId);
   if (tripId && tripId.length > 80) throw new ApiError(400, "Viagem inválida.");
-  if (tripId && (Number(payload.tollCents ?? 0) !== 0 || (payload.actualFuelCostCents != null && payload.actualFuelCostCents !== ""))) {
-    throw new ApiError(400, "Lance diesel e pedágio na viagem compartilhada, uma única vez.");
+  if (tripId && Number(payload.tollCents ?? 0) !== 0) {
+    throw new ApiError(400, "O pedágio da viagem histórica já está contabilizado.");
   }
+  const cargoVehicles = parseCargoVehicles(payload.cargoVehicles, payload.cargoVehicleModel, payload.cargoPlate);
   return {
+    cargoVehicles,
+    fuelLitersMilli: nullableInteger(payload.fuelLitersMilli, "Litros abastecidos", 1_000_000_000),
+    fuelPumpAmountCents: nullableInteger(payload.fuelPumpAmountCents, "Valor bomba", MAX_MONEY_CENTS),
     tripId,
     yardCostCents: resultMoney(payload.yardCostCents ?? 0, "Pátio / recebimento"),
     pickupCostCents: resultMoney(payload.pickupCostCents ?? 0, "Coleta"),
@@ -69,12 +65,8 @@ export function parseFleetFreightPayload(payload: Record<string, unknown>) {
     vehicleId: entityId(payload.vehicleId, "Veículo da frota"),
     driverId: entityId(payload.driverId, "Motorista"),
     clientName: boundedRequiredUpper(payload.clientName, "Cliente", 140),
-    cargoVehicleModel: boundedOptionalUpper(
-      payload.cargoVehicleModel,
-      "Modelo do veículo transportado",
-      80,
-    ),
-    cargoPlate: normalizePlate(payload.cargoPlate),
+    cargoVehicleModel: cargoVehicles[0].model,
+    cargoPlate: cargoVehicles[0].plate,
     originCep: optionalCep(payload.originCep),
     destinationCep: optionalCep(payload.destinationCep),
     origin: boundedRequiredUpper(payload.origin, "Origem", 180),

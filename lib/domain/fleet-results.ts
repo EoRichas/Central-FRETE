@@ -1,3 +1,4 @@
+import { allocateTripCost } from './trip-allocation.ts';
 import type { FleetFreight } from './fleet.ts';
 
 export type FleetTrip = {
@@ -13,7 +14,8 @@ export function calculateTripResult(trip: FleetTrip, freights: FleetFreight[]): 
   const members = freights.filter(freight => freight.tripId === trip.id);
   const revenueCents = members.reduce((sum, freight) => sum + freight.freightAmountCents, 0);
   const directCostCents = members.reduce((sum, freight) => sum + freight.directCostCents, 0);
-  const sharedCostCents = trip.fuelCostCents + trip.tollCents + trip.otherCostCents;
+  const fuelCostCents = members.length ? members.reduce((sum, freight) => sum + (freight.actualFuelCostCents ?? allocateTripCost(trip.fuelCostCents, members.map(f => f.id), freight.id)), 0) : trip.fuelCostCents;
+  const sharedCostCents = fuelCostCents + trip.tollCents + trip.otherCostCents;
   return { ...trip, freights: members, revenueCents, directCostCents, sharedCostCents,
     resultCents: revenueCents - directCostCents - sharedCostCents };
 }

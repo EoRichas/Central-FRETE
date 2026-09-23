@@ -1,9 +1,11 @@
+import type { CargoVehicle } from "@/lib/domain/cargo-vehicles";
 import type {
   FinancialStatus,
   PaymentStatus,
   PaymentType,
   SaleFinancialResult,
 } from "@/lib/domain/finance";
+import type { OriginLocationType } from "@/lib/domain/operations";
 
 export type Role = "ADMIN" | "GERENCIA" | "VENDEDOR" | "FINANCEIRO" | "OPERACIONAL";
 
@@ -92,6 +94,9 @@ export type InstallmentRecord = {
 };
 
 export type SaleRecord = {
+  cargoVehicles: CargoVehicle[];
+  fleetFreightId: string | null;
+  paymentCondition: string | null;
   id: string;
   saleNumber: string;
   saleDate: string;
@@ -105,6 +110,7 @@ export type SaleRecord = {
   plate: string | null;
   initialProviderName: string | null;
   origin: string;
+  originLocationType: OriginLocationType | null;
   destination: string;
   pickupAddressSnapshot: string | null;
   deliveryAddressSnapshot: string | null;

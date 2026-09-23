@@ -8,7 +8,7 @@ import {
   hasPossibleFleetMatch,
   summarizeFleet,
 } from "../lib/domain/fleet.ts";
-import { calculateDestinationArrivalDate, normalizeCostCategory } from "../lib/domain/operations.ts";
+import { calculateDestinationArrivalDate, isEditableOperationCostCategory, normalizeCostCategory } from "../lib/domain/operations.ts";
 import { roleCan } from "../lib/domain/permissions.ts";
 import {
   createPasswordCredential,
@@ -92,6 +92,8 @@ test("preserva o cálculo de prazo e a normalização de ICMS", () => {
   assert.equal(calculateDestinationArrivalDate("2026-08-25", 5), "2026-08-30");
   assert.equal(calculateDestinationArrivalDate("2026-08-25", 0), "");
   assert.equal(normalizeCostCategory("CTE_MDFE"), "ICMS");
+  assert.equal(isEditableOperationCostCategory("NOTA_FISCAL_IMPOSTO"), true);
+  assert.equal(isEditableOperationCostCategory("OUTRAS_DESPESAS"), true);
 });
 
 test("respeita as permissões de cada perfil", () => {

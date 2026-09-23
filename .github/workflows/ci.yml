@@ -28,6 +28,9 @@ jobs:
       - name: Executar testes de regressão
         run: npm test
 
+      - name: Executar testes de integração PostgreSQL
+        run: npm run test:integration
+
       - name: Validar tipos TypeScript
         run: npm exec -- tsc --noEmit
 

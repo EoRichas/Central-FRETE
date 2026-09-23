@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import type { CurrentUser, Role } from "@/lib/contracts";
 import { Icons } from "@/components/icons";
 import { TruckLoader } from "@/components/truck-loader";
@@ -27,7 +27,7 @@ const navigation: Array<{
   { href: "/inicio", label: "Início", icon: Icons.home, roles: ["ADMIN", "GERENCIA", "VENDEDOR", "FINANCEIRO"] },
   { href: "/vendas", label: "Vendas Cegonha", icon: Icons.truck, roles: ["ADMIN", "GERENCIA", "VENDEDOR", "FINANCEIRO"] },
   { href: "/clientes", label: "Clientes", icon: Icons.users, roles: ["ADMIN", "GERENCIA"] },
-  { href: "/prestadores", label: "Prestadores", icon: Icons.briefcase, roles: ["ADMIN", "GERENCIA"] },
+  { href: "/prestadores", label: "Prestadores", icon: Icons.briefcase, roles: ["ADMIN", "GERENCIA", "VENDEDOR"] },
   { href: "/frota", label: "Frota", icon: Icons.fleet, roles: ["ADMIN", "GERENCIA", "FINANCEIRO", "OPERACIONAL"] },
   { href: "/financeiro", label: "Financeiro", icon: Icons.wallet, roles: ["ADMIN", "GERENCIA", "FINANCEIRO"] },
   { href: "/vendedores", label: "Comissões", icon: Icons.users, roles: ["ADMIN", "GERENCIA", "VENDEDOR", "FINANCEIRO"] },
@@ -66,17 +66,21 @@ function dashboardGreeting(name: string) {
   return { salutation, firstName, date };
 }
 
+function subscribeTheme(onChange: () => void) {
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  return () => observer.disconnect();
+}
+const themeSnapshot = () => document.documentElement.dataset.theme === 'dark';
+const serverThemeSnapshot = () => false;
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
+  const darkMode = useSyncExternalStore(subscribeTheme, themeSnapshot, serverThemeSnapshot);
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [userLoaded, setUserLoaded] = useState(false);
-
-  useEffect(() => {
-    setDarkMode(document.documentElement.dataset.theme === "dark");
-  }, []);
 
   useEffect(() => {
     let stopped = false;
@@ -110,7 +114,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   function toggleDarkMode(checked: boolean) {
     const theme = checked ? "dark" : "light";
-    setDarkMode(checked);
     document.documentElement.dataset.theme = theme;
     document.documentElement.style.colorScheme = theme;
     window.localStorage.setItem("cf-theme", theme);

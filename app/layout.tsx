@@ -12,6 +12,7 @@ import "./animation-restore.css";
 import "./action-refinements.css";
 import "./login-refinements.css";
 import "./ui-fixes-20260917.css";
+import "./cargo-orders.css";
 
 export const metadata: Metadata = {
   title: {

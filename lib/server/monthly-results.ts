@@ -2,7 +2,11 @@ import type { MonthlyClosing, MonthlySource } from '@/lib/domain/fleet-results';
 import { queryAll, queryFirst } from '@/lib/server/d1';
 
 // One statement supplies a consistent snapshot, also used inside the closing INSERT.
-export const MONTHLY_SOURCE_SQL = `with month as (select ?::text as competency)
+export const MONTHLY_SOURCE_SQL = `with month as (select ?::text as competency),
+trip_members as (select id,trip_id,actual_fuel_cost_cents,
+ count(*) over(partition by trip_id) as members,
+ row_number() over(partition by trip_id order by id COLLATE "C") as position
+ from fleet_freights where trip_id is not null)
 select jsonb_build_object(
  'competency', m.competency,
  'freights', coalesce((select jsonb_agg(jsonb_build_object(
@@ -12,7 +16,9 @@ select jsonb_build_object(
    'fuelPending', f.trip_id is null and f.actual_fuel_cost_cents is null
  ) order by f.id) from fleet_freights f where left(f.billing_date,7)=m.competency), '[]'::jsonb),
  'trips', coalesce((select jsonb_agg(jsonb_build_object('id',t.id,'name',t.name,
-   'costCents',t.fuel_cost_cents+t.toll_cents+t.other_cost_cents) order by t.id)
+   'costCents',coalesce((select sum(coalesce(f.actual_fuel_cost_cents,
+ t.fuel_cost_cents / f.members + case when f.position <= mod(t.fuel_cost_cents,f.members) then 1 else 0 end))
+ from trip_members f where f.trip_id=t.id),t.fuel_cost_cents)+t.toll_cents+t.other_cost_cents) order by t.id)
    from fleet_trips t where left(t.operation_date,7)=m.competency), '[]'::jsonb),
  'entries', coalesce((select jsonb_agg(jsonb_build_object('id',e.id,'kind',e.kind,
    'description',e.description,'amountCents',e.amount_cents) order by e.id)
