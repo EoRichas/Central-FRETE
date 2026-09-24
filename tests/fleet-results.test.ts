@@ -18,3 +18,19 @@ test('fechamento mantém prejuízo, competência sem fretes e zero realizado', (
  assert.equal(calculateFleetFreightMetrics({distanceMeters:100000,freightAmountCents:1000,tollCents:0,driverCommissionCents:0,actualFuelCostCents:0},DEFAULT_FLEET_PARAMETERS,null).fuelCostCents,0);
  assert.throws(() => calculateMonthlyResult({...empty,entries:[{id:'a',kind:'REVENUE',description:'a',amountCents:Number.MAX_SAFE_INTEGER},{id:'b',kind:'REVENUE',description:'b',amountCents:1}]}), /precisão/);
 });
+
+test('resultado mensal soma vendas e frota e preserva versões antigas sem vendas', () => {
+ const legacy: MonthlySource = { competency:'2026-09',freights:[{id:'f',client:'Cliente',revenueCents:100000,directCostCents:10000,standaloneCostCents:20000,fuelPending:false}],trips:[],entries:[{id:'fixed',kind:'FIXED',description:'Aluguel',amountCents:5000}],unbilledCount:0 };
+ const old = calculateMonthlyResult(legacy);
+ assert.equal(old.resultCents,65000);
+ assert.equal(old.salesRevenueCents,0);
+ const source = {...legacy,sales:{count:2,revenueCents:80000,costCents:15000,pendingCount:1}};
+ const result = calculateMonthlyResult(source);
+ assert.equal(result.revenueCents,180000);
+ assert.equal(result.variableCostCents,45000);
+ assert.equal(result.resultCents,130000);
+ assert.equal(result.salesCount,2);
+ assert.equal(result.pendingSalesCount,1);
+ assert.equal(calculateMonthlyResult(legacy).resultCents,65000);
+ assert.equal(calculateMonthlyResult({...source,freights:[]}).resultCents,60000);
+});

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { FleetMonthlyPanel } from "@/components/fleet-monthly-panel";
 import { useMemo, useState } from "react";
 import type { SaleRecord } from "@/lib/contracts";
 import { currentCompetency } from "@/lib/domain/dates";
@@ -39,9 +40,9 @@ export function FinanceScreen() {
   return (
     <>
       <PageHeader
-        eyebrow="Custos das vendas"
+        eyebrow="Resultado da empresa"
         title="Financeiro"
-        description="Visão direta do valor do frete e do custo total de cada venda."
+        description="Resultado mensal de Vendas/Fretes e Frota, com detalhamento dos custos de cada venda."
       />
       <section className="filter-panel compact">
         <label>
@@ -58,6 +59,8 @@ export function FinanceScreen() {
         </div>
       </section>
 
+      <FleetMonthlyPanel key={competency} competency={competency} />
+
       {api.loading && <LoadingState label="Calculando fretes e custos…" />}
       {api.error && <ErrorState message={api.error} retry={api.refresh} />}
       {!api.loading && !api.error && !sales.length && (
@@ -70,15 +73,15 @@ export function FinanceScreen() {
         <>
           <section className="receivable-summary large finance-three-metrics">
             <div>
-              <span>Valor total dos fretes</span>
+              <span>Valor dos fretes exibidos</span>
               <strong>{formatMoney(totals.freight)}</strong>
             </div>
             <div>
-              <span>Comissões dos vendedores</span>
+              <span>Comissões das vendas exibidas</span>
               <strong>{formatMoney(totals.commissions)}</strong>
             </div>
             <div>
-              <span>Custo total das vendas</span>
+              <span>Custo das vendas exibidas</span>
               <strong>{formatMoney(totals.costs)}</strong>
             </div>
           </section>

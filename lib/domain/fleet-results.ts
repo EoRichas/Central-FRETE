@@ -28,6 +28,8 @@ export type MonthlyEntry = {
 };
 export type MonthlySource = {
   competency: string;
+  // Optional only for immutable closings created before sales consolidation.
+  sales?: { count: number; revenueCents: number; costCents: number; pendingCount: number };
   freights: { id: string; client: string; revenueCents: number; directCostCents: number;
     standaloneCostCents: number; fuelPending: boolean }[];
   trips: { id: string; name: string; costCents: number }[];
@@ -37,18 +39,22 @@ export type MonthlySource = {
 export function calculateMonthlyResult(source: MonthlySource) {
   const sumEntries = (kind: MonthlyEntryKind) => source.entries.filter(e => e.kind === kind).reduce((sum, e) => sum + e.amountCents, 0);
   const fleetRevenueCents = source.freights.reduce((sum, f) => sum + f.revenueCents, 0);
+  const salesRevenueCents = source.sales?.revenueCents ?? 0;
+  const salesCostCents = source.sales?.costCents ?? 0;
   const otherRevenueCents = sumEntries('REVENUE');
   const directCostCents = source.freights.reduce((sum, f) => sum + f.directCostCents, 0);
   const transportCostCents = source.freights.reduce((sum, f) => sum + f.standaloneCostCents, 0) + source.trips.reduce((sum, t) => sum + t.costCents, 0);
   const otherVariableCents = sumEntries('VARIABLE');
   const fixedCostCents = sumEntries('FIXED');
-  const revenueCents = fleetRevenueCents + otherRevenueCents;
-  const variableCostCents = directCostCents + transportCostCents + otherVariableCents;
+  const revenueCents = salesRevenueCents + fleetRevenueCents + otherRevenueCents;
+  const variableCostCents = salesCostCents + directCostCents + transportCostCents + otherVariableCents;
   const resultCents = revenueCents - variableCostCents - fixedCostCents;
   for (const value of [revenueCents, variableCostCents, fixedCostCents, resultCents]) {
     if (!Number.isSafeInteger(value)) throw new Error('Total mensal excede o limite de precisão.');
   }
-  return { fleetRevenueCents, otherRevenueCents, directCostCents, transportCostCents,
+  return { salesRevenueCents, salesCostCents, salesCount: source.sales?.count ?? 0,
+    pendingSalesCount: source.sales?.pendingCount ?? 0,
+    fleetRevenueCents, otherRevenueCents, directCostCents, transportCostCents,
     otherVariableCents, fixedCostCents, revenueCents, variableCostCents, resultCents,
     pendingFuelCount: source.freights.filter(f => f.fuelPending).length };
 }

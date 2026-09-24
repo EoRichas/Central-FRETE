@@ -15,12 +15,27 @@ export function FleetMonthlyPanel({ competency }: { competency: string }) {
   const source = closed?.snapshot ?? api.data.current;
   const totals = calculateMonthlyResult(source);
   return <section className="panel table-panel">
-    <header className="fleet-panel-header"><div><h2>Composição do resultado</h2><p>{competencyLabel(competency)} · {closed ? "Fechamento preservado" : "Apuração atual"} por faturamento; custos históricos compartilhados pela data da viagem.</p>
+    <header className="fleet-panel-header"><div><h2>Composição do resultado mensal</h2><p>{competencyLabel(competency)} · {closed ? "Fechamento preservado" : "Apuração atual"}. Vendas pela competência da venda; Frota pelo faturamento; custos compartilhados pela data da viagem.</p>
+      {source.sales && <p>{totals.salesCount} venda(s) e {source.freights.length} frete(s) da Frota. As receitas dos dois cadastros são somadas automaticamente.</p>}
+      {closed && !source.sales && <p role="status">Este fechamento anterior não incluía Vendas/Fretes. Os valores históricos foram preservados; a consolidação vale para novas apurações.</p>}
+      {source.entries.some(entry => entry.kind === 'REVENUE' || entry.kind === 'VARIABLE') && source.sales && <p role="status">Confira os lançamentos manuais: receitas e custos das vendas já estão incluídos automaticamente e não devem ser repetidos em outras receitas ou custos variáveis.</p>}
       {totals.pendingFuelCount > 0 && <p className="form-error" role="status">Resultado parcial: {totals.pendingFuelCount} frete(s) sem combustível realizado.</p>}
+      {totals.pendingSalesCount > 0 && <p className="form-error" role="status">Resultado parcial: {totals.pendingSalesCount} venda(s) com custos pendentes.</p>}
       {source.unbilledCount > 0 && <p role="status">{source.unbilledCount} frete(s) sem faturamento ainda não integra(m) esta apuração.</p>}
     </div></header>
     <div className="responsive-table"><table><thead><tr><th>Composição</th><th>Valor</th></tr></thead><tbody>
-      {([['Fretes faturados da Frota',totals.fleetRevenueCents],['Outras receitas',totals.otherRevenueCents],['Comissões e despesas diretas dos fretes',-totals.directCostCents],['Combustível, pedágio e outros custos de viagem',-totals.transportCostCents],['Outros custos variáveis',-totals.otherVariableCents],['Custos fixos',-totals.fixedCostCents],['Resultado mensal',totals.resultCents]] as const).map(([label,value],index) => <tr key={label}><td data-label="Composição">{index === 6 ? <strong>{label}</strong> : label}</td><td data-label="Valor">{index === 6 ? <strong>{formatMoney(value)}</strong> : formatMoney(value)}</td></tr>)}
+      {([
+        ['Receita de Vendas/Fretes',totals.salesRevenueCents],
+        ['Fretes faturados da Frota',totals.fleetRevenueCents],
+        ['Outras receitas (lançamentos manuais)',totals.otherRevenueCents],
+        ['Faturamento consolidado',totals.revenueCents],
+        ['Vendas: comissões e demais custos',-totals.salesCostCents],
+        ['Frota: comissões e despesas diretas',-totals.directCostCents],
+        ['Frota: combustível, pedágio e outros custos de viagem',-totals.transportCostCents],
+        ['Outros custos variáveis',-totals.otherVariableCents],
+        ['Custos fixos',-totals.fixedCostCents],
+        ['Resultado mensal',totals.resultCents],
+      ] as const).map(([label,value]) => <tr key={label}><td data-label="Composição">{label === 'Resultado mensal' || label === 'Faturamento consolidado' ? <strong>{label}</strong> : label}</td><td data-label="Valor">{!source.sales && (label === 'Receita de Vendas/Fretes' || label === 'Vendas: comissões e demais custos') ? "Não incluído nesta versão" : label === 'Resultado mensal' || label === 'Faturamento consolidado' ? <strong>{formatMoney(value)}</strong> : formatMoney(value)}</td></tr>)}
     </tbody></table></div>
   </section>;
 }
