@@ -5,7 +5,6 @@ import { calculateSaleFinancials, commissionCents } from "../lib/domain/finance.
 import {
   averageVehicleCostPerKmCents,
   calculateFleetFreightMetrics,
-  hasPossibleFleetMatch,
   summarizeFleet,
 } from "../lib/domain/fleet.ts";
 import { calculateDestinationArrivalDate, isEditableOperationCostCategory, normalizeCostCategory } from "../lib/domain/operations.ts";
@@ -59,15 +58,6 @@ test("conserva precisão da média mensal até o cálculo do frete", () => {
   assert.equal(metrics.contributionCents, 33000);
 });
 
-test("identifica encaixe de retorno dentro da janela operacional", () => {
-  const freights = [
-    { id: "ida", origin: "São Bernardo do Campo / SP", destination: "Taboão da Serra / SP", pickupDate: "2026-07-17", deliveryDate: "2026-07-17" },
-    { id: "volta", origin: "  TABOÃO DA SERRA / SP ", destination: "São Bernardo do Campo / SP", pickupDate: "2026-07-19", deliveryDate: "2026-07-19" },
-  ];
-  assert.equal(hasPossibleFleetMatch(freights[0], freights, 3), true);
-  assert.equal(hasPossibleFleetMatch(freights[0], freights, 1), false);
-});
-
 test("resume a frota ponderando a margem pelo faturamento", () => {
   const summary = summarizeFleet([
     { costsConfigured: true, freightAmountCents: 10_000, allocatedCostCents: 1_000, totalCostCents: 4_000, directCostCents: 1_000, contributionCents: 9_000, returnUsed: true, possibleMatch: false },
@@ -78,8 +68,6 @@ test("resume a frota ponderando a margem pelo faturamento", () => {
     contributionCents: 31_000,
     missingCostCount: 0,
     freightCount: 2,
-    possibleMatchCount: 1,
-    returnUsedCount: 1,
     revenueCents: 40_000,
     allocatedCostCents: 3_000,
     totalCostCents: 25_000,

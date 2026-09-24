@@ -33,7 +33,7 @@ mock.module('../../lib/server/d1.ts', { namedExports: {
 
 before(async () => {
  await pg.exec('CREATE ROLE anon; CREATE ROLE authenticated;');
- for (let pass = 0; pass < 2; pass++) for (const file of ['001_central_frete_postgres.sql', '002_fleet.sql', '003_fleet_billing.sql', '004_operational_role.sql', '005_detach_driver_vehicle.sql', '006_fleet_vehicle_cost_average_flag.sql', '008_fleet_results.sql', '009_direct_paid_operation_costs.sql', '010_fleet_cargo_sales_orders.sql', '011_sale_origin_location_type.sql']) await pg.exec(await readFile(new URL(`../../database/${file}`, import.meta.url), 'utf8'));
+ for (let pass = 0; pass < 2; pass++) for (const file of ['001_central_frete_postgres.sql', '002_fleet.sql', '003_fleet_billing.sql', '004_operational_role.sql', '005_detach_driver_vehicle.sql', '006_fleet_vehicle_cost_average_flag.sql', '008_fleet_results.sql', '009_direct_paid_operation_costs.sql', '010_fleet_cargo_sales_orders.sql', '011_sale_origin_location_type.sql', '../supabase/migrations/20260923220518_fleet_operation_integrity.sql']) await pg.exec(await readFile(new URL(`../../database/${file}`, import.meta.url), 'utf8'));
  await pg.exec("INSERT INTO users(id,email,name,role) VALUES ('admin','admin@example.test','Admin','ADMIN'),('finance','finance@example.test','Finance','FINANCEIRO'),('seller','seller@example.test','Seller','VENDEDOR');");
  process.env.CENTRAL_FRETE_SESSION_SECRET = 'test-secret-never-use-in-production-1234';
 });
@@ -379,7 +379,7 @@ test('viagem agrupa dois veículos, conta diesel uma vez e fecha o mês com hist
 const salePayload = { saleDate:'2026-09-23',financialDueDate:'2026-09-30',freightAmountCents:180000,commissionBasisPoints:700,
  operationalStatus:'CONFIRMAR',sellerName:'SELLER',origin:'ORIGEM TESTE',originLocationType:'PATIO',destination:'DESTINO TESTE',paymentMethod:'PIX',
  cargoVehicles:[{model:'MODELO A',plate:'AAA1A11',identification:'CHASSI-1'},{model:'MODELO B',plate:null,identification:'CHASSI-2'}],
- paymentCondition:'À vista',notes:'Prazo após embarque',operationalDeadlineDays:8,costs:[] };
+ destinationLocationType:'PORTA',notes:'Prazo após embarque',operationalDeadlineDays:8,costs:[] };
 
 test('numeração anual nasce na transação, rejeita manual, preserva legado e reinicia por ano',async()=>{
  const api=await import('../../app/api/sales/route.ts');
@@ -474,6 +474,8 @@ test('OS tem vínculo único, versões imutáveis, autorização e PDF com ident
  const emitted=await orders.POST(await request('/api/sales/x/service-order','seller','POST'),context);assert.equal(emitted.status,200,await emitted.clone().text());
  const initial=await emitted.json();assert.equal(initial.latest.version,1);assert.equal(initial.latest.snapshot.saleId,sale.id);assert.equal(initial.latest.snapshot.cargoVehicles.length,2);
  assert.equal(initial.latest.snapshot.originLocationType,'PATIO');
+ assert.equal(initial.latest.snapshot.destinationLocationType,'PORTA');
+ assert.equal('paymentCondition' in initial.latest.snapshot,false);
  assert.equal(initial.latest.snapshot.issuer.name,'Central Express');assert.equal(initial.stale,false);
  await Promise.all(Array.from({length:4},async()=>orders.POST(await request('/api/sales/x/service-order','seller','POST'),context)));
  assert.equal((await queryAll('select * from service_orders where sale_id=?',[sale.id])).length,1);
@@ -485,7 +487,8 @@ test('OS tem vínculo único, versões imutáveis, autorização e PDF com ident
  const bytes=new Uint8Array(await pdf.arrayBuffer());const document=await PDFDocument.load(bytes);assert.match(document.getTitle()!,/Central Express/);assert.ok(document.getPageCount()>=1);
  if (process.env.CENTRAL_QA_OUTPUT) { const {mkdir,writeFile}=await import('node:fs/promises'); await mkdir(process.env.CENTRAL_QA_OUTPUT,{recursive:true}); await writeFile(`${process.env.CENTRAL_QA_OUTPUT}/service-order.pdf`,bytes); }
  assert.equal((await orders.GET(await request('/api/sales/x/service-order?format=pdf&version=-1','seller'),context)).status,400);
- assert.equal((await edit.DELETE(await request('/api/sales/x','admin','DELETE'),context)).status,409);
+ assert.equal((await edit.DELETE(await request('/api/sales/x','admin','DELETE'),context)).status,200);
+ assert.equal(await queryFirst('select id from service_orders where sale_id=?',[sale.id]),null);
 });
 
 test('OS consulta todos os veículos do frete vinculado e detecta edição da carga',async()=>{
@@ -501,4 +504,99 @@ test('OS consulta todos os veículos do frete vinculado e detecta edição da ca
  const duplicate=await sales.POST(await request('/api/sales','admin','POST',payload));assert.notEqual(duplicate.status,201);
  const tables=await queryAll("select tablename,rowsecurity from pg_tables where tablename in ('sale_number_counters','service_orders','service_order_versions')");assert.equal(tables.length,3);assert.ok(tables.every(t=>(t as {rowsecurity:boolean}).rowsecurity));
  assert.equal((await queryAll("select * from information_schema.role_table_grants where grantee in ('anon','authenticated') and table_name in ('sale_number_counters','service_orders','service_order_versions')")).length,0);
+});
+
+test('hodômetro persiste distância efetiva e rota; backend rejeita leituras inválidas e protege dados do Financeiro',async()=>{
+ const create=await import('../../app/api/fleet/freights/route.ts');const edit=await import('../../app/api/fleet/freights/[id]/route.ts');
+ const payload={vehicleId:'results-truck',driverId:'results-driver',clientName:'ODOMETRO',origin:'A',destination:'B',pickupDate:'2030-01-01',billingDate:'2030-01-01',operationalStatus:'FATURADO',priority:'NORMAL',freightAmountCents:500000,distanceMeters:510000,routeDistanceMeters:510000,odometerStartMeters:125300000,odometerEndMeters:125795000,tollCents:30000,driverCommissionCents:40000,otherCostCents:20000,actualFuelCostCents:100000,cargoVehicles:[{model:'UNO'}]};
+ const response=await create.POST(await request('/api/fleet/freights','admin','POST',payload));assert.equal(response.status,201,await response.clone().text());const {id}=await response.json();const ctx={params:Promise.resolve({id})};
+ const {loadFleetData}=await import('../../lib/server/fleet.ts');
+ let freight=(await loadFleetData(true,true,true,false,'2030-01')).freights.find(f=>f.id===id)!;
+ assert.equal(freight.distanceMeters,495000);assert.equal(freight.routeDistanceMeters,510000);assert.equal(freight.netRevenueCents,310000);assert.equal(freight.marginBasisPoints,6200);
+ assert.equal((await edit.PATCH(await request('/api/fleet/freights/x','admin','PATCH',{odometerEndMeters:125299999}),ctx)).status,400);
+ await assert.rejects(pg.query('update fleet_freights set odometer_end_meters=1 where id=$1',[id]));
+ const financial=await edit.PATCH(await request('/api/fleet/freights/x','finance','PATCH',{odometerStartMeters:0,odometerEndMeters:10000,routeDistanceMeters:10000}),ctx);assert.equal(financial.status,200,await financial.clone().text());
+ freight=(await loadFleetData(true,true,true,false,'2030-01')).freights.find(f=>f.id===id)!;assert.equal(freight.distanceMeters,495000);assert.equal(freight.odometerStartMeters,125300000);
+ const changed=await edit.PATCH(await request('/api/fleet/freights/x','admin','PATCH',{odometerEndMeters:125800000,cargoVehicles:salePayload.cargoVehicles}),ctx);assert.equal(changed.status,200,await changed.clone().text());
+ assert.equal((await queryFirst('select distance_meters from fleet_freights where id=?',[id]) as {distance_meters:number}).distance_meters,500000);
+});
+
+test('exclusão real de frete pago remove anexos, mantém venda e OS e desacopla vínculo com carga preservada',async()=>{
+ const {id}=await queryFirst("select id from fleet_freights where client_name='ODOMETRO'") as {id:string};
+ const sales=await import('../../app/api/sales/route.ts');const orders=await import('../../app/api/sales/[id]/service-order/route.ts');const remove=await import('../../app/api/fleet/freights/[id]/route.ts');
+ const created=await sales.POST(await request('/api/sales','admin','POST',{...salePayload,fleetFreightId:id}));assert.equal(created.status,201,await created.clone().text());const sale=await created.json();
+ assert.equal((await orders.POST(await request('/api/sales/x/service-order','admin','POST'),{params:Promise.resolve({id:sale.id})})).status,200);
+ await pg.query("insert into fleet_attachments(id,freight_id,storage_key,file_name,size_bytes) values('delete-proof',$1,'delete-fleet/proof.pdf','proof.pdf',12)",[id]);
+ stored.set('delete-fleet/proof.pdf',new ArrayBuffer(12));
+ await pg.query("update fleet_freights set proof_attachment_id='delete-proof',payment_status='PAGO',paid_at='2030-01-01' where id=$1",[id]);
+ await pg.exec("insert into users(id,email,name,role) values('delete-manager','delete-manager@example.test','Manager','GERENCIA') on conflict do nothing");
+ for (const role of ['finance','seller','operator','delete-manager']) assert.equal((await remove.DELETE(await request('/api/fleet/freights/x',role,'DELETE'),{params:Promise.resolve({id})})).status,403);
+ const deleted=await remove.DELETE(await request('/api/fleet/freights/x','admin','DELETE'),{params:Promise.resolve({id})});assert.equal(deleted.status,200,await deleted.clone().text());
+ assert.equal(await queryFirst('select id from fleet_freights where id=?',[id]),null);assert.equal(stored.has('delete-fleet/proof.pdf'),false);
+ const kept=await queryFirst('select fleet_freight_id,cargo_vehicles from freight_sales where id=?',[sale.id]) as {fleet_freight_id:string|null;cargo_vehicles:unknown[]};assert.equal(kept.fleet_freight_id,null);assert.equal(kept.cargo_vehicles.length,2);
+ assert.ok(await queryFirst('select id from service_orders where sale_id=?',[sale.id]));assert.equal(await queryFirst("select id from fleet_attachments where id='delete-proof'"),null);
+});
+
+test('excluir venda com OS e versões mantém frete; falha no Storage fica na fila e pode ser reprocessada',async()=>{
+ const f=await queryFirst("select id from fleet_freights where client_name='CLIENTE CARGA'") as {id:string};
+ // Existing linked sale from the previous OS test.
+ const sale=await queryFirst('select id from freight_sales where fleet_freight_id=?',[f.id]) as {id:string};
+ const orders=await import('../../app/api/sales/[id]/service-order/route.ts');const remove=await import('../../app/api/sales/[id]/route.ts');
+ const context={params:Promise.resolve({id:sale.id})};await orders.POST(await request('/api/sales/x/service-order','admin','POST'),context);
+ const order=await queryFirst('select id from service_orders where sale_id=?',[sale.id]) as {id:string};
+ assert.ok((await queryAll('select version from service_order_versions where order_id=?',[order.id])).length>=2);
+ await pg.query("insert into sale_attachments(id,sale_id,storage_key,file_name,mime_type,size_bytes,uploaded_by) values('delete-sale-proof',$1,'delete-sale/proof.pdf','proof.pdf','application/pdf',12,'admin')",[sale.id]);
+ stored.set('delete-sale/proof.pdf',new ArrayBuffer(12));const original=bucket.delete;
+ bucket.delete=async()=>{throw new Error('Storage unavailable');};
+ try {const response=await remove.DELETE(await request('/api/sales/x','admin','DELETE'),context);assert.equal(response.status,200,await response.clone().text());assert.equal((await response.json()).storageCleanupPending,true);} finally {bucket.delete=original;}
+ assert.equal(await queryFirst('select id from freight_sales where id=?',[sale.id]),null);assert.ok(await queryFirst('select id from fleet_freights where id=?',[f.id]));
+ assert.equal((await queryAll('select * from service_order_versions where order_id=?',[order.id])).length,0);
+ assert.ok(await queryFirst("select storage_key from storage_cleanup_jobs where storage_key='delete-sale/proof.pdf'"));
+ const retry=await import('../../app/api/storage-cleanup/route.ts');assert.equal((await retry.POST(await request('/api/storage-cleanup','finance','POST'))).status,403);
+ assert.equal((await retry.POST(await request('/api/storage-cleanup','admin','POST'))).status,200);assert.equal(stored.has('delete-sale/proof.pdf'),false);
+});
+
+test('tipo de destino é independente, editável e incluído em novas OS; condição de pagamento é ignorada',async()=>{
+ const create=await import('../../app/api/sales/route.ts');const edit=await import('../../app/api/sales/[id]/route.ts');
+ const response=await create.POST(await request('/api/sales','seller','POST',{...salePayload,cargoVehicles:[{model:'UNO'}],paymentCondition:'Não deve ser salvo'}));assert.equal(response.status,201,await response.clone().text());const {id}=await response.json();
+ const ctx={params:Promise.resolve({id})};const updated=await edit.PATCH(await request('/api/sales/x','admin','PATCH',{...salePayload,destinationLocationType:'PONTO_DE_ENCONTRO'}),ctx);assert.equal(updated.status,200,await updated.clone().text());
+ const row=await queryFirst('select origin_location_type,destination_location_type,payment_condition,jsonb_typeof(cargo_vehicles) as cargo_type from freight_sales where id=?',[id]) as Record<string,unknown>;
+ assert.equal(row.origin_location_type,'PATIO');assert.equal(row.destination_location_type,'PONTO_DE_ENCONTRO');assert.equal(row.payment_condition,null);assert.equal(row.cargo_type,'array');
+ const exporter=await import('../../app/api/exports/sales.csv/route.ts');
+ const csv=await exporter.GET(await request('/api/exports/sales.csv?competency=2026-09','admin'));assert.equal(csv.status,200);assert.match(await csv.text(),/TIPO LOCAL DESTINO/);
+ assert.equal((await edit.PATCH(await request('/api/sales/x','admin','PATCH',{...salePayload,destinationLocationType:'INVALIDO'}),ctx)).status,400);
+ const removed=await edit.DELETE(await request('/api/sales/x','admin','DELETE'),ctx);assert.equal(removed.status,200,await removed.clone().text());
+});
+
+test('faturamento mensal não trunca em 500 e comissões incluem apenas motoristas cadastrados',async()=>{
+ await pg.exec(`insert into fleet_freights(id,vehicle_plate,driver_id,driver_name,client_name,origin,destination,pickup_date,billing_date,operational_status,freight_amount_cents,distance_meters,driver_commission_cents)
+ select 'billing-'||i,'ABC1D23',case when i<=600 then 'results-driver' else null end,'MOTORISTA','CLIENTE','A','B','2031-01-01','2031-02-01','FATURADO',1000,1000,100 from generate_series(1,601) i`);
+ const {loadFleetData}=await import('../../lib/server/fleet.ts');const fleet=await loadFleetData(true,true,true,false,'2031-02');
+ assert.equal(fleet.freights.length,0);assert.equal(fleet.billing.freightCount,601);assert.equal(fleet.billing.revenueCents,601000);assert.equal(fleet.billing.commissionCents,60000);assert.equal(fleet.billing.drivers[0].freights.length,600);
+ assert.equal('possibleMatchCount' in fleet.summary,false);assert.equal('matchWindowDays' in fleet.parameters,false);
+});
+
+test('rota CEP a CEP retorna endereços e distância rodoviária; falta de integração e timeout permitem manual',async()=>{
+ const route=await import('../../app/api/fleet/route-lookup/route.ts');const original=globalThis.fetch;const key=process.env.GOOGLE_MAPS_API_KEY;
+ process.env.GOOGLE_MAPS_API_KEY='test-key';
+ try {
+  globalThis.fetch=async(input)=>String(input).includes('viacep') ? Response.json({logradouro:'Rua A',localidade:'São Paulo',uf:'SP'}) : Response.json({routes:[{distanceMeters:510000}]});
+  const call=()=>request('/api/fleet/route-lookup','admin','POST',{originCep:'01001000',destinationCep:'20040002'}).then(route.POST);
+  const result=await call();assert.equal(result.status,200);assert.equal((await result.json()).distanceMeters,510000);
+  delete process.env.GOOGLE_MAPS_API_KEY;const missing=await (await call()).json();assert.equal(missing.distanceMeters,null);assert.match(missing.notice,/manualmente/);assert.ok(missing.origin);
+  process.env.GOOGLE_MAPS_API_KEY='test-key';globalThis.fetch=async(input)=>{if(String(input).includes('viacep'))return Response.json({localidade:'São Paulo',uf:'SP'});throw new Error('Timeout');};
+  assert.match((await (await call()).json()).notice,/manualmente/);
+  assert.equal((await route.POST(await request('/api/fleet/route-lookup','finance','POST',{origin:'A',destination:'B'}))).status,403);
+ } finally {globalThis.fetch=original;if(key===undefined)delete process.env.GOOGLE_MAPS_API_KEY;else process.env.GOOGLE_MAPS_API_KEY=key;}
+});
+
+test('exclusão de frete sem vínculo preserva histórico mensal; migration nova é reaplicável sem perda',async()=>{
+ const history=await queryAll('select * from fleet_vehicle_costs order by id');assert.ok(history.length>0);
+ const remove=await import('../../app/api/fleet/freights/[id]/route.ts');
+ const response=await remove.DELETE(await request('/api/fleet/freights/linked-freight','admin','DELETE'),{params:Promise.resolve({id:'linked-freight'})});assert.equal(response.status,200,await response.clone().text());
+ assert.equal(await queryFirst("select id from fleet_freights where id='linked-freight'"),null);
+ await pg.exec(await readFile(new URL('../../supabase/migrations/20260923220518_fleet_operation_integrity.sql',import.meta.url),'utf8'));
+ assert.deepEqual(await queryAll('select * from fleet_vehicle_costs order by id'),history);
+ const tables=await queryAll("select rowsecurity from pg_tables where schemaname='public' and tablename='storage_cleanup_jobs'");assert.equal((tables[0] as {rowsecurity:boolean}).rowsecurity,true);
+ assert.equal((await queryAll("select 1 from information_schema.role_table_grants where table_name='storage_cleanup_jobs' and grantee in ('anon','authenticated')")).length,0);
 });
