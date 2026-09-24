@@ -96,7 +96,6 @@ export type InstallmentRecord = {
 export type SaleRecord = {
   cargoVehicles: CargoVehicle[];
   fleetFreightId: string | null;
-  paymentCondition: string | null;
   id: string;
   saleNumber: string;
   saleDate: string;
@@ -110,6 +109,7 @@ export type SaleRecord = {
   plate: string | null;
   initialProviderName: string | null;
   origin: string;
+  destinationLocationType: OriginLocationType | null;
   originLocationType: OriginLocationType | null;
   destination: string;
   pickupAddressSnapshot: string | null;

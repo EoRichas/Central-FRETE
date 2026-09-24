@@ -1,3 +1,4 @@
+import { drainStorageCleanup } from "@/lib/server/storage-cleanup";
 import { cargoVehiclesOrLegacy } from "@/lib/domain/cargo-vehicles";
 import { authorize } from "@/lib/server/auth";
 import { ApiError, getD1, jsonError, queryFirst } from "@/lib/server/d1";
@@ -35,10 +36,12 @@ type FreightSnapshot = {
   operationalStatus: string;
   priority: string;
   freightAmountCents: number;
+  routeDistanceMeters: number | null;
+  odometerStartMeters: number | null;
+  odometerEndMeters: number | null;
   distanceMeters: number;
   tollCents: number;
   driverCommissionCents: number;
-  returnUsed: number;
 };
 
 async function freightSnapshot(id: string) {
@@ -54,9 +57,8 @@ async function freightSnapshot(id: string) {
       pickup_date as pickupDate, delivery_date as deliveryDate,
       billing_date as billingDate, operational_status as operationalStatus,
       priority, freight_amount_cents as freightAmountCents,
-      distance_meters as distanceMeters, toll_cents as tollCents,
-      driver_commission_cents as driverCommissionCents,
-      return_used as returnUsed
+      route_distance_meters as routeDistanceMeters, odometer_start_meters as odometerStartMeters, odometer_end_meters as odometerEndMeters, distance_meters as distanceMeters, toll_cents as tollCents,
+      driver_commission_cents as driverCommissionCents
      from fleet_freights where id = ?`,
     [id],
   );
@@ -91,7 +93,9 @@ export async function PATCH(request: Request, context: RouteContext) {
           operationalStatus: previous.operationalStatus,
           priority: previous.priority,
           distanceMeters: previous.distanceMeters,
-          returnUsed: Boolean(previous.returnUsed),
+          routeDistanceMeters: previous.routeDistanceMeters,
+          odometerStartMeters: previous.odometerStartMeters,
+          odometerEndMeters: previous.odometerEndMeters,
           tollCents: previous.tripId ? previous.tollCents : submitted.tollCents,
           actualFuelCostCents: submitted.actualFuelCostCents,
         }
@@ -115,9 +119,9 @@ export async function PATCH(request: Request, context: RouteContext) {
             origin = ?, destination = ?, pickup_date = ?, delivery_date = ?,
             billing_date = ?, operational_status = ?, priority = ?,
             freight_amount_cents = ?, distance_meters = ?, toll_cents = ?,
-            driver_commission_cents = ?, return_used = ?, updated_by = ?, origin_cep = ?, destination_cep = ?,
+            driver_commission_cents = ?, updated_by = ?, origin_cep = ?, destination_cep = ?,
             trip_id = ?, yard_cost_cents = ?, pickup_cost_cents = ?, delivery_cost_cents = ?, other_cost_cents = ?, actual_fuel_cost_cents = ?,
-            cargo_vehicles = ?::jsonb, fuel_liters_milli = ?, fuel_pump_amount_cents = ?,
+            cargo_vehicles = ?::text::jsonb, fuel_liters_milli = ?, fuel_pump_amount_cents = ?, route_distance_meters = ?, odometer_start_meters = ?, odometer_end_meters = ?,
             updated_at = to_char(timezone('UTC', now()), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
            where id = ?`,
         )
@@ -140,11 +144,11 @@ export async function PATCH(request: Request, context: RouteContext) {
           data.distanceMeters,
           data.tollCents,
           data.driverCommissionCents,
-          data.returnUsed ? 1 : 0,
           user.id,
           data.originCep, data.destinationCep,
           data.tripId, data.yardCostCents, data.pickupCostCents, data.deliveryCostCents, data.otherCostCents, data.actualFuelCostCents,
           JSON.stringify(data.cargoVehicles), data.fuelLitersMilli, data.fuelPumpAmountCents,
+          data.routeDistanceMeters, data.odometerStartMeters, data.odometerEndMeters,
           id,
         ),
       db
@@ -159,7 +163,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           id,
           user.id,
           user.email,
-          JSON.stringify({ ...previous, returnUsed: Boolean(previous.returnUsed) }),
+          JSON.stringify(previous),
           JSON.stringify(next),
           request.headers.get("x-request-id") ?? crypto.randomUUID(),
         ),
@@ -172,7 +176,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
 export async function DELETE(request: Request, context: RouteContext) {
   try {
-    const user = await authorize(request, ["ADMIN", "GERENCIA"]);
+    const user = await authorize(request, ["ADMIN"]);
     const { id } = await context.params;
     const previous = await freightSnapshot(id);
     if (!previous) throw new ApiError(404, "Frete da frota não encontrado.");
@@ -190,12 +194,12 @@ export async function DELETE(request: Request, context: RouteContext) {
           id,
           user.id,
           user.email,
-          JSON.stringify({ ...previous, returnUsed: Boolean(previous.returnUsed) }),
+          JSON.stringify({id: previous.id, freightAmountCents: previous.freightAmountCents}),
           request.headers.get("x-request-id") ?? crypto.randomUUID(),
         ),
       db.prepare("delete from fleet_freights where id = ?").bind(id),
     ]);
-    return Response.json({ id, deleted: true });
+    return Response.json({ id, deleted: true, storageCleanupPending: await drainStorageCleanup() });
   } catch (error) {
     return jsonError(error);
   }

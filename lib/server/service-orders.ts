@@ -11,18 +11,18 @@ export function orderIssuer(): ServiceOrderSnapshot['issuer'] {
 // One SQL statement captures all document fields from the same MVCC snapshot, including
 // linked fleet cargo and client address. No costs, commissions or internal finance are disclosed.
 export const ORDER_SOURCE_SQL = `select jsonb_build_object(
- 'schemaVersion',1,'issuer',?::jsonb,'saleId',s.id,'saleNumber',s.sale_number,'saleDate',s.sale_date,
+ 'schemaVersion',1,'issuer',?::text::jsonb,'saleId',s.id,'saleNumber',s.sale_number,'saleDate',s.sale_date,
  'clientName',c.legal_name,'clientDocument',c.cpf_cnpj,
  'clientAddress',(select concat_ws(', ',a.street,a.number,nullif(a.complement,''),a.district,a.city,a.state,a.cep)
    from client_addresses a where a.client_id=c.id order by (a.type='COBRANCA') desc,a.is_primary desc,a.id limit 1),
  'origin',s.origin,'destination',s.destination,'pickupAddress',s.pickup_address_snapshot,'deliveryAddress',s.delivery_address_snapshot,
  'cargoVehicles',case when f.id is not null then coalesce(f.cargo_vehicles,jsonb_build_array(jsonb_build_object('model',f.cargo_vehicle_model,'plate',f.cargo_plate,'identification',null)))
    else coalesce(s.cargo_vehicles,jsonb_build_array(jsonb_build_object('model',s.vehicle,'plate',s.plate,'identification',null))) end,
- 'freightAmountCents',s.freight_amount_cents,'paymentCondition',s.payment_condition,
+ 'freightAmountCents',s.freight_amount_cents,
  'installments',coalesce((select jsonb_agg(jsonb_build_object('dueDate',i.due_date,'paymentMethod',i.payment_method,'amountCents',i.expected_amount_cents) order by i.installment_number,i.id)
    from receivable_installments i where i.sale_id=s.id),'[]'::jsonb),
  'financialDueDate',s.financial_due_date,'operationalDeadlineDays',s.operational_deadline_days,'deliveryDeadline',s.delivery_deadline,'notes',s.notes
-) || case when s.origin_location_type is null then '{}'::jsonb else jsonb_build_object('originLocationType',s.origin_location_type) end as snapshot from freight_sales s left join clients c on c.id=s.client_id
+) || case when s.origin_location_type is null then '{}'::jsonb else jsonb_build_object('originLocationType',s.origin_location_type) end || case when s.destination_location_type is null then '{}'::jsonb else jsonb_build_object('destinationLocationType',s.destination_location_type) end as snapshot from freight_sales s left join clients c on c.id=s.client_id
 left join fleet_freights f on f.id=s.fleet_freight_id where s.id=?`;
 
 export async function authorizeOrder(user: CurrentUser, saleId: string) {

@@ -16,6 +16,7 @@ export async function migrateDatabase(configuration) {
     "009_direct_paid_operation_costs.sql",
     "010_fleet_cargo_sales_orders.sql",
     "011_sale_origin_location_type.sql",
+    "../supabase/migrations/20260923220518_fleet_operation_integrity.sql",
   ];
   const migrations = await Promise.all(
     migrationFiles.map((file) =>

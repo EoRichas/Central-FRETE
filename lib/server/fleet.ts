@@ -16,7 +16,6 @@ import {
   DEFAULT_FLEET_PARAMETERS,
   averageVehicleCostPerKmCents,
   calculateFleetFreightMetrics,
-  hasPossibleFleetMatch,
   summarizeFleet,
 } from "@/lib/domain/fleet";
 import { queryAll, queryFirst } from "@/lib/server/d1";
@@ -25,7 +24,6 @@ type SettingsRow = {
   fuelPriceCents: number;
   averageConsumptionMilliKmPerLiter: number;
   fallbackFixedCostPerKmCents: number;
-  matchWindowDays: number;
   officeMonthlyCostCents: number | null;
   updatedAt: string;
   updatedByName: string | null;
@@ -86,10 +84,12 @@ type FreightRow = {
   operationalStatus: FleetOperationalStatus;
   priority: FleetPriority;
   freightAmountCents: number;
+  routeDistanceMeters: number | null;
+  odometerStartMeters: number | null;
+  odometerEndMeters: number | null;
   distanceMeters: number;
   tollCents: number;
   driverCommissionCents: number;
-  returnUsed: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -99,7 +99,6 @@ async function loadParameters(): Promise<FleetParameters> {
     `select s.fuel_price_cents as fuelPriceCents,
       s.average_consumption_milli_km_per_liter as averageConsumptionMilliKmPerLiter,
       s.fallback_fixed_cost_per_km_cents as fallbackFixedCostPerKmCents,
-      s.match_window_days as matchWindowDays,
       s.office_monthly_cost_cents as officeMonthlyCostCents,
       s.updated_at as updatedAt, u.name as updatedByName
      from fleet_settings s
@@ -148,10 +147,9 @@ export async function loadFleetData(
           pickup_date as pickupDate, delivery_date as deliveryDate,
           billing_date as billingDate, operational_status as operationalStatus,
           priority, freight_amount_cents as freightAmountCents,
-          distance_meters as distanceMeters, toll_cents as tollCents,
+          route_distance_meters as routeDistanceMeters, odometer_start_meters as odometerStartMeters, odometer_end_meters as odometerEndMeters, distance_meters as distanceMeters, toll_cents as tollCents,
           driver_commission_cents as driverCommissionCents,
-          return_used as returnUsed, created_at as createdAt,
-          updated_at as updatedAt
+          created_at as createdAt, updated_at as updatedAt
          from fleet_freights
          order by pickup_date desc, created_at desc
          `,
@@ -193,17 +191,18 @@ export async function loadFleetData(
     active: Boolean(row.active),
   }));
 
-  const matchableFreights = freightRows.map((row) => ({
-    id: row.id,
-    origin: row.origin,
-    destination: row.destination,
-    pickupDate: row.pickupDate,
-    deliveryDate: row.deliveryDate,
-  }));
   const vehicleRates = new Map(vehicles.map((vehicle) => [vehicle.id, vehicle.averageCostPerKmCents]));
+  const tripsById = new Map(trips.map(trip => [trip.id, trip]));
+  const membersByTrip = new Map<string, string[]>();
+  for (const row of freightRows) {
+    if (!row.tripId) continue;
+    const members = membersByTrip.get(row.tripId) ?? [];
+    members.push(row.id);
+    membersByTrip.set(row.tripId, members);
+  }
   const allFreights: FleetFreight[] = freightRows.map((row) => {
-    const trip = trips.find(t => t.id === row.tripId);
-    const memberIds = freightRows.filter(f => f.tripId === row.tripId).map(f => f.id);
+    const trip = row.tripId ? tripsById.get(row.tripId) : undefined;
+    const memberIds = row.tripId ? membersByTrip.get(row.tripId) ?? [] : [];
     const metrics = calculateFleetFreightMetrics(
       row,
       parameters,
@@ -215,18 +214,20 @@ export async function loadFleetData(
     return {
       ...row,
       cargoVehicles: cargoVehiclesOrLegacy(row.cargoVehicles, row.cargoVehicleModel, row.cargoPlate),
-      returnUsed: Boolean(row.returnUsed),
       ...metrics,
-      possibleMatch: hasPossibleFleetMatch(
-        row,
-        matchableFreights,
-        parameters.matchWindowDays,
-      ),
     };
   });
 
   const freights = allFreights.filter(row => !competency || row.pickupDate.slice(0, 7) === competency);
+  const billingFreights = allFreights.filter(row => !competency || row.billingDate?.slice(0,7) === competency);
+  const commissionDrivers = drivers.map(driver => {
+    const members = billingFreights.filter(f => f.driverId === driver.id);
+    return {id: driver.id, name: driver.name, commissionCents: members.reduce((sum,f) => sum+f.driverCommissionCents,0), freights: members};
+  }).filter(driver => driver.freights.length > 0);
   return {
+    canDeleteFreights: false,
+    billing: {revenueCents: billingFreights.reduce((sum,f) => sum+f.freightAmountCents,0), freightCount: billingFreights.length,
+      commissionCents: commissionDrivers.reduce((sum,d) => sum+d.commissionCents,0), freights: billingFreights, drivers: commissionDrivers},
     trips,
     tripResults: trips.filter(trip => !competency || trip.operationDate.slice(0, 7) === competency).map(trip => calculateTripResult(trip, allFreights)),
     parameters,

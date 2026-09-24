@@ -20,6 +20,7 @@ export async function GET(request: Request) {
       competency,
       user.role === "FINANCEIRO",
     );
+    fleet.canDeleteFreights = user.role === "ADMIN";
     return Response.json({ fleet });
   } catch (error) {
     return jsonError(error);
