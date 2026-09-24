@@ -9,6 +9,14 @@ trip_members as (select id,trip_id,actual_fuel_cost_cents,
  from fleet_freights where trip_id is not null)
 select jsonb_build_object(
  'competency', m.competency,
+ 'sales', jsonb_build_object(
+   'count', (select count(*) from freight_sales s where s.competency=m.competency),
+   'revenueCents', (select coalesce(sum(s.freight_amount_cents),0) from freight_sales s where s.competency=m.competency),
+   'costCents', (select coalesce(sum(round(s.freight_amount_cents::numeric * s.commission_basis_points / 10000)),0)
+     from freight_sales s where s.competency=m.competency)
+     + (select coalesce(sum(c.amount_cents),0) from freight_costs c join freight_sales s on s.id=c.sale_id where s.competency=m.competency),
+   'pendingCount', (select count(*) from freight_sales s where s.competency=m.competency and s.costs_pending=1)
+ ),
  'freights', coalesce((select jsonb_agg(jsonb_build_object(
    'id', f.id, 'client', f.client_name, 'revenueCents', f.freight_amount_cents,
    'directCostCents', f.driver_commission_cents + f.yard_cost_cents + f.pickup_cost_cents + f.delivery_cost_cents + f.other_cost_cents,

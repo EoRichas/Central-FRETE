@@ -11,7 +11,7 @@ A imagem aprovada, sem formulário ou retângulo branco desenhado, substitui `pu
 1. Em Frota > Fretes, registre a receita e os custos específicos do veículo transportado: comissão do motorista, pátio/recebimento, coleta, entrega e outros custos diretos.
 2. Para uma carga com vários veículos, crie uma viagem em Frota > Viagens. Informe o caminhão, motorista, data de apuração e custos realizados de diesel, pedágio e outros custos compartilhados.
 3. Edite cada frete transportado e selecione a mesma viagem. O caminhão e o motorista devem coincidir. Diesel e pedágio não podem ser lançados novamente no frete vinculado. Valores de comissão permanecem por frete; se houver uma comissão total da viagem, distribua seu valor entre os fretes sem repetir o total em cada um.
-4. Em Frota > Fechamento mensal, confira os fretes faturados, custos e lançamentos complementares. Inclua despesas fixas, outros custos variáveis e receitas de outras áreas que ainda não estejam representadas na Frota.
+4. Em Frota > Fechamento mensal, confira os fretes faturados, custos e lançamentos complementares. Inclua despesas fixas, outros custos variáveis e receitas de outras áreas que ainda não estejam representadas em Vendas/Fretes ou na Frota.
 5. Confirme a conferência e feche o mês. Para ajustes, reabra com motivo e feche novamente. A versão anterior permanece no histórico.
 
 ## Regras
@@ -31,7 +31,11 @@ No fechamento, receitas e custos diretos dos fretes entram no mês da **data de 
 
 Fretes sem data de faturamento ficam fora da receita mensal e aparecem como pendência informativa quando coletados no mês selecionado. Fretes avulsos faturados sem diesel realizado impedem o fechamento. O operador deve informar inclusive zero quando não houve esse custo.
 
-A integração automática é com o módulo **Frota**. O módulo **Vendas** não é somado automaticamente, pois não existe vínculo confiável entre seus registros e os fretes da Frota. Receitas de outras áreas, tributos e despesas não registrados na Frota são lançamentos complementares identificados e conferidos pelo responsável. O resultado representa toda a empresa somente quando esses lançamentos estiverem completos. Não lançar novamente o mesmo transporte ou custo em fontes diferentes.
+A integração automática soma **Vendas/Fretes + Frota**, conforme a confirmação de que são receitas de cadastros distintos. Vendas usa sua competência e inclui os custos cadastrados e a comissão de cada vendedor, arredondada por venda. A Frota mantém faturamento, combustível realizado e custos de viagens pelas regras acima. A consulta considera todas as vendas da competência, sem o limite de 500 da listagem. Vínculos comerciais para consultar a carga não eliminam automaticamente receitas de nenhum dos cadastros.
+
+Receitas ou despesas complementares já cadastradas continuam preservadas. Se alguma delas repetia totais de Vendas informados manualmente, deve ser conferida e corrigida pelo responsável para evitar duplicação; a tela apresenta esse aviso. Vendas com custos pendentes deixam o resultado identificado como parcial. O Financeiro e a Frota exibem a mesma composição mensal.
+
+Fechamentos novos preservam também os totais de Vendas. Versões anteriores sem esse campo continuam com seus valores originais, identificadas como anteriores à consolidação; não se recalculam retroativamente. A atualização não cria tabelas ou migrações e não altera as regras de fechamento/reabertura.
 
 ## Histórico, concorrência e acesso
 
@@ -61,3 +65,9 @@ Para reverter o código, as colunas/tabelas novas podem ser mantidas sem perda d
 - Build de produção passou com `npm run build -- --webpack`.
 - Os arquivos alterados passam na checagem de lint. O lint global permanece com um erro anterior em `components/app-shell.tsx`, por `setState` dentro de um efeito, além de avisos preexistentes.
 - A inspeção visual no navegador não foi concluída: o navegador remoto retornou `net::ERR_BLOCKED_BY_CLIENT` ao tentar acessar a prévia local. O login foi conferido por caminho, checksum e resposta HTTP; isso não substitui validação visual em diferentes telas.
+
+## Consolidação de Vendas — 24/09/2026
+
+A consolidação foi adaptada à main após o PR #54, preservando sua interface simplificada, combustível realizado, vínculos de carga e Ordens de Serviço. Não reaplica as telas antigas de viagens nem altera o login, já atualizado no repositório.
+
+Validação desta atualização: 43 testes unitários, 19 de integração em PGlite, build de produção e lint dos arquivos alterados aprovados. O teste de regressão usa 501 vendas, múltiplos custos na mesma venda, comissão por venda, um frete faturado da Frota, custo fixo e edição posterior ao fechamento. A interface reutiliza o painel existente; não foi feita nova inspeção interativa em navegador. Nenhuma migração ou alteração em produção foi executada.

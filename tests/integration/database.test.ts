@@ -502,3 +502,33 @@ test('OS consulta todos os veículos do frete vinculado e detecta edição da ca
  const tables=await queryAll("select tablename,rowsecurity from pg_tables where tablename in ('sale_number_counters','service_orders','service_order_versions')");assert.equal(tables.length,3);assert.ok(tables.every(t=>(t as {rowsecurity:boolean}).rowsecurity));
  assert.equal((await queryAll("select * from information_schema.role_table_grants where grantee in ('anon','authenticated') and table_name in ('sale_number_counters','service_orders','service_order_versions')")).length,0);
 });
+
+test('mensal consolida mais de 500 vendas com frota, custos e comissões sem alterar fechamento anterior', async () => {
+ const monthly=await import('../../app/api/fleet/monthly/route.ts');
+ const {loadMonthlyReport}=await import('../../lib/server/monthly-results.ts');
+ const {calculateMonthlyResult}=await import('../../lib/domain/fleet-results.ts');
+ await pg.exec(`INSERT INTO freight_sales(id,sale_number,sale_date,competency,seller_id,seller_name,origin,destination,financial_due_date,operational_status,freight_amount_cents,commission_basis_points,created_by)
+ SELECT 'sum-sale-'||n,'SUM-'||n,'2025-02-01','2025-02','seller','Seller','A','B','2025-02-05','SEM_PREVISAO',100,700,'admin' FROM generate_series(1,501) n;
+ INSERT INTO freight_costs(id,sale_id,category,description,amount_cents) VALUES ('sum-cost-a','sum-sale-1','OUTRAS_DESPESAS','A',500),('sum-cost-b','sum-sale-1','OUTRAS_DESPESAS','B',200);
+ UPDATE freight_sales SET costs_pending=0 WHERE competency='2025-02';
+ UPDATE freight_sales SET costs_pending=1 WHERE id='sum-sale-1';
+ INSERT INTO fleet_freights(id,vehicle_plate,driver_name,client_name,origin,destination,pickup_date,billing_date,operational_status,freight_amount_cents,distance_meters,driver_commission_cents,actual_fuel_cost_cents,toll_cents)
+ VALUES ('sum-freight','SUM1A23','DRIVER','CLIENT','A','B','2025-01-30','2025-02-01','SEM_PREVISAO',100000,100000,10000,20000,5000);
+ INSERT INTO company_monthly_entries(id,competency,kind,description,amount_cents,created_by) VALUES ('sum-fixed','2025-02','FIXED','Aluguel',5000,'admin');`);
+ const report=await loadMonthlyReport('2025-02');
+ const totals=calculateMonthlyResult(report.current);
+ assert.deepEqual(report.current.sales,{count:501,revenueCents:50100,costCents:4207,pendingCount:1});
+ assert.equal(totals.fleetRevenueCents,100000); assert.equal(totals.revenueCents,150100);
+ assert.equal(totals.variableCostCents,39207); assert.equal(totals.fixedCostCents,5000); assert.equal(totals.resultCents,105893);
+ assert.equal((await monthly.GET(await request('/api/fleet/monthly?competency=2025-02','seller'))).status,403);
+ const financeView=await monthly.GET(await request('/api/fleet/monthly?competency=2025-02','finance'));
+ assert.equal(financeView.status,200); assert.deepEqual((await financeView.json()).current.sales,report.current.sales);
+ const closed=await monthly.POST(await request('/api/fleet/monthly','finance','POST',{competency:'2025-02',action:'CLOSE',reviewed:true}));
+ assert.equal(closed.status,200,await closed.clone().text());
+ await pg.exec("UPDATE freight_sales SET freight_amount_cents=200,costs_pending=0 WHERE id='sum-sale-1'");
+ const changed=await loadMonthlyReport('2025-02');
+ assert.equal(calculateMonthlyResult(changed.current).resultCents,105986);
+ assert.deepEqual(changed.history[0].snapshot.sales,report.current.sales);
+ assert.equal(calculateMonthlyResult(changed.history[0].snapshot).resultCents,105893);
+ assert.equal((await loadMonthlyReport('2025-01')).current.sales?.count,0);
+});
