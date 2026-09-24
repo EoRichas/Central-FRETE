@@ -90,7 +90,7 @@ export async function renderServiceOrderPdf(order: ServiceOrderVersion): Promise
   section('Cliente');
   paragraph(s.clientName || 'Cliente não informado',11,bold);
   field('CPF/CNPJ',s.clientDocument);field('Endereço',s.clientAddress);
-  section('Transporte');field('Origem',s.origin);if(s.originLocationType) field('Local da origem',ORIGIN_LOCATION_TYPE_LABELS[s.originLocationType]);field('Destino',s.destination);
+  section('Transporte');field('Origem',s.origin);if(s.originLocationType) field('Local da origem',ORIGIN_LOCATION_TYPE_LABELS[s.originLocationType]);field('Destino',s.destination);if(s.destinationLocationType) field('Local do destino',ORIGIN_LOCATION_TYPE_LABELS[s.destinationLocationType]);
   if(s.pickupAddress) field('Coleta',s.pickupAddress);
   if(s.deliveryAddress) field('Entrega',s.deliveryAddress);
   y-=5;
@@ -99,7 +99,6 @@ export async function renderServiceOrderPdf(order: ServiceOrderVersion): Promise
   section('Valores e pagamento');
   field('Valor do frete',money(s.freightAmountCents));
   paragraph(`VALOR TOTAL   ${money(s.freightAmountCents)}`,14,bold,blue);y-=4;
-  field('Condição de pagamento',s.paymentCondition);
   if(s.installments.length) table(['Parcela','Forma de pagamento','Vencimento','Valor'],s.installments.map((i,index)=>[String(index+1),methods[i.paymentMethod]||i.paymentMethod,date(i.dueDate),money(i.amountCents)]),[52,221,108,130]);
   else { field('Forma de pagamento',null);field('Vencimento',date(s.financialDueDate)); }
   section('Operação e observações');

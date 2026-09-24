@@ -38,7 +38,6 @@ export type FleetParameters = {
   fuelPriceCents: number;
   averageConsumptionMilliKmPerLiter: number;
   fallbackFixedCostPerKmCents: number;
-  matchWindowDays: number;
   officeMonthlyCostCents: number | null;
   updatedAt: string | null;
   updatedByName: string | null;
@@ -73,6 +72,9 @@ export type FleetDriver = {
 };
 
 export type FleetFreightBase = {
+  routeDistanceMeters?: number | null;
+  odometerStartMeters?: number | null;
+  odometerEndMeters?: number | null;
   cargoVehicles?: CargoVehicle[];
   fuelLitersMilli?: number | null;
   fuelPumpAmountCents?: number | null;
@@ -100,7 +102,6 @@ export type FleetFreightBase = {
   distanceMeters: number;
   tollCents: number;
   driverCommissionCents: number;
-  returnUsed: boolean;
 };
 
 export type FleetFreightMetrics = {
@@ -127,7 +128,6 @@ export type FleetFreight = FleetFreightBase & FleetFreightMetrics & {
   paymentStatus: "EM_ABERTO" | "PAGO";
   originCep: string | null;
   destinationCep: string | null;
-  possibleMatch: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -137,8 +137,6 @@ export type FleetSummary = {
   contributionCents: number;
   missingCostCount: number;
   freightCount: number;
-  possibleMatchCount: number;
-  returnUsedCount: number;
   revenueCents: number;
   allocatedCostCents: number;
   totalCostCents: number;
@@ -154,6 +152,8 @@ export type FleetData = {
   drivers: FleetDriver[];
   freights: FleetFreight[];
   summary: FleetSummary;
+  canDeleteFreights: boolean;
+  billing: FleetBillingData;
   canManage: boolean;
   canEditFreights: boolean;
   canEditFreightFinancials: boolean;
@@ -161,34 +161,14 @@ export type FleetData = {
   freightOnly: boolean;
 };
 
-type MatchableFreight = Pick<
-  FleetFreightBase,
-  "origin" | "destination" | "pickupDate" | "deliveryDate"
-> & { id: string };
-
 export const DEFAULT_FLEET_PARAMETERS: FleetParameters = {
   fuelPriceCents: 738,
   averageConsumptionMilliKmPerLiter: 3_200,
   fallbackFixedCostPerKmCents: 45,
-  matchWindowDays: 3,
   officeMonthlyCostCents: null,
   updatedAt: null,
   updatedByName: null,
 };
-
-function routeKey(value: string) {
-  return value
-    .normalize("NFKC")
-    .trim()
-    .replace(/\s+/g, " ")
-    .toLocaleUpperCase("pt-BR");
-}
-
-function utcDay(value: string | null) {
-  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
-  const timestamp = Date.parse(`${value}T00:00:00Z`);
-  return Number.isFinite(timestamp) ? Math.floor(timestamp / 86_400_000) : null;
-}
 
 export function averageVehicleCostPerKmCents(
   costs: Array<Pick<FleetVehicleCost, "distanceMeters" | "monthlyCostCents"> & Partial<Pick<FleetVehicleCost, "includeInRateAverage">>>,
@@ -264,23 +244,6 @@ export function calculateFleetFreightPreview(
   return calculateFleetFreightMetrics(draft, parameters, rate, tripShare);
 }
 
-export function hasPossibleFleetMatch(
-  freight: MatchableFreight,
-  allFreights: MatchableFreight[],
-  windowDays: number,
-) {
-  const deliveryDay = utcDay(freight.deliveryDate);
-  if (deliveryDay === null || !routeKey(freight.destination)) return false;
-  const deadlineDay = deliveryDay + Math.max(0, windowDays);
-  const destination = routeKey(freight.destination);
-
-  return allFreights.some((candidate) => {
-    if (candidate.id === freight.id || routeKey(candidate.origin) !== destination) return false;
-    const pickupDay = utcDay(candidate.pickupDate);
-    return pickupDay !== null && pickupDay >= deliveryDay && pickupDay <= deadlineDay;
-  });
-}
-
 export function summarizeFleet(freights: FleetFreight[]): FleetSummary {
   const revenueCents = freights.reduce((total, freight) => total + freight.freightAmountCents, 0);
   const allocatedCostCents = freights.reduce((total, freight) => total + freight.allocatedCostCents, 0);
@@ -292,8 +255,6 @@ export function summarizeFleet(freights: FleetFreight[]): FleetSummary {
     contributionCents: freights.reduce((sum, freight) => sum + freight.contributionCents, 0),
     missingCostCount: 0,
     freightCount: freights.length,
-    possibleMatchCount: freights.filter((freight) => freight.possibleMatch).length,
-    returnUsedCount: freights.filter((freight) => freight.returnUsed).length,
     revenueCents,
     allocatedCostCents,
     totalCostCents,
@@ -303,3 +264,9 @@ export function summarizeFleet(freights: FleetFreight[]): FleetSummary {
       : 0,
   };
 }
+
+export type FleetBillingData = {
+  revenueCents: number; freightCount: number; commissionCents: number;
+  freights: FleetFreight[];
+  drivers: {id: string; name: string; commissionCents: number; freights: FleetFreight[]}[];
+};

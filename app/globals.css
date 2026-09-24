@@ -754,3 +754,7 @@ td > small { max-width: 270px; margin-top: 2px; overflow: hidden; color: var(--m
 }
 
 .fleet-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; display: grid; gap: 20px; }
+
+/* Keep the final expense aligned and compact on wide and narrow screens. */
+.fixed-cost-row.other-expense-compact { grid-column: 1 / -1; justify-self: center; width: min(100%, 560px); border-right: 0; }
+.fleet-commission-detail { margin: 12px 20px; padding: 12px 0; border-bottom: 1px solid var(--line); }

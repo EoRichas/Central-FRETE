@@ -1,3 +1,4 @@
+import { ORIGIN_LOCATION_TYPE_LABELS } from "@/lib/domain/operations";
 import { authorize } from "@/lib/server/auth";
 import { currentCompetency, isCompetency } from "@/lib/domain/dates";
 import { ApiError, jsonError } from "@/lib/server/d1";
@@ -15,7 +16,12 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const competency = url.searchParams.get("competency") || currentCompetency();
     if (!isCompetency(competency)) throw new ApiError(400, "Competência inválida.");
-    const sales = await listSales(user, { competency, limit: 500 });
+    const sales: Awaited<ReturnType<typeof listSales>> = [];
+    for (let offset = 0; ; offset += 500) {
+      const page = await listSales(user, { competency, limit: 500, offset });
+      sales.push(...page);
+      if (page.length < 500) break;
+    }
     const rows = [
       [
         "VENDA",
@@ -24,6 +30,8 @@ export async function GET(request: Request) {
         "CLIENTE",
         "ORIGEM",
         "DESTINO",
+        "TIPO LOCAL ORIGEM",
+        "TIPO LOCAL DESTINO",
         "STATUS OPERACIONAL",
         "STATUS FINANCEIRO",
         "VALOR FRETE",
@@ -40,6 +48,8 @@ export async function GET(request: Request) {
         sale.clientName ?? "CLIENTE NÃO INFORMADO",
         sale.origin,
         sale.destination,
+        sale.originLocationType ? ORIGIN_LOCATION_TYPE_LABELS[sale.originLocationType] : "",
+        sale.destinationLocationType ? ORIGIN_LOCATION_TYPE_LABELS[sale.destinationLocationType] : "",
         sale.operationalStatus,
         sale.financial.status,
         (sale.freightAmountCents / 100).toFixed(2),

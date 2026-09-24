@@ -65,6 +65,9 @@ export async function POST(request: Request) {
     const originLocationType = payload.originLocationType == null || payload.originLocationType === ""
       ? null
       : enumValue(payload.originLocationType, "Tipo de local de origem", ORIGIN_LOCATION_TYPES);
+    const destinationLocationType = payload.destinationLocationType == null || payload.destinationLocationType === ""
+      ? null
+      : enumValue(payload.destinationLocationType, "Tipo de local de destino", ORIGIN_LOCATION_TYPES);
     const competency = saleDate.slice(0, 7);
     const freightAmountCents = integerInRange(
       payload.freightAmountCents,
@@ -180,8 +183,8 @@ export async function POST(request: Request) {
             pickup_address_snapshot, delivery_address_snapshot,
             operational_deadline_days, origin_yard_entry_date, delivery_deadline,
             financial_due_date, operational_status, notes, freight_amount_cents,
-            commission_basis_points, costs_pending, created_by, cargo_vehicles, fleet_freight_id, payment_condition
-          ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?) returning sale_number as saleNumber`,
+            commission_basis_points, costs_pending, created_by, cargo_vehicles, fleet_freight_id, destination_location_type
+          ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::text::jsonb, ?, ?) returning sale_number as saleNumber`,
         )
         .bind(
           saleId,
@@ -211,7 +214,7 @@ export async function POST(request: Request) {
           commissionBasisPoints,
           costsPending ? 1 : 0,
           user.id,
-          JSON.stringify(cargo.cargoVehicles), cargo.fleetFreightId, cargo.paymentCondition,
+          JSON.stringify(cargo.cargoVehicles), cargo.fleetFreightId, destinationLocationType,
         ),
       db
         .prepare(
@@ -291,7 +294,7 @@ export async function POST(request: Request) {
           `insert into audit_logs (
             id, entity_type, entity_id, action, actor_user_id, actor_email,
             new_value, request_id
-          ) values (?, 'FREIGHT_SALE', ?, 'CREATED', ?, ?, (?::jsonb || jsonb_build_object('saleNumber',(select sale_number from freight_sales where id=?)))::text, ?)`,
+          ) values (?, 'FREIGHT_SALE', ?, 'CREATED', ?, ?, (?::text::jsonb || jsonb_build_object('saleNumber',(select sale_number from freight_sales where id=?)))::text, ?)`,
         )
         .bind(
           crypto.randomUUID(),

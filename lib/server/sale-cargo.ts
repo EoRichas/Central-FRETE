@@ -9,6 +9,5 @@ export async function parseSaleCargo(payload: Record<string, unknown>, user: Cur
     if (!await queryFirst('select id from fleet_freights where id=?', [fleetFreightId])) throw new ApiError(400, 'Frete da frota não encontrado.');
   }
   const cargoVehicles = parseCargoVehicles(payload.cargoVehicles === undefined ? previous?.cargoVehicles : payload.cargoVehicles, payload.vehicle ?? previous?.vehicle, payload.plate ?? previous?.plate);
-  const paymentCondition = boundedText(payload.paymentCondition === undefined ? previous?.paymentCondition : payload.paymentCondition, 'Condição de pagamento', 200);
-  return { fleetFreightId, cargoVehicles, paymentCondition };
+  return { fleetFreightId, cargoVehicles };
 }

@@ -217,13 +217,13 @@ export function SaleFormScreen({ initialSale }: { initialSale?: SaleRecord }) {
     try {
       const payload = {
         cargoVehicles, fleetFreightId: fleetFreightId || null,
-        paymentCondition: form.get("paymentCondition"),
         saleDate: form.get("saleDate"),
         sellerName: form.get("sellerName"),
         clientId: clientId || null,
         initialProviderName: form.get("initialProviderName"),
         origin: form.get("origin"),
         originLocationType: form.get("originLocationType") || null,
+        destinationLocationType: form.get("destinationLocationType") || null,
         destination: form.get("destination"),
         pickupAddressSnapshot: pickupAddress,
         deliveryAddressSnapshot: deliveryAddress,
@@ -341,7 +341,6 @@ export function SaleFormScreen({ initialSale }: { initialSale?: SaleRecord }) {
             </div>
             {meApi.data?.user.role === 'ADMIN' && <Field label="Operação da Frota (opcional)" hint="Quando vinculada, a venda e a OS consultam os veículos diretamente no frete."><select value={fleetFreightId} onChange={e => setFleetFreightId(e.target.value)}><option value="">Sem vínculo com a Frota</option>{initialSale?.fleetFreightId && <option value={initialSale.fleetFreightId}>Operação vinculada</option>}{fleetOptions.data?.freights.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}</select>{fleetOptions.error && <span role="alert">{fleetOptions.error}</span>}</Field>}
             {fleetFreightId ? <p className="fleet-update-note">Os veículos transportados serão consultados na operação da Frota vinculada.</p> : <CargoVehiclesEditor vehicles={cargoVehicles} onChange={setCargoVehicles} />}
-            <Field label="Condição de pagamento"><input name="paymentCondition" maxLength={200} defaultValue={initialSale?.paymentCondition ?? ''} placeholder="Ex.: à vista ou conforme vencimento" /></Field>
             <div className="operation-timing-grid">
               <Field label="Entrada no pátio de origem"><input type="date" value={originYardEntryDate} onChange={(event) => { const value = event.target.value; setOriginYardEntryDate(value); const calculated = calculateDestinationArrivalDate(value, operationalDeadlineDays); if (calculated) setDestinationArrivalDate(calculated); }} /></Field>
               <Field label="Chegada prevista no destino" hint="Calculada pela entrada + prazo; pode ser ajustada."><input type="date" value={destinationArrivalDate} onChange={(event) => setDestinationArrivalDate(event.target.value)} /></Field>
@@ -362,6 +361,12 @@ export function SaleFormScreen({ initialSale }: { initialSale?: SaleRecord }) {
                 <span className="route-side-label">Destino</span>
                 <Field label="Cidade / UF"><input name="destination" defaultValue={initialSale?.destination ?? ""} required /></Field>
                 <Field label="Endereço completo de entrega"><input value={deliveryAddress} onChange={(event) => setDeliveryAddress(event.target.value)} /></Field>
+                <Field label="Tipo de local de destino" hint="Informe onde o veículo deverá ser entregue.">
+                  <select name="destinationLocationType" defaultValue={initialSale?.destinationLocationType ?? ""} required>
+                    <option value="">Selecione o local</option>
+                    {ORIGIN_LOCATION_TYPES.map((type) => <option key={type} value={type}>{ORIGIN_LOCATION_TYPE_LABELS[type]}</option>)}
+                  </select>
+                </Field>
               </div>
             </div>
           </div>
@@ -378,7 +383,7 @@ export function SaleFormScreen({ initialSale }: { initialSale?: SaleRecord }) {
             <div className="cost-list-head"><div><h3>Custos da operação</h3><p>Preencha apenas as linhas que possuem valor.</p></div><span className="cost-currency-tag">TODOS OS VALORES EM BRL</span></div>
             <div className="fixed-cost-grid">
               {costs.map((cost, index) => (
-                <label className="fixed-cost-row" key={cost.key}>
+                <label className={`fixed-cost-row ${cost.category === "OUTRAS_DESPESAS" ? "other-expense-compact" : ""}`} key={cost.key}>
                   <span className="cost-index">{String(index + 1).padStart(2, "0")}</span>
                   <strong>{cost.label}</strong>
                   <div className="money-field compact"><span>R$</span><input aria-label={`Valor de ${cost.label}`} inputMode="decimal" placeholder="0,00" value={cost.amount} onChange={(event) => updateCost(cost.key, event.target.value)} /></div>

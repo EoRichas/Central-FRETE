@@ -313,6 +313,7 @@ export function SaleDetailScreen({ id }: { id: string }) {
             <div><dt>Cliente</dt><dd>{sale.clientName ?? "CLIENTE NÃO INFORMADO"}</dd></div>
             <div><dt>Prestador inicial</dt><dd>{sale.initialProviderName ?? "—"}</dd></div>
             <div><dt>Local da origem</dt><dd>{sale.originLocationType ? ORIGIN_LOCATION_TYPE_LABELS[sale.originLocationType] : "—"}</dd></div>
+            <div><dt>Local da destino</dt><dd>{sale.destinationLocationType ? ORIGIN_LOCATION_TYPE_LABELS[sale.destinationLocationType] : "—"}</dd></div>
             <div><dt>Coleta</dt><dd>{sale.pickupAddressSnapshot ?? sale.origin}</dd></div>
             <div><dt>Entrega</dt><dd>{sale.deliveryAddressSnapshot ?? sale.destination}</dd></div>
             <div><dt>Prazo operacional</dt><dd>{sale.operationalDeadlineDays ? `${sale.operationalDeadlineDays} dias` : "—"}</dd></div>

@@ -5,8 +5,8 @@ export type ServiceOrderSnapshot = {
   issuer: { name: string; document: string | null; address: string | null; contact: string | null };
   saleId: string; saleNumber: string; saleDate: string;
   clientName: string | null; clientDocument: string | null; clientAddress: string | null;
-  origin: string; originLocationType?: OriginLocationType | null; destination: string; pickupAddress: string | null; deliveryAddress: string | null;
-  cargoVehicles: CargoVehicle[]; freightAmountCents: number; paymentCondition: string | null;
+  origin: string; originLocationType?: OriginLocationType | null; destination: string; destinationLocationType?: OriginLocationType | null; pickupAddress: string | null; deliveryAddress: string | null;
+  cargoVehicles: CargoVehicle[]; freightAmountCents: number;
   installments: { dueDate: string; paymentMethod: string; amountCents: number }[];
   financialDueDate: string; operationalDeadlineDays: number | null; deliveryDeadline: string | null;
   notes: string | null;

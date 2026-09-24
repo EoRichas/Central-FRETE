@@ -90,7 +90,7 @@ export async function listSales(
   params.push(limit, offset);
   const sales = await queryAll<SaleRow>(
     `select
-      s.id, s.fleet_freight_id as fleetFreightId, s.payment_condition as paymentCondition,
+      s.id, s.fleet_freight_id as fleetFreightId, s.destination_location_type as destinationLocationType,
       case when f.id is not null then f.cargo_vehicles else s.cargo_vehicles end as cargoVehicles, s.sale_number as saleNumber, s.sale_date as saleDate,
       s.competency, s.seller_id as sellerId, s.seller_name as sellerName,
       s.client_id as clientId, c.legal_name as clientName,

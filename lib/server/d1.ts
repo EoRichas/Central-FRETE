@@ -64,21 +64,26 @@ function queryResult<T>(rows: readonly unknown[]): QueryResult<T> {
   };
 }
 
-function databaseError(error: unknown, query: string): ApiError {
+export function databaseError(error: unknown, query: string): ApiError {
   const message = error instanceof Error ? error.message : String(error);
   const code = typeof error === "object" && error !== null && "code" in error
     ? String(error.code)
     : null;
 
-  console.error("central_frete_database_error", { code, message, query });
+  const constraint = typeof error === "object" && error !== null && "constraint_name" in error ? String(error.constraint_name) : null;
+  console.error("central_frete_database_error", { code, constraint, message, query, stack: error instanceof Error ? error.stack : undefined });
+  if (constraint?.includes("cargo_vehicles")) return new ApiError(400, "Não foi possível salvar os veículos transportados. Confira os dados da carga.");
+  if (code === "23514") return new ApiError(400, "Confira os valores informados antes de salvar.");
 
   if (code === "23505") return new ApiError(409, "Já existe um registro com os dados informados.");
+  if (code === "23503" && /delete from freight_sales/i.test(query)) return new ApiError(409, "Não foi possível concluir a exclusão da venda. Revise os registros vinculados.");
+  if (code === "23503" && /delete from fleet_freights/i.test(query)) return new ApiError(409, "Não foi possível concluir a exclusão do frete. Revise os registros vinculados.");
   if (code === "23503") return new ApiError(409, "O registro possui vínculos e não pode ser alterado dessa forma.");
   if (code === "42P01") {
-    return new ApiError(503, "As tabelas ainda não foram criadas. Execute npm run migrate antes de iniciar o sistema.");
+    return new ApiError(503, "O sistema está temporariamente indisponível. Tente novamente mais tarde.");
   }
 
-  return new ApiError(503, `Falha ao acessar o banco de dados: ${message}`);
+  return new ApiError(503, "Não foi possível concluir a operação no banco de dados. Tente novamente.");
 }
 
 async function execute<T>(sql: string, params: unknown[] = []): Promise<QueryResult<T>> {
@@ -120,8 +125,10 @@ export async function getD1(): Promise<Database> {
           for (const statement of statements) {
             const data = statementData.get(statement);
             if (!data) throw new ApiError(500, "A consulta não pertence à conexão do banco.");
-            const rows = await transaction.unsafe(toPostgresSql(data.query), data.params as never[]);
-            results.push(queryResult<T>(rows));
+            try {
+              const rows = await transaction.unsafe(toPostgresSql(data.query), data.params as never[]);
+              results.push(queryResult<T>(rows));
+            } catch (error) { throw databaseError(error, data.query); }
           }
           return results;
         });

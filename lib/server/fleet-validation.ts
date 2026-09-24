@@ -1,3 +1,4 @@
+import { effectiveFleetDistance } from "@/lib/domain/fleet-distance";
 import { parseCargoVehicles, nullableInteger } from "@/lib/server/cargo-validation";
 import { resultMoney } from "@/lib/server/fleet-results-validation";
 import {
@@ -52,7 +53,16 @@ export function parseFleetFreightPayload(payload: Record<string, unknown>) {
     throw new ApiError(400, "O pedágio da viagem histórica já está contabilizado.");
   }
   const cargoVehicles = parseCargoVehicles(payload.cargoVehicles, payload.cargoVehicleModel, payload.cargoPlate);
+  const distance = {
+    distanceMeters: integerInRange(payload.distanceMeters, "Distância", 0, 100_000_000),
+    routeDistanceMeters: nullableInteger(payload.routeDistanceMeters, "Distância pela rota", 100_000_000),
+    odometerStartMeters: nullableInteger(payload.odometerStartMeters, "KM inicial", 1_000_000_000_000),
+    odometerEndMeters: nullableInteger(payload.odometerEndMeters, "KM final", 1_000_000_000_000),
+  };
+  try { distance.distanceMeters = effectiveFleetDistance(distance); }
+  catch (error) { throw new ApiError(400, error instanceof Error ? error.message : "Distância inválida."); }
   return {
+    ...distance,
     cargoVehicles,
     fuelLitersMilli: nullableInteger(payload.fuelLitersMilli, "Litros abastecidos", 1_000_000_000),
     fuelPumpAmountCents: nullableInteger(payload.fuelPumpAmountCents, "Valor bomba", MAX_MONEY_CENTS),
@@ -90,12 +100,6 @@ export function parseFleetFreightPayload(payload: Record<string, unknown>) {
       0,
       MAX_MONEY_CENTS,
     ),
-    distanceMeters: integerInRange(
-      payload.distanceMeters,
-      "Distância",
-      0,
-      100_000_000,
-    ),
     tollCents: integerInRange(
       payload.tollCents,
       "Pedágio",
@@ -108,7 +112,6 @@ export function parseFleetFreightPayload(payload: Record<string, unknown>) {
       0,
       MAX_MONEY_CENTS,
     ),
-    returnUsed: booleanValue(payload.returnUsed, "Retorno aproveitado"),
   };
 }
 
@@ -132,12 +135,6 @@ export function parseFleetSettingsPayload(payload: Record<string, unknown>) {
       "Custo fixo padrão por km",
       0,
       1_000_000,
-    ),
-    matchWindowDays: integerInRange(
-      payload.matchWindowDays,
-      "Janela de encaixe",
-      0,
-      90,
     ),
     officeMonthlyCostCents: officeValue === null
       ? null

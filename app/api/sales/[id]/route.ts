@@ -1,3 +1,4 @@
+import { drainStorageCleanup } from "@/lib/server/storage-cleanup";
 import { parseSaleCargo } from "@/lib/server/sale-cargo";
 import { authorize } from "@/lib/server/auth";
 import {
@@ -11,10 +12,8 @@ import {
 } from "@/lib/domain/operations";
 import {
   ApiError,
-  getBucket,
   getD1,
   jsonError,
-  queryAll,
   queryFirst,
 } from "@/lib/server/d1";
 import { getSale } from "@/lib/server/repository";
@@ -57,21 +56,6 @@ export async function DELETE(request: Request, context: RouteContext) {
     const sale = await getSale(user, id);
     if (!sale) throw new ApiError(404, "Venda não encontrada.");
 
-    if (await queryFirst('select id from service_orders where sale_id=?', [id])) throw new ApiError(409, 'Esta venda possui OS emitida e deve ser preservada.');
-    const [attachments, paymentProofs] = await Promise.all([
-      queryAll<{ storageKey: string }>(
-        `select storage_key as storageKey from sale_attachments where sale_id = ?`,
-        [id],
-      ),
-      queryAll<{ storageKey: string }>(
-        `select proof_key as storageKey from payment_transactions
-         where sale_id = ? and proof_key is not null`,
-        [id],
-      ),
-    ]);
-    const storageKeys = [...new Set(
-      [...attachments, ...paymentProofs].map((item) => item.storageKey),
-    )];
     const db = await getD1();
     await db.batch([
       db
@@ -100,21 +84,7 @@ export async function DELETE(request: Request, context: RouteContext) {
       db.prepare("delete from freight_sales where id = ?").bind(id),
     ]);
 
-    let storageCleanupPending = false;
-    if (storageKeys.length) {
-      try {
-        const bucket = await getBucket();
-        await Promise.all(storageKeys.map((key) => bucket.delete(key)));
-      } catch (cleanupError) {
-        storageCleanupPending = true;
-        console.warn("sale_storage_cleanup_pending", {
-          saleId: id,
-          count: storageKeys.length,
-          message:
-            cleanupError instanceof Error ? cleanupError.message : "unknown",
-        });
-      }
-    }
+    const storageCleanupPending = await drainStorageCleanup();
 
     return Response.json({ deleted: true, storageCleanupPending });
   } catch (error) {
@@ -144,6 +114,11 @@ export async function PATCH(request: Request, context: RouteContext) {
       : payload.originLocationType == null || payload.originLocationType === ""
         ? null
         : enumValue(payload.originLocationType, "Tipo de local de origem", ORIGIN_LOCATION_TYPES);
+    const destinationLocationType = payload.destinationLocationType === undefined
+      ? sale.destinationLocationType
+      : payload.destinationLocationType == null || payload.destinationLocationType === ""
+        ? null
+        : enumValue(payload.destinationLocationType, "Tipo de local de destino", ORIGIN_LOCATION_TYPES);
     const freightAmountCents = integerInRange(
       payload.freightAmountCents,
       "Valor do frete em centavos",
@@ -321,7 +296,7 @@ export async function PATCH(request: Request, context: RouteContext) {
             operational_deadline_days = ?, origin_yard_entry_date = ?,
             delivery_deadline = ?, financial_due_date = ?,
             operational_status = ?, notes = ?, freight_amount_cents = ?,
-            commission_basis_points = ?, costs_pending = ?, cargo_vehicles = ?::jsonb, fleet_freight_id = ?, payment_condition = ?,
+            commission_basis_points = ?, costs_pending = ?, cargo_vehicles = ?::text::jsonb, fleet_freight_id = ?, destination_location_type = ?,
             updated_at = to_char(timezone('UTC', now()), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
           where id = ?`,
         )
@@ -351,7 +326,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           freightAmountCents,
           commissionBasisPoints,
           costsPending ? 1 : 0,
-          JSON.stringify(cargo.cargoVehicles), cargo.fleetFreightId, cargo.paymentCondition,
+          JSON.stringify(cargo.cargoVehicles), cargo.fleetFreightId, destinationLocationType,
           id,
         ),
       db.prepare("delete from freight_costs where sale_id = ?").bind(id),

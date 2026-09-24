@@ -1,4 +1,5 @@
 "use client";
+import { StorageCleanupNotice } from "@/components/storage-cleanup-notice";
 
 import Link from "next/link";
 import { currentCompetency } from "@/lib/domain/dates";
@@ -30,7 +31,7 @@ export function SalesScreen({
     if (operationalStatus) params.set("operationalStatus", operationalStatus);
     return `/api/sales?${params}`;
   }, [competency, query, financialStatus, operationalStatus]);
-  const { data, loading, error, refresh } = useApi<{ sales: SaleRecord[]; count: number }>(url);
+  const { data, loading, error, refresh } = useApi<{ sales: SaleRecord[]; count: number; canDelete: boolean }>(url);
   const sales = useMemo(() => {
     const values = [...(data?.sales ?? [])];
     return values.sort((a, b) => {
@@ -46,6 +47,7 @@ export function SalesScreen({
   return (
     <>
       <PageHeader eyebrow="Operação" title="Vendas e fretes" description="Consulte o ciclo operacional e a cobrança de cada frete em uma única visão." actions={<><a className="button secondary" href={`/api/exports/sales.csv?competency=${competency}`}><Icons.receipt /> Exportar Excel</a><Link className="button primary" href="/vendas/nova"><Icons.plus /> Nova venda</Link></>} />
+      {data?.canDelete && <StorageCleanupNotice />}
       <section className="filter-panel">
         <label><span>Pesquisar</span><div className="search-input"><Icons.search /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Venda, cliente, placa, origem…" /></div></label>
         <label><span>Competência</span><input type="month" value={competency} onChange={(event) => setCompetency(event.target.value || currentCompetency())} /></label>
