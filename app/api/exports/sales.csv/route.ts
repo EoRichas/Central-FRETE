@@ -1,3 +1,5 @@
+import { SALE_CHANNELS } from "@/lib/domain/sales";
+import { enumValue } from "@/lib/server/validation";
 import { ORIGIN_LOCATION_TYPE_LABELS } from "@/lib/domain/operations";
 import { authorize } from "@/lib/server/auth";
 import { currentCompetency, isCompetency } from "@/lib/domain/dates";
@@ -18,7 +20,7 @@ export async function GET(request: Request) {
     if (!isCompetency(competency)) throw new ApiError(400, "Competência inválida.");
     const sales: Awaited<ReturnType<typeof listSales>> = [];
     for (let offset = 0; ; offset += 500) {
-      const page = await listSales(user, { competency, limit: 500, offset });
+      const page = await listSales(user, { competency, saleChannel: url.searchParams.has("saleChannel") ? enumValue(url.searchParams.get("saleChannel"), "Canal", SALE_CHANNELS) : undefined, limit: 500, offset });
       sales.push(...page);
       if (page.length < 500) break;
     }

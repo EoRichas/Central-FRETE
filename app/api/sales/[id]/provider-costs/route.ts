@@ -79,7 +79,7 @@ export async function POST(request: Request, context: RouteContext) {
       ? db
           .prepare(
             `update freight_costs set provider_name = ?, description = ?,
-              pix_details = ?, amount_cents = ?, confirmed = 1, payment_status = ?,
+              pix_details = ?, amount_cents = ?, confirmed = ?, payment_status = ?,
               paid_at = ?, paid_by = ?,
               updated_at = to_char(timezone('UTC', now()), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
              where id = ?`,
@@ -89,6 +89,7 @@ export async function POST(request: Request, context: RouteContext) {
             description,
             pixDetails,
             amountCents,
+            paymentStatus === "PAGO" ? 1 : 0,
             paymentStatus,
             paidAt,
             paidBy,
@@ -100,7 +101,7 @@ export async function POST(request: Request, context: RouteContext) {
               id, sale_id, category, provider_name, pix_details, description,
               amount_cents, confirmed, provider_slot, payment_status,
               paid_at, paid_by
-            ) values (?, ?, 'PRESTADOR_SERVICO', ?, ?, ?, ?, 1, ?, ?, ?, ?)`,
+            ) values (?, ?, 'PRESTADOR_SERVICO', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .bind(
             costId,
@@ -109,6 +110,7 @@ export async function POST(request: Request, context: RouteContext) {
             pixDetails,
             description,
             amountCents,
+            paymentStatus === "PAGO" ? 1 : 0,
             providerSlot,
             paymentStatus,
             paidAt,
@@ -116,6 +118,7 @@ export async function POST(request: Request, context: RouteContext) {
           );
 
     await db.batch([
+      db.prepare("select id from freight_sales where id=? for update").bind(saleId),
       costStatement,
       db.prepare("update freight_costs set proof_attachment_id=? where id=?").bind(proof?.id ?? null, costId),
       db
@@ -149,6 +152,7 @@ export async function POST(request: Request, context: RouteContext) {
             providerName,
             pixDetails,
             amountCents,
+            confirmed: paymentStatus === "PAGO",
             paymentStatus,
             paidAt,
           }),

@@ -1,3 +1,4 @@
+import { SALE_ORDER_SQL, type SaleChannel, type SaleSort } from "@/lib/domain/sales";
 import { cargoVehiclesOrLegacy } from "@/lib/domain/cargo-vehicles";
 import type {
   CostRecord,
@@ -41,6 +42,8 @@ function placeholders(count: number) {
 }
 
 export type SaleFilters = {
+  saleChannel?: SaleChannel;
+  sort?: SaleSort;
   id?: string;
   competency?: string;
   query?: string;
@@ -57,6 +60,8 @@ export async function listSales(
 ): Promise<SaleRecord[]> {
   const where: string[] = [];
   const params: unknown[] = [];
+  if (filters.saleChannel) { where.push("s.sale_channel = ?"); params.push(filters.saleChannel); }
+  if (user.role === "OPERACIONAL") { where.push("s.sale_channel = 'CEGONHA'"); }
   if (filters.id) { where.push("s.id = ?"); params.push(filters.id); }
   if (filters.competency) {
     where.push("s.competency = ?");
@@ -90,7 +95,7 @@ export async function listSales(
   params.push(limit, offset);
   const sales = await queryAll<SaleRow>(
     `select
-      s.id, s.fleet_freight_id as fleetFreightId, s.destination_location_type as destinationLocationType,
+      s.id, s.sale_channel as saleChannel, s.fleet_freight_id as fleetFreightId, s.destination_location_type as destinationLocationType,
       case when f.id is not null then f.cargo_vehicles else s.cargo_vehicles end as cargoVehicles, s.sale_number as saleNumber, s.sale_date as saleDate,
       s.competency, s.seller_id as sellerId, s.seller_name as sellerName,
       s.client_id as clientId, c.legal_name as clientName,
@@ -112,7 +117,7 @@ export async function listSales(
     left join clients c on c.id = s.client_id
     left join fleet_freights f on f.id = s.fleet_freight_id
     ${where.length ? `where ${where.join(" and ")}` : ""}
-    order by s.sale_date desc, case when s.sale_number ~ '^[0-9]{4}-[0-9]+$' then split_part(s.sale_number,'-',2)::numeric when s.sale_number ~ '^[0-9]+$' then s.sale_number::numeric else 0 end desc, s.id desc
+    order by ${SALE_ORDER_SQL[filters.sort ?? "number-asc"]}
     limit ? offset ?`,
     params,
   );

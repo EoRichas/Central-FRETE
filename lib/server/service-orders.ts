@@ -1,3 +1,4 @@
+import { roleCan } from "@/lib/domain/permissions";
 import type { CurrentUser } from '@/lib/contracts';
 import type { ServiceOrderSnapshot, ServiceOrderVersion, ServiceOrderReport } from '@/lib/domain/service-order';
 import { ApiError, getD1, queryAll, queryFirst } from '@/lib/server/d1';
@@ -9,9 +10,9 @@ export function orderIssuer(): ServiceOrderSnapshot['issuer'] {
     contact: process.env.CENTRAL_EXPRESS_CONTACT?.trim() || null };
 }
 // One SQL statement captures all document fields from the same MVCC snapshot, including
-// linked fleet cargo and client address. No costs, commissions or internal finance are disclosed.
+// linked fleet cargo, client address and operation costs. Seller commission stays internal.
 export const ORDER_SOURCE_SQL = `select jsonb_build_object(
- 'schemaVersion',1,'issuer',?::text::jsonb,'saleId',s.id,'saleNumber',s.sale_number,'saleDate',s.sale_date,
+ 'schemaVersion',2,'layoutVersion','central-express-20260928','saleChannel',s.sale_channel,'issuer',?::text::jsonb,'saleId',s.id,'saleNumber',s.sale_number,'saleDate',s.sale_date,
  'clientName',c.legal_name,'clientDocument',c.cpf_cnpj,
  'clientAddress',(select concat_ws(', ',a.street,a.number,nullif(a.complement,''),a.district,a.city,a.state,a.cep)
    from client_addresses a where a.client_id=c.id order by (a.type='COBRANCA') desc,a.is_primary desc,a.id limit 1),
@@ -19,6 +20,17 @@ export const ORDER_SOURCE_SQL = `select jsonb_build_object(
  'cargoVehicles',case when f.id is not null then coalesce(f.cargo_vehicles,jsonb_build_array(jsonb_build_object('model',f.cargo_vehicle_model,'plate',f.cargo_plate,'identification',null)))
    else coalesce(s.cargo_vehicles,jsonb_build_array(jsonb_build_object('model',s.vehicle,'plate',s.plate,'identification',null))) end,
  'freightAmountCents',s.freight_amount_cents,
+ 'operationValues',jsonb_build_object(
+   'freightAmountCents',s.freight_amount_cents,
+   'totalOperationCostCents',coalesce((select sum(amount_cents) from freight_costs where sale_id=s.id),0),
+   'insuranceCents',coalesce((select sum(amount_cents) from freight_costs where sale_id=s.id and category='SEGURO_ALLIANZ'),0),
+   'invoiceCents',coalesce((select sum(amount_cents) from freight_costs where sale_id=s.id and category='NOTA_FISCAL_IMPOSTO'),0),
+   'icmsCents',coalesce((select sum(amount_cents) from freight_costs where sale_id=s.id and category='ICMS'),0),
+   'cteMdfeCents',coalesce((select sum(amount_cents) from freight_costs where sale_id=s.id and category='CTE_MDFE'),0),
+   'legacyCombinedTaxTransportCents',coalesce((select sum(amount_cents) from freight_costs where sale_id=s.id and category='ICMS_CTE_MDFE'),0)),
+ 'operationCosts',coalesce((select jsonb_agg(jsonb_build_object('id',id,'category',category,'amountCents',amount_cents,
+   'description',description,'occurredOn',occurred_on,'paymentStatus',payment_status) order by id)
+   from freight_costs where sale_id=s.id),'[]'::jsonb),
  'installments',coalesce((select jsonb_agg(jsonb_build_object('dueDate',i.due_date,'paymentMethod',i.payment_method,'amountCents',i.expected_amount_cents) order by i.installment_number,i.id)
    from receivable_installments i where i.sale_id=s.id),'[]'::jsonb),
  'financialDueDate',s.financial_due_date,'operationalDeadlineDays',s.operational_deadline_days,'deliveryDeadline',s.delivery_deadline,'notes',s.notes
@@ -26,7 +38,7 @@ export const ORDER_SOURCE_SQL = `select jsonb_build_object(
 left join fleet_freights f on f.id=s.fleet_freight_id where s.id=?`;
 
 export async function authorizeOrder(user: CurrentUser, saleId: string) {
-  if (user.role === 'OPERACIONAL') throw new ApiError(403, 'Seu perfil não permite acessar documentos de vendas.');
+  if (!roleCan(user.role, 'VIEW_SERVICE_ORDERS')) throw new ApiError(403, 'Seu perfil não permite acessar documentos de vendas.');
   if (!await getSale(user, saleId)) throw new ApiError(404, 'Venda não encontrada.');
 }
 export async function readOrderVersion(saleId: string, version?: number) {
@@ -52,12 +64,15 @@ export async function issueOrder(saleId: string, user: CurrentUser) {
     db.prepare('insert into service_orders(id,sale_id,created_by) values(?,?,?) on conflict(sale_id) do nothing').bind(crypto.randomUUID(),saleId,user.id),
     db.prepare(`with source as (${ORDER_SOURCE_SQL}), latest as (
       select v.version,v.snapshot from service_order_versions v join service_orders o on o.id=v.order_id
-      where o.sale_id=? order by v.version desc limit 1)
+      where o.sale_id=? order by v.version desc limit 1), issued as (
       insert into service_order_versions(order_id,version,snapshot,created_by)
       select o.id,coalesce((select version from latest),0)+1,source.snapshot,?
       from service_orders o cross join source where o.sale_id=?
-      and not exists(select 1 from latest where latest.snapshot=source.snapshot)`)
-      .bind(JSON.stringify(orderIssuer()),saleId,saleId,user.id,saleId),
+      and not exists(select 1 from latest where latest.snapshot=source.snapshot)
+      returning order_id,version)
+      insert into audit_logs(id,entity_type,entity_id,action,actor_user_id,actor_email,new_value)
+      select gen_random_uuid()::text,'SERVICE_ORDER',order_id,'VERSION_ISSUED',?,?,jsonb_build_object('version',version,'saleId',?::text)::text from issued`)
+      .bind(JSON.stringify(orderIssuer()),saleId,saleId,user.id,saleId,user.id,user.email,saleId),
   ]);
   return orderReport(saleId);
 }

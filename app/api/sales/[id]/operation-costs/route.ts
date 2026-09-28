@@ -10,6 +10,7 @@ import { getSale } from "@/lib/server/repository";
 import {
   EDITABLE_OPERATION_COST_CATEGORIES,
   isOperationPaymentCategory,
+  isDirectPaidOperationCostCategory,
 } from "@/lib/domain/operations";
 import {
   asObject,
@@ -75,6 +76,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       "Situação do custo",
       COST_STATUSES,
     );
+    if (isDirectPaidOperationCostCategory(previous.category) && status !== "PAGO") throw new ApiError(400, "Nota Fiscal, Seguro e ICMS permanecem pagos.");
     const occurredOn = payload.occurredOn
       ? dateOnly(payload.occurredOn, "Data do custo")
       : null;
@@ -85,9 +87,10 @@ export async function PATCH(request: Request, context: RouteContext) {
         ? optionalString(payload.pixDetails)
         : previous.pixDetails;
     const confirmed = status === "PAGO";
-    const proof = confirmed ? await saleProof(saleId, payload.proofId) : null;
+    const proof = confirmed && !isDirectPaidOperationCostCategory(previous.category) ? await saleProof(saleId, payload.proofId) : null;
     const db = await getD1();
     await db.batch([
+      db.prepare("select id from freight_sales where id=? for update").bind(saleId),
       db
         .prepare(
           `update freight_costs set description = ?, pix_details = ?,

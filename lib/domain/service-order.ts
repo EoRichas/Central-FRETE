@@ -1,7 +1,6 @@
 import type { CargoVehicle } from './cargo-vehicles';
 import type { OriginLocationType } from './operations';
-export type ServiceOrderSnapshot = {
-  schemaVersion: 1;
+type ServiceOrderFields = {
   issuer: { name: string; document: string | null; address: string | null; contact: string | null };
   saleId: string; saleNumber: string; saleDate: string;
   clientName: string | null; clientDocument: string | null; clientAddress: string | null;
@@ -11,5 +10,16 @@ export type ServiceOrderSnapshot = {
   financialDueDate: string; operationalDeadlineDays: number | null; deliveryDeadline: string | null;
   notes: string | null;
 };
+export type OperationValues = {
+  freightAmountCents: number; totalOperationCostCents: number; insuranceCents: number;
+  invoiceCents: number; icmsCents: number; cteMdfeCents: number; legacyCombinedTaxTransportCents: number;
+};
+export type ServiceOrderSnapshot = ServiceOrderFields & ({schemaVersion: 1} | {
+  schemaVersion: 2;
+  layoutVersion: 'central-express-20260928';
+  saleChannel: 'CEGONHA' | 'FROTA';
+  operationValues: OperationValues;
+  operationCosts: {id: string; category: string; amountCents: number; description: string | null; occurredOn: string | null; paymentStatus: string}[];
+});
 export type ServiceOrderVersion = { orderId: string; version: number; createdAt: string; snapshot: ServiceOrderSnapshot };
 export type ServiceOrderReport = { latest: ServiceOrderVersion | null; versions: {version:number;createdAt:string}[]; stale: boolean };

@@ -72,6 +72,7 @@ export async function DELETE(request: Request, context: RouteContext) {
           user.email,
           JSON.stringify({
             saleNumber: sale.saleNumber,
+            saleChannel: sale.saleChannel, fleetFreightId: sale.fleetFreightId,
             sellerName: sale.sellerName,
             clientName: sale.clientName,
             freightAmountCents: sale.freightAmountCents,
@@ -100,6 +101,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     if (!sale) throw new ApiError(404, "Venda não encontrada.");
     const payload = asObject(await request.json());
     if (payload.saleNumber !== undefined && payload.saleNumber !== sale.saleNumber) throw new ApiError(400, 'O número da venda não pode ser alterado.');
+    if (payload.saleChannel !== undefined && payload.saleChannel !== sale.saleChannel) throw new ApiError(400, "O canal da venda não pode ser alterado.");
     const saleNumber = sale.saleNumber;
     const cargo = await parseSaleCargo(payload, user, sale);
     const saleDate = dateOnly(payload.saleDate, "Data da venda");
@@ -241,16 +243,14 @@ export async function PATCH(request: Request, context: RouteContext) {
           ? dateOnly(cost.occurredOn, `Data da despesa ${index + 1}`)
           : null,
         amountCents,
-        confirmed: isDirectPaidOperationCostCategory(category)
-          ? true
-          : user.role === "ADMIN"
-            ? Boolean(cost.confirmed)
-            : availableConfirmed > 0,
+        confirmed: isDirectPaidOperationCostCategory(category) || (category === "PRESTADOR_SERVICO"
+          ? preservedProviderPayment?.paymentStatus === "PAGO"
+          : user.role === "ADMIN" ? Boolean(cost.confirmed) : availableConfirmed > 0),
         providerSlot,
         paymentStatus:
           category === "PRESTADOR_SERVICO"
             ? preservedProviderPayment?.paymentStatus ?? "EM_ABERTO"
-            : "NAO_APLICAVEL",
+            : isDirectPaidOperationCostCategory(category) || Boolean(cost.confirmed) ? "PAGO" : "EM_ABERTO",
         pixDetails:
           category === "PRESTADOR_SERVICO"
             ? preservedProviderPayment?.pixDetails ?? null
@@ -413,6 +413,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           user.email,
           JSON.stringify({
             saleNumber: sale.saleNumber,
+            saleChannel: sale.saleChannel, fleetFreightId: sale.fleetFreightId,
             saleDate: sale.saleDate,
             clientId: sale.clientId,
             operationalStatus: sale.operationalStatus,
@@ -421,7 +422,7 @@ export async function PATCH(request: Request, context: RouteContext) {
             costCount: sale.costs.length,
           }),
           JSON.stringify({
-            saleNumber,
+            saleNumber, saleChannel: sale.saleChannel, fleetFreightId: cargo.fleetFreightId,
             saleDate,
             clientId,
             operationalStatus,

@@ -1,3 +1,5 @@
+import { roleCan } from "@/lib/domain/permissions";
+import { SALE_CHANNELS, SALE_SORTS, type SaleSort } from "@/lib/domain/sales";
 import { parseSaleCargo } from "@/lib/server/sale-cargo";
 import { authorize } from "@/lib/server/auth";
 import { currentCompetency, isCompetency } from "@/lib/domain/dates";
@@ -34,8 +36,13 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const competency = url.searchParams.get("competency") || currentCompetency();
     if (!isCompetency(competency)) throw new ApiError(400, "Competência inválida.");
+    const sort = url.searchParams.get("sort") || "number-asc";
+    if (!SALE_SORTS.includes(sort as SaleSort)) throw new ApiError(400, "Ordenação inválida.");
+    const saleChannel = url.searchParams.has("saleChannel") ? enumValue(url.searchParams.get("saleChannel"), "Canal da venda", SALE_CHANNELS) : undefined;
     const sales = await listSales(user, {
       competency,
+      saleChannel,
+      sort: sort as SaleSort,
       query: url.searchParams.get("q") || undefined,
       operationalStatus:
         url.searchParams.get("operationalStatus") || undefined,
@@ -44,7 +51,7 @@ export async function GET(request: Request) {
       limit: Number(url.searchParams.get("limit") || 200),
       offset: Number(url.searchParams.get("offset") || 0),
     });
-    return Response.json({ sales, count: sales.length, canDelete: user.role === "ADMIN" });
+    return Response.json({ sales, count: sales.length, canCreate: roleCan(user.role, saleChannel === "FROTA" ? "CREATE_FLEET_SALE" : "CREATE_CEGONHA_SALE"), canDelete: user.role === "ADMIN" });
   } catch (error) {
     return jsonError(error);
   }
@@ -52,9 +59,12 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const user = await authorize(request, ["ADMIN", "VENDEDOR"]);
+    const user = await authorize(request, ["ADMIN", "VENDEDOR", "OPERACIONAL"]);
     const payload = asObject(await request.json());
     if (payload.saleNumber != null && payload.saleNumber !== '') throw new ApiError(400, 'O número da venda é gerado automaticamente.');
+    const saleChannel = enumValue(payload.saleChannel ?? "CEGONHA", "Canal da venda", SALE_CHANNELS);
+    if (!roleCan(user.role, saleChannel === "FROTA" ? "CREATE_FLEET_SALE" : "CREATE_CEGONHA_SALE")) throw new ApiError(403, "Seu perfil não permite criar esta venda.");
+    if (user.role === "OPERACIONAL" && Number(payload.advanceAmountCents || 0) !== 0) throw new ApiError(403, "Seu perfil não permite registrar recebimentos.");
     const cargo = await parseSaleCargo(payload, user);
     const saleDate = dateOnly(payload.saleDate, "Data da venda");
     if (new Date(`${saleDate}T12:00:00Z`).toISOString().slice(0,10) !== saleDate) throw new ApiError(400,"Data da venda inválida.");
@@ -138,10 +148,10 @@ export async function POST(request: Request) {
           1,
           9_000_000_000_000,
         ),
-        confirmed: user.role === "ADMIN" || isDirectPaidOperationCostCategory(category),
+        confirmed: isDirectPaidOperationCostCategory(category) || (user.role === "ADMIN" && cost.confirmed === true),
         providerSlot,
         paymentStatus:
-          category === "PRESTADOR_SERVICO" ? "EM_ABERTO" : "NAO_APLICAVEL",
+          isDirectPaidOperationCostCategory(category) || (user.role === "ADMIN" && cost.confirmed === true) ? "PAGO" : "EM_ABERTO",
       };
     });
     const providerSlots = costs
@@ -158,11 +168,11 @@ export async function POST(request: Request) {
     );
     const saleId = crypto.randomUUID();
     const installmentId = crypto.randomUUID();
-    const sellerName =
+    let sellerName =
       user.role === "VENDEDOR"
         ? user.name
-        : requiredUpper(payload.sellerName, "Vendedor");
-    const sellerUser =
+        : user.role === "OPERACIONAL" ? "" : requiredUpper(payload.sellerName, "Vendedor");
+    let sellerUser =
       user.role === "VENDEDOR"
         ? { id: user.id }
         : await queryFirst<{ id: string }>(
@@ -171,6 +181,11 @@ export async function POST(request: Request) {
              limit 1`,
             [sellerName],
           );
+    if (user.role === "OPERACIONAL") {
+      const selected = await queryFirst<{id: string; name: string}>("select id,name from users where id=? and role='VENDEDOR' and active=1", [String(payload.sellerId ?? "")]);
+      if (!selected) throw new ApiError(400, "Selecione um vendedor ativo.");
+      sellerUser = selected; sellerName = selected.name;
+    }
     const sellerId = sellerUser?.id ?? null;
     const costsPending = costs.some((cost) => !cost.confirmed);
     const db = await getD1();
@@ -183,8 +198,8 @@ export async function POST(request: Request) {
             pickup_address_snapshot, delivery_address_snapshot,
             operational_deadline_days, origin_yard_entry_date, delivery_deadline,
             financial_due_date, operational_status, notes, freight_amount_cents,
-            commission_basis_points, costs_pending, created_by, cargo_vehicles, fleet_freight_id, destination_location_type
-          ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::text::jsonb, ?, ?) returning sale_number as saleNumber`,
+            commission_basis_points, costs_pending, created_by, cargo_vehicles, fleet_freight_id, destination_location_type, sale_channel
+          ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::text::jsonb, ?, ?, ?) returning sale_number as saleNumber`,
         )
         .bind(
           saleId,
@@ -214,7 +229,7 @@ export async function POST(request: Request) {
           commissionBasisPoints,
           costsPending ? 1 : 0,
           user.id,
-          JSON.stringify(cargo.cargoVehicles), cargo.fleetFreightId, destinationLocationType,
+          JSON.stringify(cargo.cargoVehicles), cargo.fleetFreightId, destinationLocationType, saleChannel,
         ),
       db
         .prepare(
@@ -302,7 +317,7 @@ export async function POST(request: Request) {
           user.id,
           user.email,
           JSON.stringify({
-            numbering: "AUTOMATIC_ANNUAL",
+            numbering: "AUTOMATIC_GLOBAL", saleChannel, actorRole: user.role, fleetFreightId: cargo.fleetFreightId,
             freightAmountCents,
             commissionBasisPoints,
             costCount: costs.length,

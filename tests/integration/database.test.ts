@@ -33,7 +33,7 @@ mock.module('../../lib/server/d1.ts', { namedExports: {
 
 before(async () => {
  await pg.exec('CREATE ROLE anon; CREATE ROLE authenticated;');
- for (let pass = 0; pass < 2; pass++) for (const file of ['001_central_frete_postgres.sql', '002_fleet.sql', '003_fleet_billing.sql', '004_operational_role.sql', '005_detach_driver_vehicle.sql', '006_fleet_vehicle_cost_average_flag.sql', '008_fleet_results.sql', '009_direct_paid_operation_costs.sql', '010_fleet_cargo_sales_orders.sql', '011_sale_origin_location_type.sql', '../supabase/migrations/20260923220518_fleet_operation_integrity.sql']) await pg.exec(await readFile(new URL(`../../database/${file}`, import.meta.url), 'utf8'));
+ for (let pass = 0; pass < 2; pass++) for (const file of ['001_central_frete_postgres.sql', '002_fleet.sql', '003_fleet_billing.sql', '004_operational_role.sql', '005_detach_driver_vehicle.sql', '006_fleet_vehicle_cost_average_flag.sql', '008_fleet_results.sql', '009_direct_paid_operation_costs.sql', '010_fleet_cargo_sales_orders.sql', '011_sale_origin_location_type.sql', '../supabase/migrations/20260923220518_fleet_operation_integrity.sql', '012_sales_channels_global_numbering_costs.sql']) await pg.exec(await readFile(new URL(`../../database/${file}`, import.meta.url), 'utf8'));
  await pg.exec("INSERT INTO users(id,email,name,role) VALUES ('admin','admin@example.test','Admin','ADMIN'),('finance','finance@example.test','Finance','FINANCEIRO'),('seller','seller@example.test','Seller','VENDEDOR');");
  process.env.CENTRAL_FRETE_SESSION_SECRET = 'test-secret-never-use-in-production-1234';
 });
@@ -165,7 +165,7 @@ test('vendedor consulta prestadores e despesas de nota fiscal e outras despesas 
  const costs=await queryAll("select id,category from freight_costs where sale_id=? order by category",[sale.id]) as Array<{id:string;category:string}>;
  assert.deepEqual(costs.map(cost=>cost.category),['NOTA_FISCAL_IMPOSTO','OUTRAS_DESPESAS']);
  for (const cost of costs) {
-   const edited=await operationCosts.PATCH(await request(`/api/sales/${sale.id}/operation-costs`,'finance','PATCH',{costId:cost.id,description:`EDITADO ${cost.category}`,amountCents:cost.category==='NOTA_FISCAL_IMPOSTO'?1500:900,status:'EM_ABERTO'}),{params:Promise.resolve({id:sale.id})});
+   const edited=await operationCosts.PATCH(await request(`/api/sales/${sale.id}/operation-costs`,'finance','PATCH',{costId:cost.id,description:`EDITADO ${cost.category}`,amountCents:cost.category==='NOTA_FISCAL_IMPOSTO'?1500:900,status:cost.category==='NOTA_FISCAL_IMPOSTO'?'PAGO':'EM_ABERTO'}),{params:Promise.resolve({id:sale.id})});
    assert.equal(edited.status,200,await edited.clone().text());
  }
  const updated=await queryAll("select category,amount_cents,description from freight_costs where sale_id=? order by category",[sale.id]) as Array<{category:string;amount_cents:number;description:string}>;
@@ -381,18 +381,18 @@ const salePayload = { saleDate:'2026-09-23',financialDueDate:'2026-09-30',freigh
  cargoVehicles:[{model:'MODELO A',plate:'AAA1A11',identification:'CHASSI-1'},{model:'MODELO B',plate:null,identification:'CHASSI-2'}],
  destinationLocationType:'PORTA',notes:'Prazo após embarque',operationalDeadlineDays:8,costs:[] };
 
-test('numeração anual nasce na transação, rejeita manual, preserva legado e reinicia por ano',async()=>{
+test('numeração global nasce na transação, rejeita manual e não reinicia por ano',async()=>{
  const api=await import('../../app/api/sales/route.ts');
  const response=await api.POST(await request('/api/sales','seller','POST',salePayload));
  assert.equal(response.status,201,await response.clone().text());
- const first=await response.json();assert.equal(first.saleNumber,'2026-1');
+ const first=await response.json();assert.match(first.saleNumber,/^[0-9]+$/);assert.ok(Number(first.saleNumber)>200);
  const responses=await Promise.all(Array.from({length:8},async()=>api.POST(await request('/api/sales','seller','POST',salePayload))));
  const rows=await Promise.all(responses.map(async r=>{assert.equal(r.status,201,await r.clone().text());return r.json();}));
  assert.equal(new Set(rows.map(r=>r.saleNumber)).size,8);
  assert.equal((await api.POST(await request('/api/sales','seller','POST',{...salePayload,saleNumber:'2026-999'}))).status,400);
  assert.equal((await api.POST(await request('/api/sales','seller','POST',{...salePayload,saleDate:'2026-02-30'}))).status,400);
  const nextYear=await api.POST(await request('/api/sales','seller','POST',{...salePayload,saleDate:'2027-01-01'}));
- assert.equal((await nextYear.json()).saleNumber,'2027-1');
+ assert.equal(Number((await nextYear.json()).saleNumber),Number(first.saleNumber)+9);
  const edit=await import('../../app/api/sales/[id]/route.ts');
  assert.equal((await edit.PATCH(await request('/api/sales/x','admin','PATCH',{...salePayload,saleNumber:'WRONG'}),{params:Promise.resolve({id:first.id})})).status,400);
  await assert.rejects(pg.query("update freight_sales set sale_number='WRONG' where id=$1",[first.id]));
@@ -403,19 +403,19 @@ test('numeração anual nasce na transação, rejeita manual, preserva legado e 
  assert.ok((await listSales(user)).length>=10); // annual numbers no longer fail an integer cast
  await pg.query('delete from freight_sales where id=$1',[rows[7].id]);
  const afterDelete=await api.POST(await request('/api/sales','seller','POST',salePayload));
- assert.equal((await afterDelete.json()).saleNumber,'2026-10');
+ assert.equal(Number((await afterDelete.json()).saleNumber),Number(first.saleNumber)+10);
 });
 
 test('falha após gerar número reverte venda e contador no PostgreSQL',async()=>{
  const {getD1}=await import('../../lib/server/d1.ts');const db=await getD1();
- const before=await queryFirst('select last_value from sale_number_counters where year=2026');
+ const before=await queryFirst('select last_value from global_sale_number_counter where id=1');
  await assert.rejects(db.batch([
    db.prepare(`insert into freight_sales(id,sale_number,sale_date,competency,seller_name,origin,destination,financial_due_date,operational_status,freight_amount_cents,commission_basis_points,created_by)
      values('rollback-sale',null,'2026-09-23','2026-09','SELLER','A','B','2026-09-30','CONFIRMAR',100,0,'admin')`),
    db.prepare("insert into receivable_installments(id,sale_id,installment_number,installment_count,due_date,payment_method,expected_amount_cents) values('bad','rollback-sale',0,1,'2026-09-30','PIX',100)"),
  ]));
  assert.equal(await queryFirst("select id from freight_sales where id='rollback-sale'"),null);
- assert.deepEqual(await queryFirst('select last_value from sale_number_counters where year=2026'),before);
+ assert.deepEqual(await queryFirst('select last_value from global_sale_number_counter where id=1'),before);
 });
 
 test('múltiplos veículos e combustível persistem; financeiro não altera a carga; zero real substitui estimativa',async()=>{
@@ -599,4 +599,91 @@ test('exclusão de frete sem vínculo preserva histórico mensal; migration nova
  assert.deepEqual(await queryAll('select * from fleet_vehicle_costs order by id'),history);
  const tables=await queryAll("select rowsecurity from pg_tables where schemaname='public' and tablename='storage_cleanup_jobs'");assert.equal((tables[0] as {rowsecurity:boolean}).rowsecurity,true);
  assert.equal((await queryAll("select 1 from information_schema.role_table_grants where table_name='storage_cleanup_jobs' and grantee in ('anon','authenticated')")).length,0);
+});
+
+test('venda Frota usa sequência global, escopo do vendedor e OS comum; operacional cria somente Cegonha',async()=>{
+ const sales=await import('../../app/api/sales/route.ts');
+ const detail=await import('../../app/api/sales/[id]/route.ts');
+ const orders=await import('../../app/api/sales/[id]/service-order/route.ts');
+ const fleet=await import('../../app/api/fleet/route.ts');
+ const clients=await import('../../app/api/clients/route.ts');
+ const sellers=await import('../../app/api/sales/sellers/route.ts');
+ const before=Number((await queryFirst('select last_value from global_sale_number_counter where id=1') as {last_value:number}).last_value);
+ const created=await sales.POST(await request('/api/sales','seller','POST',{...salePayload,saleChannel:'FROTA'}));
+ assert.equal(created.status,201,await created.clone().text()); const f=await created.json();
+ assert.equal(Number(f.saleNumber),before+1);
+ const operational=await sales.POST(await request('/api/sales','operator','POST',{...salePayload,sellerName:undefined,sellerId:'seller'}));
+ assert.equal(operational.status,201,await operational.clone().text());const c=await operational.json();
+ assert.equal(Number(c.saleNumber),before+2);
+ assert.equal((await sales.POST(await request('/api/sales','operator','POST',{...salePayload,saleChannel:'FROTA',sellerId:'seller'}))).status,403);
+ assert.equal((await sales.POST(await request('/api/sales','operator','POST',{...salePayload,sellerId:'admin'}))).status,400);
+ assert.equal((await sales.POST(await request('/api/sales','operator','POST',{...salePayload,sellerId:'seller',advanceAmountCents:100}))).status,403);
+ assert.equal((await detail.DELETE(await request('/api/sales/x','operator','DELETE'),{params:Promise.resolve({id:c.id})})).status,403);
+ assert.equal((await fleet.GET(await request('/api/fleet','seller'))).status,403);
+ assert.equal((await clients.GET(await request('/api/clients','operator'))).status,200);
+ assert.equal((await clients.POST(await request('/api/clients','operator','POST',{}))).status,403);
+ const sellerOptions=await sellers.GET(await request('/api/sales/sellers','operator'));
+ assert.equal(sellerOptions.status,200);const options=await sellerOptions.json();
+ assert.ok(options.sellers.some((s:{id:string})=>s.id==='seller'));assert.deepEqual(Object.keys(options.sellers[0]).sort(),['id','name']);
+ const listed=await sales.GET(await request('/api/sales?competency=2026-09&saleChannel=FROTA','seller')).then(r=>r.json());
+ assert.ok(listed.sales.some((s:{id:string})=>s.id===f.id));assert.ok(listed.sales.every((s:{saleChannel:string})=>s.saleChannel==='FROTA'));
+ const legacy=await sales.GET(await request('/api/sales?competency=2026-09&saleChannel=CEGONHA','seller')).then(r=>r.json());
+ assert.ok(!legacy.sales.some((s:{id:string})=>s.id===f.id));
+ const finance=await sales.GET(await request('/api/sales?competency=2026-09','finance')).then(r=>r.json());
+ assert.ok(finance.sales.some((s:{id:string})=>s.id===f.id));assert.ok(finance.sales.some((s:{id:string})=>s.id===c.id));
+ const ctx={params:Promise.resolve({id:f.id})};
+ const emitted=await orders.POST(await request('/api/sales/x/service-order','seller','POST'),ctx);
+ assert.equal(emitted.status,200,await emitted.clone().text());assert.equal((await emitted.json()).latest.snapshot.saleChannel,'FROTA');
+ assert.equal((await detail.GET(await request('/api/sales/x','operator'),ctx)).status,404);
+});
+
+test('custos separados, pagamentos diretos e alteração de custo preservam snapshots anteriores',async()=>{
+ const sales=await import('../../app/api/sales/route.ts');const costsApi=await import('../../app/api/sales/[id]/operation-costs/route.ts');
+ const orders=await import('../../app/api/sales/[id]/service-order/route.ts');
+ const costs=[['NOTA_FISCAL_IMPOSTO',1200],['SEGURO_ALLIANZ',2300],['ICMS',3400],['CTE_MDFE',4500],['ICMS_CTE_MDFE',5600],['OUTRAS_DESPESAS',600]];
+ const created=await sales.POST(await request('/api/sales','seller','POST',{...salePayload,costs:costs.map(([category,amountCents])=>({category,amountCents}))}));
+ assert.equal(created.status,201,await created.clone().text());const sale=await created.json();const context={params:Promise.resolve({id:sale.id})};
+ const rows=await queryAll('select id,category,confirmed,payment_status from freight_costs where sale_id=?',[sale.id]) as {id:string;category:string;confirmed:number;payment_status:string}[];
+ for(const row of rows){const direct=['NOTA_FISCAL_IMPOSTO','SEGURO_ALLIANZ','ICMS'].includes(row.category);assert.equal(row.payment_status,direct?'PAGO':'EM_ABERTO');assert.equal(row.confirmed,direct?1:0);}
+ const issued=await orders.POST(await request('/api/sales/x/service-order','seller','POST'),context);assert.equal(issued.status,200,await issued.clone().text());const initial=await issued.json();
+ assert.equal(initial.latest.snapshot.schemaVersion,2);
+ assert.deepEqual(initial.latest.snapshot.operationValues,{freightAmountCents:salePayload.freightAmountCents,totalOperationCostCents:17600,invoiceCents:1200,insuranceCents:2300,icmsCents:3400,cteMdfeCents:4500,legacyCombinedTaxTransportCents:5600});
+ const nf=rows.find(r=>r.category==='NOTA_FISCAL_IMPOSTO')!;
+ assert.equal((await costsApi.PATCH(await request('/api/sales/x/operation-costs','finance','PATCH',{costId:nf.id,amountCents:1500,status:'EM_ABERTO'}),context)).status,400);
+ const update=await costsApi.PATCH(await request('/api/sales/x/operation-costs','finance','PATCH',{costId:nf.id,amountCents:1500,status:'PAGO'}),context);
+ assert.equal(update.status,200,await update.clone().text());
+ const stale=await orders.GET(await request('/api/sales/x/service-order','seller'),context).then(r=>r.json());assert.equal(stale.stale,true);assert.equal(stale.latest.snapshot.operationValues.invoiceCents,1200);
+ const next=await orders.POST(await request('/api/sales/x/service-order','seller','POST'),context).then(r=>r.json());assert.equal(next.latest.version,2);assert.equal(next.latest.snapshot.operationValues.invoiceCents,1500);
+ const audit=await queryAll("select * from audit_logs where entity_type='SERVICE_ORDER' and entity_id=?",[next.latest.orderId]);assert.equal(audit.length,2);
+ const {listSales}=await import('../../lib/server/repository.ts');
+ const sorted=await listSales({id:'admin',email:'admin@example.test',name:'Admin',role:'ADMIN'},{limit:500});
+ const nums=sorted.filter(s=>/^\d+$/.test(s.saleNumber)).map(s=>Number(s.saleNumber));assert.deepEqual(nums,[...nums].sort((a,b)=>a-b));
+ const page1=await listSales({id:'admin',email:'admin@example.test',name:'Admin',role:'ADMIN'},{limit:2});
+ const page2=await listSales({id:'admin',email:'admin@example.test',name:'Admin',role:'ADMIN'},{limit:2,offset:2});
+ assert.deepEqual([...page1,...page2].map(s=>s.id),sorted.slice(0,4).map(s=>s.id));
+});
+
+test('migração renumera somente vendas anuais sem OS e é repetível',async()=>{
+ const migration=await readFile(new URL('../../database/012_sales_channels_global_numbering_costs.sql',import.meta.url),'utf8');
+ const before=Number((await queryFirst('select last_value from global_sale_number_counter where id=1') as {last_value:number}).last_value);
+ const seed=(id:string,number:string)=>pg.query("insert into freight_sales(id,sale_number,sale_date,competency,seller_name,origin,destination,financial_due_date,operational_status,freight_amount_cents,commission_basis_points,created_by) values($1,$2,'2020-01-01','2020-01','SELLER','A','B','2020-01-02','CONFIRMAR',100,0,'admin')",[id,number]);
+ await seed('migrate-a','2020-1');await seed('migrate-b','2020-2');await seed('migrate-issued','2020-3');
+ await pg.exec("insert into service_orders(id,sale_id,created_by) values('migration-order','migrate-issued','admin'); insert into service_order_versions(order_id,version,snapshot,created_by) values('migration-order',1,'{\"schemaVersion\":1,\"saleNumber\":\"2020-3\"}','admin');");
+ await pg.exec(migration);
+ const numbers=await queryAll("select id,sale_number from freight_sales where id like 'migrate-%' order by id") as {id:string;sale_number:string}[];
+ assert.deepEqual(numbers.map(r=>r.sale_number),[String(before+1),String(before+2),'2020-3']);
+ await pg.exec(migration);assert.deepEqual(await queryAll("select id,sale_number from freight_sales where id like 'migrate-%' order by id"),numbers);
+ assert.deepEqual((await queryFirst("select snapshot from service_order_versions where order_id='migration-order'") as {snapshot:object}).snapshot,{schemaVersion:1,saleNumber:'2020-3'});
+ assert.equal((await queryAll("select * from audit_logs where action='SALE_RENUMBERED' and entity_id like 'migrate-%'")).length,2);
+});
+
+test('prestador em aberto não é confirmado ao cadastrar ou editar valor',async()=>{
+ const sales=await import('../../app/api/sales/route.ts');const providers=await import('../../app/api/sales/[id]/provider-costs/route.ts');
+ const result=await sales.POST(await request('/api/sales','seller','POST',salePayload));const sale=await result.json();const context={params:Promise.resolve({id:sale.id})};
+ for(const amountCents of [1000,2000]) {
+  const res=await providers.POST(await request('/api/sales/x/provider-costs','finance','POST',{providerSlot:1,providerName:'PRESTADOR DEMONSTRAÇÃO',amountCents,paymentStatus:'EM_ABERTO'}),context);
+  assert.ok([200,201].includes(res.status),await res.clone().text());
+  const cost=await queryFirst("select confirmed,payment_status from freight_costs where sale_id=? and provider_slot=1",[sale.id]);
+  assert.deepEqual(cost,{confirmed:0,payment_status:'EM_ABERTO'});
+ }
 });

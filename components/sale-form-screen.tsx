@@ -1,5 +1,7 @@
 "use client";
 
+import { roleCan } from "@/lib/domain/permissions";
+import type { SaleChannel } from "@/lib/domain/sales";
 import { CargoVehiclesEditor } from "@/components/cargo-vehicles-editor";
 import { cargoVehiclesOrLegacy } from "@/lib/domain/cargo-vehicles";
 import Link from "next/link";
@@ -13,6 +15,7 @@ import type {
 } from "@/lib/contracts";
 import { commissionCents } from "@/lib/domain/finance";
 import {
+  costCategoryLabel,
   calculateDestinationArrivalDate,
   FIXED_COST_ROWS,
   normalizeCostCategory,
@@ -72,7 +75,10 @@ function hydrateCostDrafts(existing: CostRecord[]) {
         ? drafts.find((draft) => draft.key === `PRESTADOR_SERVICO_${cost.providerSlot}`)
         : candidates.find((draft) => !draft.amount) ??
           candidates[candidates.length - 1];
-    if (!target) continue;
+    if (!target) {
+      drafts.push({key: cost.id, category, label: costCategoryLabel(category), amount: centsToInput(cost.amountCents), providerName: cost.providerName ?? "", description: cost.description ?? "", occurredOn: cost.occurredOn ?? "", confirmed: cost.confirmed});
+      continue;
+    }
     const hadAmount = Boolean(target.amount);
     const current = hadAmount ? moneyInputToCents(target.amount) : 0;
     target.amount = centsToInput(current + cost.amountCents);
@@ -95,13 +101,18 @@ export function SaleEditScreen({ id }: { id: string }) {
   return <SaleFormScreen initialSale={api.data.sale} />;
 }
 
-export function SaleFormScreen({ initialSale }: { initialSale?: SaleRecord }) {
+export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "CEGONHA" }: { initialSale?: SaleRecord; saleChannel?: SaleChannel }) {
+  const saleChannel = initialSale?.saleChannel ?? requestedChannel;
+  const listHref = saleChannel === "FROTA" ? "/frota" : "/vendas";
   const router = useRouter();
   const editing = Boolean(initialSale);
   const [cargoVehicles, setCargoVehicles] = useState(() => cargoVehiclesOrLegacy(initialSale?.cargoVehicles, initialSale?.vehicle ?? null, initialSale?.plate ?? null));
   const [fleetFreightId, setFleetFreightId] = useState(initialSale?.fleetFreightId ?? '');
   const clientsApi = useApi<{ clients: ClientRecord[] }>("/api/clients");
   const meApi = useApi<{ user: CurrentUser }>("/api/me");
+  const sellersApi = useApi<{sellers: {id: string; name: string}[]}>(meApi.data?.user.role === "OPERACIONAL" ? "/api/sales/sellers" : null);
+  const [sellerId, setSellerId] = useState("");
+  const canCreateClient = Boolean(meApi.data && roleCan(meApi.data.user.role, "MANAGE_CLIENTS"));
   const fleetOptions = useApi<{freights: {id:string;label:string}[]}>(meApi.data?.user.role === "ADMIN" ? "/api/sales/fleet-options" : null);
   const [sellerName, setSellerName] = useState(initialSale?.sellerName ?? "");
   const [clientId, setClientId] = useState(initialSale?.clientId ?? "");
@@ -217,8 +228,9 @@ export function SaleFormScreen({ initialSale }: { initialSale?: SaleRecord }) {
     try {
       const payload = {
         cargoVehicles, fleetFreightId: fleetFreightId || null,
+        saleChannel, sellerId,
         saleDate: form.get("saleDate"),
-        sellerName: form.get("sellerName"),
+        sellerName: meApi.data?.user.role === "OPERACIONAL" ? sellersApi.data?.sellers.find(s => s.id === sellerId)?.name : form.get("sellerName"),
         clientId: clientId || null,
         initialProviderName: form.get("initialProviderName"),
         origin: form.get("origin"),
@@ -271,7 +283,7 @@ export function SaleFormScreen({ initialSale }: { initialSale?: SaleRecord }) {
     setError(null);
     try {
       await apiMutation(`/api/sales/${initialSale.id}`, { method: "DELETE" });
-      router.replace("/vendas");
+      router.replace(listHref);
       router.refresh();
     } catch (deleteError) {
       setError(
@@ -290,7 +302,7 @@ export function SaleFormScreen({ initialSale }: { initialSale?: SaleRecord }) {
     <>
       <PageHeader
         eyebrow={editing ? `Venda ${initialSale!.saleNumber}` : "Nova operação"}
-        title={editing ? "Editar venda de frete" : "Cadastrar venda de frete"}
+        title={editing ? "Editar venda de frete" : saleChannel === "FROTA" ? "Nova venda Frota" : "Nova venda Cegonha"}
         description={
           editing
             ? "Todos os dados operacionais e financeiros da venda podem ser corrigidos; os recebimentos existentes são preservados."
@@ -299,7 +311,7 @@ export function SaleFormScreen({ initialSale }: { initialSale?: SaleRecord }) {
         actions={
           <Link
             className="button secondary"
-            href={editing ? `/vendas/${initialSale!.id}` : "/vendas"}
+            href={editing ? `/vendas/${initialSale!.id}` : listHref}
           >
             Cancelar
           </Link>
@@ -324,7 +336,7 @@ export function SaleFormScreen({ initialSale }: { initialSale?: SaleRecord }) {
                 </select>
               </Field>
             </div>
-            <div className="field-action"><span>Cadastro rápido</span><button type="button" className="button secondary" onClick={() => setClientModal(true)}><Icons.plus /> Novo cliente</button></div>
+            {canCreateClient && <div className="field-action"><span>Cadastro rápido</span><button type="button" className="button secondary" onClick={() => setClientModal(true)}><Icons.plus /> Novo cliente</button></div>}
           </div>
         </section>
 
@@ -332,9 +344,9 @@ export function SaleFormScreen({ initialSale }: { initialSale?: SaleRecord }) {
           <header><span>02</span><div><h2>Operação</h2><p>Use somente os estágios operacionais definidos para a Central Express.</p></div></header>
           <div className="operation-section-grid">
             <div className="form-grid four operation-identification-grid">
-              <Field label="Número da venda" hint="Gerado ao registrar, por ano da data da venda."><input value={initialSale?.saleNumber ?? "Automático ao salvar"} readOnly /></Field>
+              <Field label="Número da venda" hint="Sequência automática compartilhada entre Cegonha e Frota."><input value={initialSale?.saleNumber ?? "Automático ao salvar"} readOnly /></Field>
               <Field label="Data da venda"><input name="saleDate" type="date" defaultValue={initialSale?.saleDate ?? today} required /></Field>
-              <Field label="Vendedor"><input name="sellerName" value={sellerNameValue} onChange={(event) => setSellerName(event.target.value)} readOnly={meApi.data?.user.role === "VENDEDOR"} required /></Field>
+              <Field label="Vendedor">{meApi.data?.user.role === "OPERACIONAL" ? <><select value={sellerId} onChange={e => setSellerId(e.target.value)} required><option value="">Selecione um vendedor</option>{sellersApi.data?.sellers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select>{sellersApi.error && <span role="alert">{sellersApi.error}</span>}</> : <input name="sellerName" value={sellerNameValue} onChange={(event) => setSellerName(event.target.value)} readOnly={meApi.data?.user.role === "VENDEDOR"} required />}</Field>
               <Field label="Status operacional"><select name="operationalStatus" defaultValue={initialSale?.operationalStatus ?? "CONFIRMAR"}>{OPERATIONAL_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></Field>
               <Field label="Prestador inicial"><input name="initialProviderName" defaultValue={initialSale?.initialProviderName ?? ""} /></Field>
               <Field label="Prazo operacional (dias)"><input type="number" min={1} max={365} inputMode="numeric" value={operationalDeadlineDays} onChange={(event) => { const value = event.target.value; setOperationalDeadlineDays(value); const calculated = calculateDestinationArrivalDate(originYardEntryDate, value); if (calculated) setDestinationArrivalDate(calculated); }} /></Field>
@@ -417,7 +429,7 @@ export function SaleFormScreen({ initialSale }: { initialSale?: SaleRecord }) {
               {deleting ? "Excluindo venda…" : "Excluir venda"}
             </button>
           )}
-          <Link href={editing ? `/vendas/${initialSale!.id}` : "/vendas"} className="button secondary">Cancelar</Link>
+          <Link href={editing ? `/vendas/${initialSale!.id}` : listHref} className="button secondary">Cancelar</Link>
           <button className="button primary" disabled={saving || deleting}>{saving ? "Salvando venda…" : editing ? "Salvar alterações" : "Salvar venda"}</button>
         </div>
       </form>
