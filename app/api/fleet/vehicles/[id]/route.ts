@@ -53,13 +53,13 @@ export async function DELETE(request: Request, context: RouteContext) {
     const user = await authorize(request, ["ADMIN", "GERENCIA"]);
     const { id } = await context.params;
     const db = await getD1();
-    // Lock references against concurrent inserts until the transaction completes.
-    await db.batch([
-      db.prepare("LOCK TABLE fleet_freights, fleet_vehicle_costs, fleet_drivers, fleet_vehicles IN SHARE ROW EXCLUSIVE MODE"),
-      db.prepare(`DELETE FROM fleet_vehicles WHERE id = ? AND NOT EXISTS (select id from fleet_freights where vehicle_id = ? union all select id from fleet_vehicle_costs where vehicle_id = ? union all select id from fleet_drivers where vehicle_id = ? limit 1)`).bind(id, id, id, id),
-      db.prepare(`insert into audit_logs (id, entity_type, entity_id, action, actor_user_id, actor_email) select ?, 'fleet_vehicles', ?, 'DELETED', ?, ? where not exists (select 1 from fleet_vehicles where id = ?)`).bind(crypto.randomUUID(), id, user.id, user.email, id),
+    const results = await db.batch([
+      db.prepare(`with deleted as (delete from fleet_vehicles where id=? returning *)
+        insert into audit_logs(id,entity_type,entity_id,action,actor_user_id,actor_email,previous_value)
+        select ?, 'FLEET_VEHICLE', id, 'DELETED', ?, ?, row_to_json(deleted)::text from deleted returning entity_id`)
+        .bind(id, crypto.randomUUID(), user.id, user.email),
     ]);
-    if (await queryFirst("select id from fleet_vehicles where id = ?", [id])) throw new ApiError(409, "Cadastro possui fretes, custos ou vínculos. Preserve o histórico desmarcando Ativo.");
+    if (!results[0].results.length) throw new ApiError(404, "Veículo da frota não encontrado.");
     return Response.json({ deleted: true });
   } catch (error) { return jsonError(error); }
 }

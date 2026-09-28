@@ -4,6 +4,8 @@ import { ApiError, getD1, jsonError, queryAll } from "@/lib/server/d1";
 import { createPasswordCredential } from "@/lib/server/local-session";
 import { asObject, enumValue, requiredUpper } from "@/lib/server/validation";
 
+import { userPhone } from "@/lib/server/user-phone";
+
 const ASSIGNABLE_ROLES = ["ADMIN", "VENDEDOR", "FINANCEIRO", "OPERACIONAL"] as const;
 
 function usernameValue(value: unknown) {
@@ -24,13 +26,14 @@ export async function GET(request: Request) {
       id: string;
       name: string;
       email: string;
+      phone: string | null;
       username: string | null;
       pixDetails: string | null;
       role: Role;
       active: number;
       hasPassword: number;
     }>(
-      `select id, name, email, username, pix_details as pixDetails, role, active,
+      `select id, name, email, phone, username, pix_details as pixDetails, role, active,
         case when password_hash is not null and password_salt is not null then 1 else 0 end as hasPassword
        from users order by active desc, name`,
     );
@@ -59,6 +62,7 @@ export async function POST(request: Request) {
     } catch (error) {
       throw new ApiError(400, error instanceof Error ? error.message : "Senha inválida.");
     }
+    const phone = userPhone(payload.phone);
     const pixDetails = null;
     const id = crypto.randomUUID();
     const email = `${username}@centralfrete.local`;
@@ -67,8 +71,8 @@ export async function POST(request: Request) {
       db.prepare(
         `insert into users (
           id, email, username, password_salt, password_hash, pix_details,
-          name, role, active
-        ) values (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+          name, role, phone, active
+        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
       ).bind(
         id,
         email,
@@ -78,6 +82,7 @@ export async function POST(request: Request) {
         pixDetails,
         name,
         role,
+        phone,
       ),
       db.prepare(
         `insert into audit_logs (
@@ -89,7 +94,7 @@ export async function POST(request: Request) {
         id,
         actor.id,
         actor.email,
-        JSON.stringify({ username, name, role }),
+        JSON.stringify({ username, name, role, phone }),
         request.headers.get("x-request-id") ?? crypto.randomUUID(),
       ),
     ]);

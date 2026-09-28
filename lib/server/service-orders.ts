@@ -4,10 +4,10 @@ import type { ServiceOrderSnapshot, ServiceOrderVersion, ServiceOrderReport } fr
 import { ApiError, getD1, queryAll, queryFirst } from '@/lib/server/d1';
 import { getSale } from '@/lib/server/repository';
 
-export function orderIssuer(): ServiceOrderSnapshot['issuer'] {
+export function orderIssuer(phone: string | null = null): ServiceOrderSnapshot['issuer'] {
   return { name: 'Central Express', document: process.env.CENTRAL_EXPRESS_DOCUMENT?.trim() || null,
     address: process.env.CENTRAL_EXPRESS_ADDRESS?.trim() || null,
-    contact: process.env.CENTRAL_EXPRESS_CONTACT?.trim() || null };
+    contact: phone, contactSource: 'USER' };
 }
 // Only client-facing fields belong to new document snapshots. Internal costs do not
 // invalidate the client document. Historical versions remain unchanged.
@@ -52,10 +52,11 @@ export async function readOrderVersion(id: string, version?: number, source: Ord
     from service_order_versions v join service_orders o on o.id=v.order_id
     where o.${spec.owner}=? ${version ? 'and v.version=?' : ''} order by v.version desc limit 1`, version ? [id,version] : [id]);
 }
-export async function orderReport(id: string, kind: OrderSource = 'sale'): Promise<ServiceOrderReport> {
+export async function orderReport(id: string, kind: OrderSource = 'sale', userId?: string): Promise<ServiceOrderReport> {
   const spec=orderSources[kind];
   const latest = await readOrderVersion(id,undefined,kind);
-  const source = await queryFirst<{snapshot: ServiceOrderSnapshot}>(spec.sql,[JSON.stringify(orderIssuer()),id]);
+  const user = userId ? await queryFirst<{phone:string|null}>("select phone from users where id=?",[userId]) : null;
+  const source = await queryFirst<{snapshot: ServiceOrderSnapshot}>(spec.sql,[JSON.stringify(orderIssuer(userId ? user?.phone ?? null : latest?.snapshot.issuer?.contact ?? null)),id]);
   const versions = await queryAll<{version:number;createdAt:string}>(`select v.version,v.created_at::text as createdAt
     from service_order_versions v join service_orders o on o.id=v.order_id where o.${spec.owner}=? order by v.version desc`,[id]);
   return { latest, versions, stale: Boolean(latest && JSON.stringify(latest.snapshot) !== JSON.stringify(source?.snapshot)) };
@@ -63,6 +64,7 @@ export async function orderReport(id: string, kind: OrderSource = 'sale'): Promi
 /** A row lock serializes issuance with edits and linking. Existing snapshots are immutable. */
 export async function issueOrder(id: string, user: CurrentUser, kind: OrderSource = 'sale') {
   const spec=orderSources[kind];
+  const contact = await queryFirst<{phone:string|null}>("select phone from users where id=?",[user.id]);
   const db = await getD1();
   await db.batch([
     db.prepare(`select id from ${spec.table} where id=? for update`).bind(id),
@@ -80,9 +82,9 @@ export async function issueOrder(id: string, user: CurrentUser, kind: OrderSourc
       returning order_id,version)
       insert into audit_logs(id,entity_type,entity_id,action,actor_user_id,actor_email,new_value)
       select gen_random_uuid()::text,'SERVICE_ORDER',order_id,'VERSION_ISSUED',?,?,jsonb_build_object('version',version,'${spec.auditKey}',?::text)::text from issued`)
-      .bind(JSON.stringify(orderIssuer()),id,id,user.id,id,user.id,user.email,id),
+      .bind(JSON.stringify(orderIssuer(contact?.phone ?? null)),id,id,user.id,id,user.id,user.email,id),
   ]);
-  return orderReport(id,kind);
+  return orderReport(id,kind,user.id);
 }
 
 export async function fleetOrderTarget(id: string) {

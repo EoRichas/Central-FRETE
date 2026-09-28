@@ -67,7 +67,7 @@ export function FreightModal({
   const [routing, setRouting] = useState(false);
   const [routeNotice, setRouteNotice] = useState("");
   const [vehicleId, setVehicleId] = useState(
-    freight?.vehicleId ?? firstVehicle?.id ?? "",
+    freight ? freight.vehicleId ?? "" : firstVehicle?.id ?? "",
   );
   const [freightValue, setFreightValue] = useState(
     centsToInput(freight?.freightAmountCents),

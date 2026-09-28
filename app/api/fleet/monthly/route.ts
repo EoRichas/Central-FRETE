@@ -41,6 +41,8 @@ export async function POST(request: Request) {
         select ?,?,source.snapshot,? from (${MONTHLY_SOURCE_SQL}) source
         where ${notClosed}
         and not exists(select 1 from jsonb_array_elements(source.snapshot->'freights') f where (f->>'fuelPending')::boolean)
+        and (source.snapshot->>'unbilledCount')::int=0
+        and not exists(select 1 from jsonb_array_elements(source.snapshot->'sales') s where (s->>'costsPending')::boolean)
         returning *`;
       params = [id,competency,user.id,competency,competency];
     } else {
@@ -56,7 +58,7 @@ export async function POST(request: Request) {
       .bind(...params,crypto.randomUUID(),competency,action,user.id,user.email,request.headers.get('x-request-id') ?? crypto.randomUUID());
     const results = await db.batch([lock, mutation]);
     if (!results[1].results.length) throw new ApiError(409, action === 'CLOSE'
-      ? 'O mês já está fechado ou há diesel realizado pendente nos fretes avulsos.'
+      ? 'O mês já está fechado ou há pendências de faturamento, diesel realizado ou custos de vendas.'
       : 'Registro não encontrado ou mês fechado. Reabra o mês para alterar lançamentos.');
     return Response.json({ updated: true });
   } catch (error) { return jsonError(error); }

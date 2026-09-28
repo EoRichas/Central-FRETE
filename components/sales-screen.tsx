@@ -52,6 +52,7 @@ export function SalesScreen({
 
   return (
     <>
+      <nav className="table-actions" aria-label="Canais de vendas"><Link className="text-button" href="/vendas">Cegonha</Link><Link className="text-button" href="/vendas?canal=FROTA">Frota</Link></nav>
       <PageHeader eyebrow="Operação" title={saleChannel === "FROTA" ? "Vendas Frota" : "Vendas Cegonha"} description="Consulte o ciclo operacional e a cobrança de cada frete em uma única visão." actions={<><a className="button secondary" href={`/api/exports/sales.csv?${competency ? `competency=${competency}` : "period=all"}&saleChannel=${saleChannel}`}><Icons.receipt /> Exportar Excel</a>{data?.canCreate && <Link className="button primary" href={newSaleHref}><Icons.plus /> Nova venda</Link>}</>} />
       {data?.canDelete && <StorageCleanupNotice />}
       <section className="filter-panel sales-filter-panel">

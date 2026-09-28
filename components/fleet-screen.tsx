@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { roleCan } from "@/lib/domain/permissions";
 import type { CurrentUser } from "@/lib/contracts";
-import { SalesScreen } from "@/components/sales-screen";
+
 import { StorageCleanupNotice } from "@/components/storage-cleanup-notice";
 import { useMemo, useState } from "react";
 import { FleetMonthlyPanel } from "@/components/fleet-monthly-panel";
@@ -37,14 +37,14 @@ import {
   DriverModal,
 } from "@/components/fleet-assets";
 
-type FleetTab = "sales" | "overview" | "freights" | "assets" | "monthly" | "billing";
+type FleetTab = "overview" | "freights" | "assets" | "monthly" | "billing";
 
 export function FleetScreen() {
   const me = useApi<{user: CurrentUser}>("/api/me");
   if (me.loading) return <LoadingState label="Carregando acesso à Frota…" />;
   if (me.error) return <ErrorState message={me.error} retry={me.refresh} />;
   if (!me.data) return null;
-  if (roleCan(me.data.user.role, "FLEET_SALES_ONLY")) return <div className="fleet-module"><SalesScreen saleChannel="FROTA" initialCompetency={currentCompetency()} initialFinancialStatus="" /></div>;
+  if (roleCan(me.data.user.role, "FLEET_SALES_ONLY")) return <section className="panel detail-card"><h2>Vendas Frota</h2><p>As vendas estão disponíveis na área comercial.</p><Link className="button secondary" href="/vendas?canal=FROTA">Abrir vendas</Link></section>;
   return <FleetOperationsScreen />;
 }
 
@@ -142,7 +142,6 @@ function FleetOperationsScreen() {
 
   const allTabs: Array<{ id: FleetTab; label: string }> = [
     { id: "overview", label: "Visão geral" },
-    { id: "sales", label: "Vendas" },
     { id: "freights", label: "Fretes" },
     { id: "assets", label: "Veículos e motoristas" },
     { id: "monthly", label: "Fechamento mensal" },
@@ -180,7 +179,7 @@ function FleetOperationsScreen() {
                 }
               />
             </label>
-            {fleet?.canEditFreights && tab !== "sales" && (
+            {fleet?.canEditFreights && (
               <button className="button primary" onClick={openNewFreight}>
                 <Icons.plus /> Novo frete
               </button>
@@ -221,13 +220,6 @@ function FleetOperationsScreen() {
               </button>
             ))}
           </div>
-          {tab === "sales" && <>
-            <SalesScreen saleChannel="FROTA" initialCompetency={competency} selectedCompetency={competency} onCompetencyChange={setCompetency} initialFinancialStatus="" />
-            <section className="panel table-panel">
-              <header className="fleet-panel-header"><div><h2>Fretes cadastrados na Frota</h2><p>Operações sem venda comercial Frota vinculada. Filtro pelo mês da coleta; os demais filtros acima se aplicam à lista de vendas.</p></div></header>
-              <FreightTable freights={fleet.freights.filter(f => !f.linkedFleetSaleId)} onOpen={f => setViewingId(f.id)} />
-            </section>
-          </>}
           {tab === "overview" && !fleet.freightOnly && (
             <>
               <section className="kpi-grid fleet-kpis">
@@ -235,7 +227,7 @@ function FleetOperationsScreen() {
                   <span>Faturamento</span>
                   <strong>{formatMoney(fleet.billing.revenueCents)}</strong>
                   <small>
-                    {fleet.billing.freightCount} fretes por data de faturamento
+                    {fleet.billing.freightCount} fretes · faturamento ou coleta provisória
                   </small>
                   <button
                     className="text-button"
