@@ -33,7 +33,7 @@ mock.module('../../lib/server/d1.ts', { namedExports: {
 
 before(async () => {
  await pg.exec('CREATE ROLE anon; CREATE ROLE authenticated;');
- for (let pass = 0; pass < 2; pass++) for (const file of ['001_central_frete_postgres.sql', '002_fleet.sql', '003_fleet_billing.sql', '004_operational_role.sql', '005_detach_driver_vehicle.sql', '006_fleet_vehicle_cost_average_flag.sql', '008_fleet_results.sql', '009_direct_paid_operation_costs.sql', '010_fleet_cargo_sales_orders.sql', '011_sale_origin_location_type.sql', '../supabase/migrations/20260923220518_fleet_operation_integrity.sql', '012_sales_channels_global_numbering_costs.sql', '013_fleet_document_costs.sql']) await pg.exec(await readFile(new URL(`../../database/${file}`, import.meta.url), 'utf8'));
+ for (let pass = 0; pass < 2; pass++) for (const file of ['001_central_frete_postgres.sql', '002_fleet.sql', '003_fleet_billing.sql', '004_operational_role.sql', '005_detach_driver_vehicle.sql', '006_fleet_vehicle_cost_average_flag.sql', '008_fleet_results.sql', '009_direct_paid_operation_costs.sql', '010_fleet_cargo_sales_orders.sql', '011_sale_origin_location_type.sql', '../supabase/migrations/20260923220518_fleet_operation_integrity.sql', '012_sales_channels_global_numbering_costs.sql', '013_fleet_document_costs.sql', '015_fleet_numbers_and_orders.sql']) await pg.exec(await readFile(new URL(`../../database/${file}`, import.meta.url), 'utf8'));
  await pg.exec("INSERT INTO users(id,email,name,role) VALUES ('admin','admin@example.test','Admin','ADMIN'),('finance','finance@example.test','Finance','FINANCEIRO'),('seller','seller@example.test','Seller','VENDEDOR');");
  process.env.CENTRAL_FRETE_SESSION_SECRET = 'test-secret-never-use-in-production-1234';
 });
@@ -132,7 +132,7 @@ test('acesso independe de licença antiga e mantém sessão, usuário ativo e pe
 });
 
 test('vendedor anexa na própria venda sem ganhar permissão para confirmar pagamento', async () => {
- await pg.exec("INSERT INTO freight_sales(id,sale_number,sale_date,competency,seller_id,seller_name,origin,destination,financial_due_date,operational_status,freight_amount_cents,commission_basis_points,created_by) VALUES ('own','1','2026-09-01','2026-09','seller','Seller','A','B','2026-09-05','SEM_PREVISAO',1000,1000,'admin'),('other','2','2026-09-01','2026-09','admin','Admin','A','B','2026-09-05','SEM_PREVISAO',1000,1000,'admin')");
+ await pg.exec("ALTER TABLE freight_sales DISABLE TRIGGER freight_sale_number; INSERT INTO freight_sales(id,sale_number,sale_date,competency,seller_id,seller_name,origin,destination,financial_due_date,operational_status,freight_amount_cents,commission_basis_points,created_by) VALUES ('own','1','2026-09-01','2026-09','seller','Seller','A','B','2026-09-05','SEM_PREVISAO',1000,1000,'admin'),('other','2','2026-09-01','2026-09','admin','Admin','A','B','2026-09-05','SEM_PREVISAO',1000,1000,'admin'); ALTER TABLE freight_sales ENABLE TRIGGER freight_sale_number;");
  const upload = await import('../../app/api/sales/[id]/attachments/route.ts');
  const payments = await import('../../app/api/sales/[id]/payments/route.ts');
  const form = () => { const data=new FormData(); data.set('file',new File(['%PDF-1.4\n%%EOF'],'comprovante.pdf',{type:'application/pdf'})); return data; };
@@ -667,7 +667,9 @@ test('migração renumera somente vendas anuais sem OS e é repetível',async()=
  const migration=await readFile(new URL('../../database/012_sales_channels_global_numbering_costs.sql',import.meta.url),'utf8');
  const before=Number((await queryFirst('select last_value from global_sale_number_counter where id=1') as {last_value:number}).last_value);
  const seed=(id:string,number:string)=>pg.query("insert into freight_sales(id,sale_number,sale_date,competency,seller_name,origin,destination,financial_due_date,operational_status,freight_amount_cents,commission_basis_points,created_by) values($1,$2,'2020-01-01','2020-01','SELLER','A','B','2020-01-02','CONFIRMAR',100,0,'admin')",[id,number]);
+ await pg.exec('ALTER TABLE freight_sales DISABLE TRIGGER freight_sale_number');
  await seed('migrate-a','2020-1');await seed('migrate-b','2020-2');await seed('migrate-issued','2020-3');
+ await pg.exec('ALTER TABLE freight_sales ENABLE TRIGGER freight_sale_number');
  await pg.exec("insert into service_orders(id,sale_id,created_by) values('migration-order','migrate-issued','admin'); insert into service_order_versions(order_id,version,snapshot,created_by) values('migration-order',1,'{\"schemaVersion\":1,\"saleNumber\":\"2020-3\"}','admin');");
  await pg.exec(migration);
  const numbers=await queryAll("select id,sale_number from freight_sales where id like 'migrate-%' order by id") as {id:string;sale_number:string}[];
@@ -730,12 +732,12 @@ test('consulta de todos os meses preserva canal e permissões e identifica venda
  const sales=await import('../../app/api/sales/route.ts');
  const fleetApi=await import('../../app/api/fleet/route.ts');
  const exporter=await import('../../app/api/exports/sales.csv/route.ts');
- const created=await sales.POST(await request('/api/sales','seller','POST',{...salePayload,saleDate:'2020-02-01',saleChannel:'FROTA'}));
+ const linkedFreight=await queryFirst("select id from fleet_freights where client_name='CLIENTE CUSTOS'") as {id:string};
+ const created=await sales.POST(await request('/api/sales','admin','POST',{...salePayload,fleetFreightId:linkedFreight.id,saleDate:'2020-02-01',saleChannel:'FROTA'}));
  assert.equal(created.status,201,await created.clone().text());const sale=await created.json();
  const other=await sales.POST(await request('/api/sales','admin','POST',{...salePayload,sellerName:'ADMIN',saleDate:'2020-02-01',saleChannel:'FROTA'}));
  assert.equal(other.status,201,await other.clone().text());const otherSale=await other.json();
- const linkedFreight=await queryFirst("select id from fleet_freights where client_name='CLIENTE CUSTOS'") as {id:string};
- await pg.query('update freight_sales set fleet_freight_id=$1 where id=$2',[linkedFreight.id,sale.id]);
+
  const listed=await (await sales.GET(await request('/api/sales?period=all&saleChannel=FROTA','seller'))).json();
  assert.ok(listed.sales.some((s:{id:string})=>s.id===sale.id));
  assert.ok(!listed.sales.some((s:{id:string})=>s.id===otherSale.id));
@@ -840,4 +842,45 @@ test('importação usa numeração automática e mantém referência da planilha
   assert.equal((await again.json()).alreadyImported,true);
   assert.equal(Number((await queryFirst('select last_value from global_sale_number_counter where id=1') as {last_value:number}).last_value),before+1);
  }finally{Object.assign(CENTRAL_FRETE_IMPORT,original);}
+});
+
+
+test('Frota gera número global e OS própria, adota o documento ao vincular venda e preserva histórico',async()=>{
+ await pg.exec(await readFile(new URL('../../database/015_fleet_numbers_and_orders.sql',import.meta.url),'utf8'));
+ const create=await import('../../app/api/fleet/freights/route.ts');const edit=await import('../../app/api/fleet/freights/[id]/route.ts');
+ const orders=await import('../../app/api/fleet/freights/[id]/service-order/route.ts');const sales=await import('../../app/api/sales/route.ts');
+ const {loadFleetData}=await import('../../lib/server/fleet.ts');const {readOrderVersion}=await import('../../lib/server/service-orders.ts');
+ const before=Number((await queryFirst('select last_value from global_sale_number_counter where id=1') as {last_value:number}).last_value);
+ const payload={vehicleId:'results-truck',driverId:'results-driver',clientName:'CLIENTE OS FROTA',origin:'ORIGEM OS',destination:'DESTINO OS',pickupDate:'2035-01-01',operationalStatus:'EM_ROTA',priority:'NORMAL',freightAmountCents:100000,distanceMeters:100000,tollCents:1000,driverCommissionCents:2000,actualFuelCostCents:10000,cargoVehicles:[{model:'UNO',plate:'ABC1D23'}]};
+ const created=await create.POST(await request('/api/fleet/freights','admin','POST',payload));assert.equal(created.status,201,await created.clone().text());const {id}=await created.json();const ctx={params:Promise.resolve({id})};
+ const f=(await loadFleetData(true,true,true,false,'2035-01')).freights.find(f=>f.id===id)!;assert.equal(f.saleNumber,String(before+1));
+ const cegonha=await sales.POST(await request('/api/sales','seller','POST',salePayload));assert.equal(cegonha.status,201);const c=await cegonha.json();assert.equal(c.saleNumber,String(before+2));
+ for(const role of ['seller','operator']){assert.equal((await orders.GET(await request('/api/fleet/freights/x/service-order',role),ctx)).status,403);assert.equal((await orders.POST(await request('/api/fleet/freights/x/service-order',role,'POST'),ctx)).status,403);}
+ assert.equal((await orders.GET(await request('/api/fleet/freights/x/service-order?format=pdf','finance'),ctx)).status,404);
+ const result=await orders.POST(await request('/api/fleet/freights/x/service-order','finance','POST'),ctx);assert.equal(result.status,200,await result.clone().text());const first=await result.json();
+ assert.equal(first.latest.snapshot.saleNumber,f.saleNumber);assert.equal(first.latest.snapshot.clientName,payload.clientName);assert.equal(first.latest.snapshot.financialDueDate,null);assert.equal(first.latest.snapshot.installments.length,0);assert.equal(first.latest.snapshot.cargoVehicles.length,1);assert.equal(first.latest.snapshot.operationValues,undefined);
+ await Promise.all(Array.from({length:3},async()=>orders.POST(await request('/api/fleet/freights/x/service-order','admin','POST'),ctx)));
+ assert.equal((await queryAll('select version from service_order_versions where order_id=?',[first.latest.orderId])).length,1);
+ assert.equal((await edit.PATCH(await request('/api/fleet/freights/x','finance','PATCH',{insuranceCostCents:3000}),ctx)).status,200);
+ assert.equal((await (await orders.GET(await request('/api/fleet/freights/x/service-order','finance'),ctx)).json()).stale,false);
+ assert.equal((await edit.PATCH(await request('/api/fleet/freights/x','admin','PATCH',{clientName:'CLIENTE ATUALIZADO'}),ctx)).status,200);
+ assert.equal((await (await orders.GET(await request('/api/fleet/freights/x/service-order','finance'),ctx)).json()).stale,true);
+ const updated=await (await orders.POST(await request('/api/fleet/freights/x/service-order','admin','POST'),ctx)).json();assert.equal(updated.latest.version,2);
+ assert.deepEqual((await readOrderVersion(id,1,'fleet'))!.snapshot,first.latest.snapshot);
+ const pdf=await orders.GET(await request('/api/fleet/freights/x/service-order?format=pdf&download=1','finance'),ctx);assert.equal(pdf.status,200);assert.equal(pdf.headers.get('Content-Type'),'application/pdf');assert.equal(pdf.headers.get('Content-Disposition'),`attachment; filename="OS-Central-${f.saleNumber}.pdf"`);
+ if(process.env.CENTRAL_QA_OUTPUT){const {mkdir,writeFile}=await import('node:fs/promises');await mkdir(process.env.CENTRAL_QA_OUTPUT,{recursive:true});await writeFile(`${process.env.CENTRAL_QA_OUTPUT}/os-frota.pdf`,new Uint8Array(await pdf.arrayBuffer()));}
+ const linked=await sales.POST(await request('/api/sales','admin','POST',{...salePayload,saleChannel:'FROTA',fleetFreightId:id}));assert.equal(linked.status,201,await linked.clone().text());const sale=await linked.json();assert.equal(sale.saleNumber,f.saleNumber);
+ assert.equal(Number((await queryFirst('select last_value from global_sale_number_counter where id=1') as {last_value:number}).last_value),before+2);
+ const owner=await queryFirst('select sale_id,fleet_freight_id from service_orders where id=?',[first.latest.orderId]);assert.deepEqual(owner,{sale_id:sale.id,fleet_freight_id:null});
+ const adopted=await (await orders.POST(await request('/api/fleet/freights/x/service-order','admin','POST'),ctx)).json();assert.equal(adopted.latest.orderId,first.latest.orderId);assert.equal(adopted.latest.version,3);assert.equal(adopted.latest.snapshot.clientName,'CLIENTE ATUALIZADO');
+ assert.deepEqual((await readOrderVersion(sale.id,1))!.snapshot,first.latest.snapshot);
+ assert.equal((await create.POST(await request('/api/fleet/freights','admin','POST',{...payload,saleNumber:'9999'}))).status,400);
+ assert.equal((await edit.PATCH(await request('/api/fleet/freights/x','admin','PATCH',{saleNumber:'9999'}),ctx)).status,400);
+ await assert.rejects(pg.query('update fleet_freights set sale_number=$1 where id=$2',['9999',id]),/não pode ser alterado/);
+ await assert.rejects(pg.query('update freight_sales set fleet_freight_id=$1 where id=$2',[id,c.id]),/números diferentes/);
+ const removed=await edit.DELETE(await request('/api/fleet/freights/x','admin','DELETE'),ctx);assert.equal(removed.status,200,await removed.clone().text());assert.equal((await readOrderVersion(sale.id))!.version,3);
+ const standalone=await create.POST(await request('/api/fleet/freights','admin','POST',payload));const solo=await standalone.json();const soloCtx={params:Promise.resolve({id:solo.id})};
+ const soloOrder=await (await orders.POST(await request('/api/fleet/freights/x/service-order','admin','POST'),soloCtx)).json();
+ assert.equal((await edit.DELETE(await request('/api/fleet/freights/x','admin','DELETE'),soloCtx)).status,200);
+ assert.equal((await queryAll('select * from service_order_versions where order_id=?',[soloOrder.latest.orderId])).length,0);
 });

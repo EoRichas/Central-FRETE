@@ -1,5 +1,5 @@
 import { authorize } from "@/lib/server/auth";
-import { getD1, jsonError } from "@/lib/server/d1";
+import { ApiError, getD1, jsonError } from "@/lib/server/d1";
 import { resolveFleetReferences } from "@/lib/server/fleet-mutations";
 import { parseFleetFreightPayload } from "@/lib/server/fleet-validation";
 import { asObject } from "@/lib/server/validation";
@@ -7,7 +7,9 @@ import { asObject } from "@/lib/server/validation";
 export async function POST(request: Request) {
   try {
     const user = await authorize(request, ["ADMIN", "GERENCIA"]);
-    const data = parseFleetFreightPayload(asObject(await request.json()));
+    const payload = asObject(await request.json());
+    if (payload.saleNumber != null) throw new ApiError(400, "O número da venda é gerado automaticamente.");
+    const data = parseFleetFreightPayload(payload);
     const { vehicle, driver } = await resolveFleetReferences(
       data.vehicleId,
       data.driverId,

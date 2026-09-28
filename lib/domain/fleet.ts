@@ -128,6 +128,7 @@ export type FleetFreightMetrics = {
 
 export type FleetFreight = FleetFreightBase & FleetFreightMetrics & {
   linkedFleetSaleId?: string | null;
+  saleNumber?: string;
   id: string;
   paidAt: string | null;
   proofAttachmentId: string | null;

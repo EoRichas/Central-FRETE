@@ -35,6 +35,7 @@ export function FreightTable({
       <table className="fleet-table">
         <thead>
           <tr>
+            <th>Venda</th>
             <th>Coleta</th>
             <th>Rota</th>
             <th>Frota / motorista</th>
@@ -49,6 +50,7 @@ export function FreightTable({
         <tbody>
           {freights.map((freight) => (
             <tr key={freight.id}>
+              <td data-label="Venda"><button type="button" className="text-button" onClick={() => onOpen(freight)} aria-label={`Abrir venda ${freight.saleNumber}`}><strong>{freight.saleNumber}</strong></button></td>
               <td data-label="Coleta">
                 <strong>{formatDate(freight.pickupDate)}</strong>
                 <small>Entrega: {formatDate(freight.deliveryDate)}</small>

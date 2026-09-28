@@ -2,6 +2,7 @@
 import { StorageCleanupNotice } from "@/components/storage-cleanup-notice";
 
 import Link from "next/link";
+import { currentCompetency } from "@/lib/domain/dates";
 import type { SaleChannel } from "@/lib/domain/sales";
 import { useMemo, useState } from "react";
 import type { SaleRecord } from "@/lib/contracts";
@@ -53,9 +54,9 @@ export function SalesScreen({
     <>
       <PageHeader eyebrow="Operação" title={saleChannel === "FROTA" ? "Vendas Frota" : "Vendas Cegonha"} description="Consulte o ciclo operacional e a cobrança de cada frete em uma única visão." actions={<><a className="button secondary" href={`/api/exports/sales.csv?${competency ? `competency=${competency}` : "period=all"}&saleChannel=${saleChannel}`}><Icons.receipt /> Exportar Excel</a>{data?.canCreate && <Link className="button primary" href={newSaleHref}><Icons.plus /> Nova venda</Link>}</>} />
       {data?.canDelete && <StorageCleanupNotice />}
-      <section className="filter-panel">
+      <section className="filter-panel sales-filter-panel">
         <label><span>Pesquisar</span><div className="search-input"><Icons.search /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Venda, cliente, placa, origem…" /></div></label>
-        <label><span>Competência</span><input type="month" value={competency} onChange={(event) => setCompetency(event.target.value)} /><button type="button" className="text-button" onClick={() => setCompetency("")}>{competency ? "Todos os meses" : "Exibindo todos os meses"}</button></label>
+        <label className="competency-filter"><span>Competência</span><input type="month" value={competency} onChange={(event) => setCompetency(event.target.value || currentCompetency())} /></label>
         <label><span>Status financeiro</span><select value={financialStatus} onChange={(event) => setFinancialStatus(event.target.value)}><option value="">Todos</option><option value="EM_ABERTO">Em aberto</option><option value="PAGO">Pago</option><option value="VENCIDO">Vencido</option></select></label>
         <label><span>Status operacional</span><select value={operationalStatus} onChange={(event) => setOperationalStatus(event.target.value)}><option value="">Todos</option>{OPERATIONAL_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
         <label><span>Ordenar</span><select value={sort} onChange={(event) => setSort(event.target.value)}><option value="number-asc">Número da venda crescente</option><option value="date-desc">Mais recentes</option><option value="date-asc">Mais antigas</option><option value="value-desc">Maior valor</option><option value="value-asc">Menor valor</option></select></label>

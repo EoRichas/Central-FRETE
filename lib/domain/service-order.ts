@@ -7,7 +7,7 @@ type ServiceOrderFields = {
   origin: string; originLocationType?: OriginLocationType | null; destination: string; destinationLocationType?: OriginLocationType | null; pickupAddress: string | null; deliveryAddress: string | null;
   cargoVehicles: CargoVehicle[]; freightAmountCents: number;
   installments: { dueDate: string; paymentMethod: string; amountCents: number }[];
-  financialDueDate: string; operationalDeadlineDays: number | null; deliveryDeadline: string | null;
+  financialDueDate: string | null; operationalDeadlineDays: number | null; deliveryDeadline: string | null;
   notes: string | null;
 };
 export type OperationValues = {
