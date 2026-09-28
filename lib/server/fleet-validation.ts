@@ -59,7 +59,10 @@ export function parseFleetFreightPayload(payload: Record<string, unknown>) {
     odometerStartMeters: nullableInteger(payload.odometerStartMeters, "KM inicial", 1_000_000_000_000),
     odometerEndMeters: nullableInteger(payload.odometerEndMeters, "KM final", 1_000_000_000_000),
   };
-  try { distance.distanceMeters = effectiveFleetDistance(distance); }
+  try {
+    distance.distanceMeters = effectiveFleetDistance(distance);
+    if (distance.odometerStartMeters != null && distance.odometerEndMeters != null) distance.routeDistanceMeters = null;
+  }
   catch (error) { throw new ApiError(400, error instanceof Error ? error.message : "Distância inválida."); }
   return {
     ...distance,
@@ -70,6 +73,10 @@ export function parseFleetFreightPayload(payload: Record<string, unknown>) {
     yardCostCents: resultMoney(payload.yardCostCents ?? 0, "Pátio / recebimento"),
     pickupCostCents: resultMoney(payload.pickupCostCents ?? 0, "Coleta"),
     deliveryCostCents: resultMoney(payload.deliveryCostCents ?? 0, "Entrega"),
+    insuranceCostCents: resultMoney(payload.insuranceCostCents ?? 0, "Seguro"),
+    invoiceCostCents: resultMoney(payload.invoiceCostCents ?? 0, "Nota Fiscal"),
+    icmsCostCents: resultMoney(payload.icmsCostCents ?? 0, "ICMS"),
+    cteMdfeCostCents: resultMoney(payload.cteMdfeCostCents ?? 0, "CTE/MDF"),
     otherCostCents: resultMoney(payload.otherCostCents ?? 0, "Outros custos diretos"),
     actualFuelCostCents: payload.actualFuelCostCents == null || payload.actualFuelCostCents === "" ? null : resultMoney(payload.actualFuelCostCents, "Diesel realizado"),
     vehicleId: entityId(payload.vehicleId, "Veículo da frota"),

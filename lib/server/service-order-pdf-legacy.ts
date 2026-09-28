@@ -1,7 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
-import { renderServiceOrderPdf as renderLegacyOrder } from './service-order-pdf-legacy';
 import fontkit from '@pdf-lib/fontkit';
 import type { ServiceOrderVersion } from '@/lib/domain/service-order';
 import { formatRouteLocationType } from '@/lib/domain/operations';
@@ -13,7 +12,6 @@ const methods: Record<string,string> = { BOLETO:'Boleto bancário', DINHEIRO:'Di
 export const SERVICE_ORDER_LAYOUT = { width:595.28, height:841.89, left:42, contentWidth:511.28, top:582, bottom:216 } as const;
 
 export async function renderServiceOrderPdf(order: ServiceOrderVersion): Promise<Uint8Array> {
-  if (order.snapshot.schemaVersion !== 3) return renderLegacyOrder(order);
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);
   const [regularBytes,boldBytes,backgroundBytes] = await Promise.all([
@@ -32,7 +30,7 @@ export async function renderServiceOrderPdf(order: ServiceOrderVersion): Promise
   let page: PDFPage, y = 0;
   const supported = new Set(normal.getCharacterSet());
   function safe(value: string) { return [...value.normalize('NFC')].map(c => c === '\n' || supported.has(c.codePointAt(0)!) ? c : '?').join(''); }
-  function lines(value: string, maxWidth: number, size = 9, font: PDFFont = normal) {
+  function lines(value: string, maxWidth: number, size = 10, font: PDFFont = normal) {
     const output: string[] = [];
     for (const paragraph of safe(value).split('\n')) {
       let current = '';
@@ -52,8 +50,8 @@ export async function renderServiceOrderPdf(order: ServiceOrderVersion): Promise
     }
     return output;
   }
-  function text(value: string,x: number,at: number,size=9,font=normal,color=ink) { page.drawText(safe(value),{x,y:at,size,font,color}); }
-  function centered(value: string,at: number,size=9,font=normal,color=ink) {
+  function text(value: string,x: number,at: number,size=10,font=normal,color=ink) { page.drawText(safe(value),{x,y:at,size,font,color}); }
+  function centered(value: string,at: number,size=10,font=normal,color=ink) {
     text(value,left+(width-font.widthOfTextAtSize(safe(value),size))/2,at,size,font,color);
   }
   function newPage() {
@@ -67,30 +65,30 @@ export async function renderServiceOrderPdf(order: ServiceOrderVersion): Promise
     y=top;
   }
   function ensure(height: number) { if(y-height < bottom) newPage(); }
-  function paragraph(value: string,size=9,font=normal,color=ink) {
-    for(const row of lines(value,width,size,font)) { ensure(13); text(row,left,y,size,font,color); y-=13; }
+  function paragraph(value: string,size=10,font=normal,color=ink) {
+    for(const row of lines(value,width,size,font)) { ensure(16); text(row,left,y,size,font,color); y-=16; }
   }
-  function section(title: string, minimumBody=32) { ensure(24+minimumBody); y-=5; text(title.toLocaleUpperCase('pt-BR'),left,y,10,bold,blue); y-=19; }
-  function field(label: string,value: string | null) { paragraph(`${label}: ${value || 'Não informado'}`); y-=2; }
+  function section(title: string, minimumBody=32) { ensure(32+minimumBody); y-=8; text(title.toLocaleUpperCase('pt-BR'),left,y,10,bold,blue); y-=24; }
+  function field(label: string,value: string | null) { paragraph(`${label}: ${value || 'Não informado'}`); y-=3; }
   function table(headers: string[], rows: string[][], widths: number[]) {
     function heading() {
-      ensure(40);
-      page.drawRectangle({x:left,y:y-9,width,height:22,color:rgb(.93,.95,.98)});
-      let x=left+4; headers.forEach((h,i) => {text(h,x,y,9,bold,blue);x+=widths[i];});y-=24;
+      ensure(54);
+      page.drawRectangle({x:left,y:y-9,width,height:25,color:rgb(.93,.95,.98)});
+      let x=left+8; headers.forEach((h,i) => {text(h,x,y,9,bold,blue);x+=widths[i];});y-=30;
     }
     heading();
     for(const row of rows) {
-      const wrapped=row.map((cell,i)=>lines(cell,widths[i]-8,9));
+      const wrapped=row.map((cell,i)=>lines(cell,widths[i]-16,10));
       const count=Math.max(...wrapped.map(c=>c.length));
       // Split oversized cells across pages instead of allowing one tall row into the footer.
       let offset=0;
       while(offset<count) {
-        if(y-bottom<25) {newPage();heading();}
-        const capacity=Math.max(1,Math.floor((y-bottom-8)/13));
+        if(y-bottom<28) {newPage();heading();}
+        const capacity=Math.max(1,Math.floor((y-bottom-12)/15));
         const chunk=Math.min(count-offset,capacity);
-        let x=left+4;
-        wrapped.forEach((cell,i)=>{cell.slice(offset,offset+chunk).forEach((v,j)=>text(v,x,y-j*13,9));x+=widths[i];});
-        y-=chunk*13+8; offset+=chunk;
+        let x=left+8;
+        wrapped.forEach((cell,i)=>{cell.slice(offset,offset+chunk).forEach((v,j)=>text(v,x,y-j*15,10));x+=widths[i];});
+        y-=chunk*15+12; offset+=chunk;
         page.drawLine({start:{x:left,y:y+6},end:{x:left+width,y:y+6},thickness:.5,color:line});
         if(offset<count) {newPage();heading();}
       }
@@ -98,40 +96,50 @@ export async function renderServiceOrderPdf(order: ServiceOrderVersion): Promise
     y-=6;
   }
   newPage();
-  if(s.issuer.document) field('CNPJ',s.issuer.document);
-  paragraph(s.clientName || 'Cliente não informado',11,bold);
-  if(s.clientDocument) field('CPF/CNPJ',s.clientDocument);
-  if(s.clientEmail) field('E-mail',s.clientEmail);
-  if(s.clientAddress) paragraph(s.clientAddress);
-  y-=12;
-  // The sale prices a transport service as a whole. Do not invent per-vehicle prices.
-  const cargo=s.cargoVehicles.map(v=>[v.model,v.plate ? `PLACA ${v.plate}` : null].filter(Boolean).join(' ')).join('\n');
-  table(['Qt.','Produto/Serviço','Detalhe do item','Valor unitário','Subtotal'],[
-    ['1',`${s.origin} X ${s.destination}`,cargo || 'Transporte de veículos',money(s.freightAmountCents),money(s.freightAmountCents)],
-  ],[25,135,170,91,90.28]);
-  ensure(38);
-  text('Total',left+width-175,y,9,normal,muted);
-  text(money(s.freightAmountCents),left+width-bold.widthOfTextAtSize(money(s.freightAmountCents),10),y,10,bold); y-=18;
-  text('Valor líquido',left+width-175,y,9,bold);
-  text(money(s.freightAmountCents),left+width-bold.widthOfTextAtSize(money(s.freightAmountCents),10),y,10,bold); y-=22;
-  ensure(65);
-  paragraph('Condição de pagamento:',9,bold); y-=3;
-  const paymentMethods=[...new Set(s.installments.map(i=>methods[i.paymentMethod] || i.paymentMethod))];
-  field('Forma de pagamento',paymentMethods.join(' / ') || null);
-  table(['Nº','Vencimento','Valor (R$)','Observações'],
-    s.installments.length ? s.installments.map((i,index)=>[String(index+1),date(i.dueDate),money(i.amountCents),`Venda ${s.saleNumber}`]) :
-      [['1',date(s.financialDueDate),money(s.freightAmountCents),`Venda ${s.saleNumber}`]],
-    [30,100,110,271.28]);
-  section('Condições do transporte',40);
-  paragraph(formatRouteLocationType(s.originLocationType,s.destinationLocationType),9,bold);
-  if(s.operationalDeadlineDays != null) paragraph(`Prazo: ${s.operationalDeadlineDays} dias.`);
-  if(s.notes) paragraph(s.notes);
+  // Issuer identity is already printed in the letterhead. Snapshot CNPJ is additional data.
+  if(s.issuer.document) field('CNPJ do emitente',s.issuer.document);
+  section('Cliente');
+  paragraph(s.clientName || 'Cliente não informado',11,bold); y-=3;
+  field('CPF/CNPJ',s.clientDocument); field('Endereço',s.clientAddress);
+  section('Transporte'); field('Origem',s.origin); field('Destino',s.destination);
+  if(s.pickupAddress) field('Coleta',s.pickupAddress);
+  if(s.deliveryAddress) field('Entrega',s.deliveryAddress);
+  section('Veículos transportados',60);
+  table(['Un.','Modelo','Placa'],s.cargoVehicles.map((v,i)=>[String(i+1),v.model||'Não informado',v.plate||'Não informada']),[38,343,130.28]);
+  paragraph(`Quantidade total: ${s.cargoVehicles.length} veículo(s)`,10,bold);
+  section('Operação e valores',200);
+  field('Tipo de operação',formatRouteLocationType(s.originLocationType,s.destinationLocationType));
+  if(s.operationalDeadlineDays != null) field('Prazo operacional',`${s.operationalDeadlineDays} dias`);
+  const values: string[][] = [['Valor do frete',money(s.freightAmountCents)]];
+  if(s.schemaVersion===2) {
+    const v=s.operationValues;
+    values.push(['Custo da operação',money(v.totalOperationCostCents)],['Seguro',money(v.insuranceCents)],
+      ['Nota Fiscal',money(v.invoiceCents)],['ICMS',money(v.icmsCents)],['CTE / MDF',money(v.cteMdfeCents)]);
+    if(v.legacyCombinedTaxTransportCents) values.push(['ICMS / CTE / MDF (legado combinado)',money(v.legacyCombinedTaxTransportCents)]);
+  }
+  // Two value columns keep the section readable without a long one-value-per-row table.
+  for(let i=0;i<values.length;i+=2) {
+    ensure(34);
+    for(let col=0;col<2;col++) {
+      const item=values[i+col]; if(!item) continue;
+      const x=left+col*(width/2);
+      text(item[0],x,y,9,normal,muted);
+      text(item[1],x,y-15,11,bold);
+    }
+    y-=34;
+  }
+
+  if(s.schemaVersion===1) paragraph('Custos não registrados nesta versão histórica.',9,normal,muted);
+  section('Pagamento',60);
+  if(s.installments.length) table(['Parcela','Forma de pagamento','Vencimento','Valor'],s.installments.map((i,index)=>[String(index+1),methods[i.paymentMethod]||i.paymentMethod,date(i.dueDate),money(i.amountCents)]),[52,200,119,140.28]);
+  else { field('Forma de pagamento',null); field('Vencimento',date(s.financialDueDate)); }
+  section('Observações'); paragraph(s.notes || 'Sem observações.');
   const pages=doc.getPages();
   for(let i=0;i<pages.length;i++) {
     page=pages[i];
-    text(`Emitida em ${date(order.createdAt)} • OS ${s.saleNumber} v${order.version}`,left,209,8,normal,muted);
+    text(`Emitida em ${date(order.createdAt)} • OS ${s.saleNumber} v${order.version}`,left,199,8,normal,muted);
     const pagination=`${i+1} / ${pages.length}`;
-    text(pagination,left+width-normal.widthOfTextAtSize(pagination,8),209,8,normal,muted);
+    text(pagination,left+width-normal.widthOfTextAtSize(pagination,8),199,8,normal,muted);
   }
   return doc.save();
 }

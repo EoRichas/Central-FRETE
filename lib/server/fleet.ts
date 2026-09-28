@@ -59,6 +59,11 @@ type FreightRow = {
   pickupCostCents: number;
   deliveryCostCents: number;
   otherCostCents: number;
+  insuranceCostCents: number;
+  invoiceCostCents: number;
+  icmsCostCents: number;
+  cteMdfeCostCents: number;
+
   actualFuelCostCents: number | null;
   cargoVehicles: import("@/lib/domain/cargo-vehicles").CargoVehicle[] | null;
   fuelLitersMilli: number | null;
@@ -137,7 +142,7 @@ export async function loadFleetData(
       ),
       queryAll<FreightRow>(
         `select trip_id as tripId, yard_cost_cents as yardCostCents, pickup_cost_cents as pickupCostCents,
-          delivery_cost_cents as deliveryCostCents, other_cost_cents as otherCostCents, actual_fuel_cost_cents as actualFuelCostCents, cargo_vehicles as cargoVehicles,
+          delivery_cost_cents as deliveryCostCents, other_cost_cents as otherCostCents, insurance_cost_cents as insuranceCostCents, invoice_cost_cents as invoiceCostCents, icms_cost_cents as icmsCostCents, cte_mdfe_cost_cents as cteMdfeCostCents, actual_fuel_cost_cents as actualFuelCostCents, cargo_vehicles as cargoVehicles,
           fuel_liters_milli as fuelLitersMilli, fuel_pump_amount_cents as fuelPumpAmountCents,
           id, vehicle_id as vehicleId, vehicle_plate as vehiclePlate,
           driver_id as driverId, driver_name as driverName,
