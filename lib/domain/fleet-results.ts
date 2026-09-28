@@ -2,7 +2,7 @@ import { allocateTripCost } from './trip-allocation.ts';
 import type { FleetFreight } from './fleet.ts';
 
 export type FleetTrip = {
-  id: string; name: string; vehicleId: string; driverId: string;
+  id: string; name: string; vehicleId: string | null; driverId: string;
   vehiclePlate: string; driverName: string; operationDate: string;
   fuelCostCents: number; tollCents: number; otherCostCents: number; notes: string;
 };
@@ -27,6 +27,8 @@ export type MonthlyEntry = {
   id: string; kind: MonthlyEntryKind; description: string; amountCents: number;
 };
 export type MonthlySource = {
+  dateBasis?: 'BILLING_OR_PICKUP';
+  sales?: {id:string; revenueCents:number; costCents:number; costsPending:boolean}[];
   competency: string;
   freights: { id: string; client: string; revenueCents: number; directCostCents: number;
     standaloneCostCents: number; fuelPending: boolean }[];
@@ -37,18 +39,21 @@ export type MonthlySource = {
 export function calculateMonthlyResult(source: MonthlySource) {
   const sumEntries = (kind: MonthlyEntryKind) => source.entries.filter(e => e.kind === kind).reduce((sum, e) => sum + e.amountCents, 0);
   const fleetRevenueCents = source.freights.reduce((sum, f) => sum + f.revenueCents, 0);
+  const salesRevenueCents = (source.sales ?? []).reduce((sum,s) => sum+s.revenueCents,0);
+  const salesCostCents = (source.sales ?? []).reduce((sum,s) => sum+s.costCents,0);
   const otherRevenueCents = sumEntries('REVENUE');
   const directCostCents = source.freights.reduce((sum, f) => sum + f.directCostCents, 0);
   const transportCostCents = source.freights.reduce((sum, f) => sum + f.standaloneCostCents, 0) + source.trips.reduce((sum, t) => sum + t.costCents, 0);
   const otherVariableCents = sumEntries('VARIABLE');
   const fixedCostCents = sumEntries('FIXED');
-  const revenueCents = fleetRevenueCents + otherRevenueCents;
-  const variableCostCents = directCostCents + transportCostCents + otherVariableCents;
+  const revenueCents = fleetRevenueCents + salesRevenueCents + otherRevenueCents;
+  const variableCostCents = directCostCents + transportCostCents + salesCostCents + otherVariableCents;
   const resultCents = revenueCents - variableCostCents - fixedCostCents;
   for (const value of [revenueCents, variableCostCents, fixedCostCents, resultCents]) {
     if (!Number.isSafeInteger(value)) throw new Error('Total mensal excede o limite de precisão.');
   }
-  return { fleetRevenueCents, otherRevenueCents, directCostCents, transportCostCents,
+  return { fleetRevenueCents, salesRevenueCents, salesCostCents,
+    pendingSalesCount: (source.sales ?? []).filter(s => s.costsPending).length, otherRevenueCents, directCostCents, transportCostCents,
     otherVariableCents, fixedCostCents, revenueCents, variableCostCents, resultCents,
     pendingFuelCount: source.freights.filter(f => f.fuelPending).length };
 }

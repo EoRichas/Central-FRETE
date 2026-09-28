@@ -120,7 +120,7 @@ export function VehicleModal({
               onClick={async () => {
                 if (
                   !window.confirm(
-                    "Excluir cadastro? Registros com histórico serão preservados.",
+                    `Excluir a placa ${vehicle.plate} do cadastro? Os fretes, viagens e valores históricos serão preservados.`,
                   )
                 )
                   return;

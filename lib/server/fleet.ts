@@ -227,7 +227,7 @@ export async function loadFleetData(
   });
 
   const freights = allFreights.filter(row => !competency || row.pickupDate.slice(0, 7) === competency);
-  const billingFreights = allFreights.filter(row => row.billingDate && (!competency || row.billingDate.slice(0,7) === competency));
+  const billingFreights = allFreights.filter(row => !competency || (row.billingDate || row.pickupDate).slice(0,7) === competency);
   const commissionDrivers = drivers.map(driver => {
     const members = billingFreights.filter(f => f.driverId === driver.id);
     return {id: driver.id, name: driver.name, commissionCents: members.reduce((sum,f) => sum+f.driverCommissionCents,0), freights: members};

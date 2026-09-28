@@ -12,6 +12,7 @@ export default async function VendasPage({
   const params = await searchParams;
   return (
     <SalesScreen
+      saleChannel={params.canal === "FROTA" ? "FROTA" : "CEGONHA"}
       initialCompetency={typeof params.competency === "string" && isCompetency(params.competency) ? params.competency : currentCompetency()}
       initialFinancialStatus={typeof params.financialStatus === "string" ? params.financialStatus : ""}
     />

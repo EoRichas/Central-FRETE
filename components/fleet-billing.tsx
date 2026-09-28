@@ -15,10 +15,11 @@ export function FleetBilling({
           <h2>Faturamento do período</h2>
           <p>
             {formatMoney(data.revenueCents)} · {data.freightCount} fretes.
-            Competência pela data de faturamento, igual ao fechamento mensal.
+            Competência pela data de faturamento; sem essa data, a coleta é usada provisoriamente.
           </p>
         </div>
       </header>
+      {data.freights.some(f => !f.billingDate) && <p className="form-error" role="status">Total provisório: há fretes sem data de faturamento. Abra o frete para corrigir a data.</p>}
       <div className="responsive-table">
         <table>
           <thead>
@@ -35,7 +36,7 @@ export function FleetBilling({
           <tbody>
             {data.freights.map((f) => (
               <tr key={f.id}>
-                <td data-label="Data">{formatDate(f.billingDate)}</td>
+                <td data-label="Data">{formatDate(f.billingDate || f.pickupDate)}{!f.billingDate && <small>Coleta · faturamento pendente</small>}</td>
                 <td data-label="Cliente">{f.clientName}</td>
                 <td data-label="Veículo">{f.vehiclePlate}</td>
                 <td data-label="Motorista">{f.driverName}</td>
@@ -56,7 +57,7 @@ export function FleetBilling({
             ))}
             {!data.freights.length && (
               <tr>
-                <td colSpan={7}>Nenhum frete faturado nesta competência.</td>
+                <td colSpan={7}>Nenhum frete nesta competência. Confira o mês selecionado.</td>
               </tr>
             )}
           </tbody>
@@ -81,7 +82,7 @@ export function FleetBilling({
             {driver.freights.map((f) => (
               <li key={f.id}>
                 <button className="text-button" onClick={() => onOpen(f)}>
-                  {formatDate(f.billingDate)} · {f.clientName} ·{" "}
+                  {formatDate(f.billingDate || f.pickupDate)} · {f.clientName} ·{" "}
                   {f.vehiclePlate} · {formatMoney(f.driverCommissionCents)}
                 </button>
               </li>

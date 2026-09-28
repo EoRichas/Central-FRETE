@@ -61,6 +61,16 @@ export async function renderServiceOrderPdf(order: ServiceOrderVersion): Promise
     const scale=Math.min(SERVICE_ORDER_LAYOUT.width/background.width,SERVICE_ORDER_LAYOUT.height/background.height);
     const fit=background.scale(scale);
     page.drawPage(background,{x:(SERVICE_ORDER_LAYOUT.width-fit.width)/2,y:(SERVICE_ORDER_LAYOUT.height-fit.height)/2,...fit});
+    if (s.issuer.contactSource === 'USER') {
+      // The original stationery contains a rasterized fixed phone. Mask only
+      // that line and render the contact saved in this document's snapshot.
+      page.drawRectangle({x:76,y:147,width:160,height:16,color:rgb(1,1,1)});
+      const digits = s.issuer.contact || '';
+      const local = digits.startsWith('55') && digits.length > 11 ? digits.slice(2) : digits;
+      const formatted = local.length === 11 ? `(${local.slice(0,2)}) ${local.slice(2,7)}-${local.slice(7)}`
+        : local.length === 10 ? `(${local.slice(0,2)}) ${local.slice(2,6)}-${local.slice(6)}` : digits;
+      text(formatted || 'Telefone não informado',78,152,9,normal,blue);
+    }
     centered('ORDEM DE SERVIÇO',640,17,bold,blue);
     centered(`Venda ${s.saleNumber}  •  ${date(s.saleDate)}`,619,10,normal,muted);
     page.drawLine({start:{x:left,y:606},end:{x:left+width,y:606},thickness:.8,color:line});

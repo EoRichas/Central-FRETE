@@ -34,7 +34,7 @@ function TripModal({ trip, fleet, onClose, onSaved, onDelete }: {
     <form className="modal-body form-stack" onSubmit={submit}>
       <Field label="Identificação da viagem"><input name="name" defaultValue={trip?.name} maxLength={120} required placeholder="Ex.: SP para Curitiba, carga 18" /></Field>
       <div className="form-grid three">
-        <Field label="Caminhão"><select name="vehicleId" defaultValue={trip?.vehicleId} required>{fleet.vehicles.filter(v => v.active || v.id === trip?.vehicleId).map(v => <option key={v.id} value={v.id}>{v.plate}</option>)}</select></Field>
+        <Field label="Caminhão"><select name="vehicleId" defaultValue={trip?.vehicleId ?? ""} required>{fleet.vehicles.filter(v => v.active || v.id === trip?.vehicleId).map(v => <option key={v.id} value={v.id}>{v.plate}</option>)}</select></Field>
         <Field label="Motorista"><select name="driverId" defaultValue={trip?.driverId} required>{fleet.drivers.filter(d => d.active || d.id === trip?.driverId).map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select></Field>
         <Field label="Data de apuração da viagem" hint="Define o mês dos custos compartilhados."><input name="operationDate" type="date" required defaultValue={trip?.operationDate ?? todaySaoPaulo()} /></Field>
       </div>

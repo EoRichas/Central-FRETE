@@ -2,7 +2,9 @@ import type { Role } from "@/lib/contracts";
 import { authorize } from "@/lib/server/auth";
 import { ApiError, getD1, jsonError, queryFirst } from "@/lib/server/d1";
 import { createPasswordCredential } from "@/lib/server/local-session";
-import { asObject, enumValue, lower, requiredUpper } from "@/lib/server/validation";
+import { asObject, enumValue, requiredUpper } from "@/lib/server/validation";
+
+import { userPhone } from "@/lib/server/user-phone";
 
 const ASSIGNABLE_ROLES = ["ADMIN", "VENDEDOR", "FINANCEIRO", "OPERACIONAL"] as const;
 type RouteContext = { params: Promise<{ id: string }> };
@@ -31,21 +33,22 @@ export async function PATCH(request: Request, context: RouteContext) {
     const previous = await queryFirst<{
       id: string;
       email: string;
+      phone: string | null;
       username: string | null;
       name: string;
       role: Role;
       active: number;
       pixDetails: string | null;
     }>(
-      `select id, email, username, name, role, active, pix_details as pixDetails
+      `select id, email, phone, username, name, role, active, pix_details as pixDetails
        from users where id = ?`,
       [id],
     );
     if (!previous) throw new ApiError(404, "Usuário não encontrado.");
 
     const payload = asObject(await request.json());
-    const email = lower(payload.email);
-    if (!email || !email.includes("@")) throw new ApiError(400, "E-mail inválido.");
+    const email = previous.email;
+    const phone = payload.phone === undefined ? previous.phone : userPhone(payload.phone);
     const username = usernameValue(payload.username);
     const name = requiredUpper(payload.name, "Nome");
     const role = enumValue(payload.role, "Perfil", ASSIGNABLE_ROLES);
@@ -76,13 +79,14 @@ export async function PATCH(request: Request, context: RouteContext) {
     const update = credential
       ? db
           .prepare(
-            `update users set email = ?, username = ?, name = ?, role = ?, active = ?,
+            `update users set email = ?, phone = ?, username = ?, name = ?, role = ?, active = ?,
               pix_details = ?, password_salt = ?, password_hash = ?,
               updated_at = to_char(timezone('UTC', now()), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
              where id = ?`,
           )
           .bind(
             email,
+            phone,
             username,
             name,
             role,
@@ -94,11 +98,11 @@ export async function PATCH(request: Request, context: RouteContext) {
           )
       : db
           .prepare(
-            `update users set email = ?, username = ?, name = ?, role = ?, active = ?,
+            `update users set email = ?, phone = ?, username = ?, name = ?, role = ?, active = ?,
               pix_details = ?, updated_at = to_char(timezone('UTC', now()), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
              where id = ?`,
           )
-          .bind(email, username, name, role, active ? 1 : 0, pixDetails, id);
+          .bind(email, phone, username, name, role, active ? 1 : 0, pixDetails, id);
 
     await db.batch([
       update,
@@ -117,6 +121,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           JSON.stringify({ ...previous, active: Boolean(previous.active) }),
           JSON.stringify({
             email,
+            phone,
             username,
             name,
             role,
@@ -149,13 +154,14 @@ export async function DELETE(request: Request, context: RouteContext) {
     const previous = await queryFirst<{
       id: string;
       email: string;
+      phone: string | null;
       username: string | null;
       name: string;
       role: Role;
       active: number;
       pixDetails: string | null;
     }>(
-      `select id, email, username, name, role, active, pix_details as pixDetails
+      `select id, email, phone, username, name, role, active, pix_details as pixDetails
        from users where id = ?`,
       [id],
     );

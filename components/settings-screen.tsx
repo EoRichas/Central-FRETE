@@ -17,6 +17,7 @@ type UserRow = {
   id: string;
   name: string;
   email: string;
+  phone: string | null;
   username: string | null;
   role: Role;
   active: boolean;
@@ -138,7 +139,7 @@ export function SettingsScreen() {
           <Field label="Nome"><input name="name" required /></Field>
           <Field label="Usuário"><input name="username" autoComplete="off" required /></Field>
           <Field label="Senha"><input name="password" type="password" minLength={6} autoComplete="new-password" required /></Field>
-          <Field label="E-mail"><input name="email" type="email" required /></Field>
+          <Field label="Telefone"><input name="phone" type="tel" autoComplete="tel" placeholder="(11) 99999-9999" maxLength={20} /></Field>
           <Field label="Perfil">
             <select name="role" defaultValue="VENDEDOR">
               <option value="ADMIN">Admin</option>
@@ -162,7 +163,7 @@ export function SettingsScreen() {
                 <tr>
                   <th>Nome</th>
                   <th>Usuário</th>
-                  <th>E-mail</th>
+                  <th>Telefone</th>
                   <th>Perfil</th>
                   <th>Login</th>
                   <th>Situação</th>
@@ -174,7 +175,7 @@ export function SettingsScreen() {
                   <tr key={user.id}>
                     <td data-label="Nome"><strong>{user.name}</strong></td>
                     <td data-label="Usuário">{user.username ?? "NÃO DEFINIDO"}</td>
-                    <td data-label="E-mail">{user.email}</td>
+                    <td data-label="Telefone">{user.phone || "Não informado"}</td>
                     <td data-label="Perfil">{profileLabel(user.role)}</td>
                     <td data-label="Login">
                       <StatusBadge status={user.hasPassword ? "CONFIGURADO" : "SEM SENHA"} />
@@ -220,8 +221,8 @@ export function SettingsScreen() {
             <Field label="Usuário">
               <input name="username" defaultValue={fallbackUsername(editingUser)} required />
             </Field>
-            <Field label="E-mail">
-              <input name="email" type="email" defaultValue={editingUser.email} required />
+            <Field label="Telefone">
+              <input name="phone" type="tel" autoComplete="tel" defaultValue={editingUser.phone ?? ""} placeholder="(11) 99999-9999" maxLength={20} />
             </Field>
             <Field label="Perfil">
               <select

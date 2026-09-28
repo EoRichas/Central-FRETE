@@ -8,13 +8,18 @@ trip_members as (select id,trip_id,actual_fuel_cost_cents,
  row_number() over(partition by trip_id order by id COLLATE "C") as position
  from fleet_freights where trip_id is not null)
 select jsonb_build_object(
- 'competency', m.competency,
+ 'competency', m.competency, 'dateBasis','BILLING_OR_PICKUP',
+ 'sales',coalesce((select jsonb_agg(jsonb_build_object(
+   'id',s.id,'revenueCents',s.freight_amount_cents,
+   'costCents',round(s.freight_amount_cents::numeric*s.commission_basis_points/10000)::bigint + coalesce((select sum(c.amount_cents) from freight_costs c where c.sale_id=s.id),0),
+   'costsPending',s.costs_pending=1) order by s.id)
+   from freight_sales s where s.competency=m.competency and s.fleet_freight_id is null),'[]'::jsonb),
  'freights', coalesce((select jsonb_agg(jsonb_build_object(
    'id', f.id, 'client', f.client_name, 'revenueCents', f.freight_amount_cents,
    'directCostCents', f.driver_commission_cents + f.yard_cost_cents + f.pickup_cost_cents + f.delivery_cost_cents + f.other_cost_cents + f.insurance_cost_cents + f.invoice_cost_cents + f.icms_cost_cents + f.cte_mdfe_cost_cents,
    'standaloneCostCents', case when f.trip_id is null then coalesce(f.actual_fuel_cost_cents,0) + f.toll_cents else 0 end,
    'fuelPending', f.trip_id is null and f.actual_fuel_cost_cents is null
- ) order by f.id) from fleet_freights f where left(f.billing_date,7)=m.competency), '[]'::jsonb),
+ ) order by f.id) from fleet_freights f where left(coalesce(f.billing_date,f.pickup_date),7)=m.competency), '[]'::jsonb),
  'trips', coalesce((select jsonb_agg(jsonb_build_object('id',t.id,'name',t.name,
    'costCents',coalesce((select sum(coalesce(f.actual_fuel_cost_cents,
  t.fuel_cost_cents / f.members + case when f.position <= mod(t.fuel_cost_cents,f.members) then 1 else 0 end))
@@ -36,6 +41,7 @@ export async function loadMonthlyReport(competency: string) {
     queryAll<MonthlyReport['periods'][number]>(`with periods as (
       select competency from company_monthly_closings
       union select competency from company_monthly_entries
+      union select competency from freight_sales
       union select competency from fleet_vehicle_costs
       union select left(billing_date,7) from fleet_freights where billing_date is not null
       union select left(pickup_date,7) from fleet_freights
@@ -44,10 +50,10 @@ export async function loadMonthlyReport(competency: string) {
       exists(select 1 from company_monthly_closings c where c.competency=p.competency and c.reopened_at is null) as closed,
       exists(select 1 from fleet_vehicle_costs v where v.competency=p.competency) as hasVehicleHistory
       from periods p order by p.competency desc`),
-    queryAll<MonthlyReport['vehicleHistory'][number]>(`select c.id,v.plate as vehiclePlate,c.competency,
+    queryAll<MonthlyReport['vehicleHistory'][number]>(`select c.id,coalesce(v.plate,c.vehicle_plate) as vehiclePlate,c.competency,
       c.distance_meters as distanceMeters,c.monthly_cost_cents as monthlyCostCents
-      from fleet_vehicle_costs c join fleet_vehicles v on v.id=c.vehicle_id
-      where c.competency=? order by v.plate,c.id`,[competency]),
+      from fleet_vehicle_costs c left join fleet_vehicles v on v.id=c.vehicle_id
+      where c.competency=? order by coalesce(v.plate,c.vehicle_plate),c.id`,[competency]),
   ]);
   if (!source) throw new Error('Não foi possível apurar a competência.');
   return { current: source.snapshot, history, periods, vehicleHistory };
