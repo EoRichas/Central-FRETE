@@ -275,8 +275,8 @@ export function SaleDetailScreen({ id }: { id: string }) {
             </Link>
             {user && roleCan(user.role, "VIEW_SERVICE_ORDERS") && <Link className="button secondary" href={`/vendas/${sale.id}/os`}>Visualizar OS</Link>}
             {canEditSale && (
-              <Link className="table-action" href={`/vendas/${sale.id}/editar`} aria-label="Editar venda" title="Editar venda">
-                <Icons.chevron />
+              <Link className="button primary" href={`/vendas/${sale.id}/editar`}>
+                Editar frete
               </Link>
             )}
             {canManagePayments && (
