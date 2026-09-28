@@ -47,3 +47,9 @@ Testes cobrem base nova com sequência cruzada 201/202/203, atualização de tod
 47 testes gerais e 37 testes de integração aprovados. TypeScript e build aprovados. Lint sem erros, com seis avisos preexistentes em outros componentes.
 
 Nenhuma permissão foi ampliada. Conferência visual no ambiente publicado permanece pendente porque não há navegador local disponível nesta execução.
+
+## Complemento: OS atual sem seletor
+
+Por solicitação posterior, a tela da OS não oferece seleção nem exibe número de versão. Visualização, impressão e download consultam a emissão mais recente; após atualização, a prévia é recarregada. O botão passa a usar o texto Atualizar OS. O PDF do modelo atual e o nome do arquivo também não mostram versão. O histórico interno e o acesso autenticado aos documentos antigos permanecem preservados.
+
+Validação deste complemento: três testes de OS/PDF e 37 de integração aprovados, TypeScript, lint dos arquivos alterados e build aprovados. PDF de demonstração renderizado e inspecionado visualmente, sem indicação de versão.

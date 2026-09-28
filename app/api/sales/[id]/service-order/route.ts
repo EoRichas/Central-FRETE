@@ -16,7 +16,7 @@ export async function GET(request: Request, context: Context) {
     const order = await readOrderVersion(id,version);
     if (!order) throw new ApiError(404,'OS ainda não emitida.');
     const bytes = await renderServiceOrderPdf(order);
-    const filename = `OS-Central-${order.snapshot.saleNumber.replace(/[^a-zA-Z0-9-]/g,'_')}-v${order.version}.pdf`;
+    const filename = `OS-Central-${order.snapshot.saleNumber.replace(/[^a-zA-Z0-9-]/g,'_')}.pdf`;
     return new Response(new Uint8Array(bytes),{headers:{'Content-Type':'application/pdf','Cache-Control':'private, no-store',
       'X-Content-Type-Options':'nosniff','Content-Disposition':`${url.searchParams.get('download') === '1' ? 'attachment' : 'inline'}; filename="${filename}"`}});
   } catch(error) { return jsonError(error); }
