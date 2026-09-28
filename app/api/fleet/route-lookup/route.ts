@@ -1,3 +1,4 @@
+import { locateCep, roadDistance } from '@/lib/server/cep-routing';
 import { authorize } from "@/lib/server/auth";
 import { ApiError, jsonError } from "@/lib/server/d1";
 import { asObject, requiredString } from "@/lib/server/validation";
@@ -63,10 +64,16 @@ export async function POST(request: Request) {
     const key = process.env.GOOGLE_MAPS_API_KEY;
     const failure = (notice: string) =>
       Response.json({ origin, destination, distanceMeters: null, notice });
-    if (!key)
-      return failure(
-        "Cálculo de rota indisponível: integração não configurada. Informe a distância manualmente.",
-      );
+    if (!key) {
+      if (!data.originCep || !data.destinationCep) return failure('Preencha os dois CEPs para calcular a distância automaticamente.');
+      try {
+        const [from,to]=await Promise.all([locateCep(String(data.originCep).replace(/\D/g,'')),locateCep(String(data.destinationCep).replace(/\D/g,''))]);
+        if(!from.point || !to.point) return failure('Este CEP não possui localização suficiente para calcular a rota. Informe a distância manualmente.');
+        return Response.json({origin,destination,distanceMeters:await roadDistance(from.point,to.point),notice:'Distância rodoviária estimada pelos CEPs.', attribution:'© OpenStreetMap contributors · OSRM'});
+      } catch (error) {
+        return failure(error instanceof ApiError ? error.message : 'O serviço de rotas não respondeu. Informe a distância manualmente.');
+      }
+    }
     try {
       const response = await fetch(
         "https://routes.googleapis.com/directions/v2:computeRoutes",

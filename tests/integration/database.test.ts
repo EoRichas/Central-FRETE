@@ -33,7 +33,7 @@ mock.module('../../lib/server/d1.ts', { namedExports: {
 
 before(async () => {
  await pg.exec('CREATE ROLE anon; CREATE ROLE authenticated;');
- for (let pass = 0; pass < 2; pass++) for (const file of ['001_central_frete_postgres.sql', '002_fleet.sql', '003_fleet_billing.sql', '004_operational_role.sql', '005_detach_driver_vehicle.sql', '006_fleet_vehicle_cost_average_flag.sql', '008_fleet_results.sql', '009_direct_paid_operation_costs.sql', '010_fleet_cargo_sales_orders.sql', '011_sale_origin_location_type.sql', '../supabase/migrations/20260923220518_fleet_operation_integrity.sql', '012_sales_channels_global_numbering_costs.sql']) await pg.exec(await readFile(new URL(`../../database/${file}`, import.meta.url), 'utf8'));
+ for (let pass = 0; pass < 2; pass++) for (const file of ['001_central_frete_postgres.sql', '002_fleet.sql', '003_fleet_billing.sql', '004_operational_role.sql', '005_detach_driver_vehicle.sql', '006_fleet_vehicle_cost_average_flag.sql', '008_fleet_results.sql', '009_direct_paid_operation_costs.sql', '010_fleet_cargo_sales_orders.sql', '011_sale_origin_location_type.sql', '../supabase/migrations/20260923220518_fleet_operation_integrity.sql', '012_sales_channels_global_numbering_costs.sql', '013_fleet_document_costs.sql']) await pg.exec(await readFile(new URL(`../../database/${file}`, import.meta.url), 'utf8'));
  await pg.exec("INSERT INTO users(id,email,name,role) VALUES ('admin','admin@example.test','Admin','ADMIN'),('finance','finance@example.test','Finance','FINANCEIRO'),('seller','seller@example.test','Seller','VENDEDOR');");
  process.env.CENTRAL_FRETE_SESSION_SECRET = 'test-secret-never-use-in-production-1234';
 });
@@ -512,7 +512,7 @@ test('hodômetro persiste distância efetiva e rota; backend rejeita leituras in
  const response=await create.POST(await request('/api/fleet/freights','admin','POST',payload));assert.equal(response.status,201,await response.clone().text());const {id}=await response.json();const ctx={params:Promise.resolve({id})};
  const {loadFleetData}=await import('../../lib/server/fleet.ts');
  let freight=(await loadFleetData(true,true,true,false,'2030-01')).freights.find(f=>f.id===id)!;
- assert.equal(freight.distanceMeters,495000);assert.equal(freight.routeDistanceMeters,510000);assert.equal(freight.netRevenueCents,310000);assert.equal(freight.marginBasisPoints,6200);
+ assert.equal(freight.distanceMeters,495000);assert.equal(freight.routeDistanceMeters,null);assert.equal(freight.netRevenueCents,310000);assert.equal(freight.marginBasisPoints,6200);
  assert.equal((await edit.PATCH(await request('/api/fleet/freights/x','admin','PATCH',{odometerEndMeters:125299999}),ctx)).status,400);
  await assert.rejects(pg.query('update fleet_freights set odometer_end_meters=1 where id=$1',[id]));
  const financial=await edit.PATCH(await request('/api/fleet/freights/x','finance','PATCH',{odometerStartMeters:0,odometerEndMeters:10000,routeDistanceMeters:10000}),ctx);assert.equal(financial.status,200,await financial.clone().text());
@@ -646,15 +646,15 @@ test('custos separados, pagamentos diretos e alteração de custo preservam snap
  const rows=await queryAll('select id,category,confirmed,payment_status from freight_costs where sale_id=?',[sale.id]) as {id:string;category:string;confirmed:number;payment_status:string}[];
  for(const row of rows){const direct=['NOTA_FISCAL_IMPOSTO','SEGURO_ALLIANZ','ICMS'].includes(row.category);assert.equal(row.payment_status,direct?'PAGO':'EM_ABERTO');assert.equal(row.confirmed,direct?1:0);}
  const issued=await orders.POST(await request('/api/sales/x/service-order','seller','POST'),context);assert.equal(issued.status,200,await issued.clone().text());const initial=await issued.json();
- assert.equal(initial.latest.snapshot.schemaVersion,2);
- assert.deepEqual(initial.latest.snapshot.operationValues,{freightAmountCents:salePayload.freightAmountCents,totalOperationCostCents:17600,invoiceCents:1200,insuranceCents:2300,icmsCents:3400,cteMdfeCents:4500,legacyCombinedTaxTransportCents:5600});
+ assert.equal(initial.latest.snapshot.schemaVersion,3);
+ assert.equal('operationValues' in initial.latest.snapshot,false); assert.equal('operationCosts' in initial.latest.snapshot,false);
  const nf=rows.find(r=>r.category==='NOTA_FISCAL_IMPOSTO')!;
  assert.equal((await costsApi.PATCH(await request('/api/sales/x/operation-costs','finance','PATCH',{costId:nf.id,amountCents:1500,status:'EM_ABERTO'}),context)).status,400);
  const update=await costsApi.PATCH(await request('/api/sales/x/operation-costs','finance','PATCH',{costId:nf.id,amountCents:1500,status:'PAGO'}),context);
  assert.equal(update.status,200,await update.clone().text());
- const stale=await orders.GET(await request('/api/sales/x/service-order','seller'),context).then(r=>r.json());assert.equal(stale.stale,true);assert.equal(stale.latest.snapshot.operationValues.invoiceCents,1200);
- const next=await orders.POST(await request('/api/sales/x/service-order','seller','POST'),context).then(r=>r.json());assert.equal(next.latest.version,2);assert.equal(next.latest.snapshot.operationValues.invoiceCents,1500);
- const audit=await queryAll("select * from audit_logs where entity_type='SERVICE_ORDER' and entity_id=?",[next.latest.orderId]);assert.equal(audit.length,2);
+ const stale=await orders.GET(await request('/api/sales/x/service-order','seller'),context).then(r=>r.json());assert.equal(stale.stale,false);assert.deepEqual(stale.latest.snapshot,initial.latest.snapshot);
+ const next=await orders.POST(await request('/api/sales/x/service-order','seller','POST'),context).then(r=>r.json());assert.equal(next.latest.version,1);assert.deepEqual(next.latest.snapshot,initial.latest.snapshot);
+ const audit=await queryAll("select * from audit_logs where entity_type='SERVICE_ORDER' and entity_id=?",[next.latest.orderId]);assert.equal(audit.length,1);
  const {listSales}=await import('../../lib/server/repository.ts');
  const sorted=await listSales({id:'admin',email:'admin@example.test',name:'Admin',role:'ADMIN'},{limit:500});
  const nums=sorted.filter(s=>/^\d+$/.test(s.saleNumber)).map(s=>Number(s.saleNumber));assert.deepEqual(nums,[...nums].sort((a,b)=>a-b));
@@ -686,4 +686,42 @@ test('prestador em aberto não é confirmado ao cadastrar ou editar valor',async
   const cost=await queryFirst("select confirmed,payment_status from freight_costs where sale_id=? and provider_slot=1",[sale.id]);
   assert.deepEqual(cost,{confirmed:0,payment_status:'EM_ABERTO'});
  }
+});
+
+test('custos fiscais da Frota persistem no cadastro e edição, compõem resultado e preservam escopo', async()=>{
+ const create=await import('../../app/api/fleet/freights/route.ts');
+ const edit=await import('../../app/api/fleet/freights/[id]/route.ts');
+ const {loadFleetData}=await import('../../lib/server/fleet.ts');
+ const payload={vehicleId:'results-truck',driverId:'results-driver',clientName:'CLIENTE CUSTOS',origin:'A',destination:'B',pickupDate:'2031-01-01',billingDate:'2031-01-01',operationalStatus:'FATURADO',priority:'NORMAL',freightAmountCents:100000,distanceMeters:100000,tollCents:1000,driverCommissionCents:2000,actualFuelCostCents:10000,insuranceCostCents:3000,invoiceCostCents:4000,icmsCostCents:5000,cteMdfeCostCents:6000};
+ const res=await create.POST(await request('/api/fleet/freights','admin','POST',payload));assert.equal(res.status,201,await res.clone().text());
+ const {id}=await res.json();const ctx={params:Promise.resolve({id})};
+ let f=(await loadFleetData(true,true,true,false,'2031-01')).freights.find(f=>f.id===id)!;
+ assert.equal(f.totalCostCents,31000);assert.equal(f.netRevenueCents,69000);
+ assert.deepEqual([f.insuranceCostCents,f.invoiceCostCents,f.icmsCostCents,f.cteMdfeCostCents],[3000,4000,5000,6000]);
+ const patched=await edit.PATCH(await request('/api/fleet/freights/x','finance','PATCH',{icmsCostCents:7000,origin:'ALTERACAO BLOQUEADA'}),ctx);assert.equal(patched.status,200,await patched.clone().text());
+ f=(await loadFleetData(true,true,true,false,'2031-01')).freights.find(f=>f.id===id)!;
+ assert.equal(f.icmsCostCents,7000);assert.equal(f.insuranceCostCents,3000);assert.equal(f.totalCostCents,33000);assert.equal(f.origin,'A');
+ assert.equal((await edit.PATCH(await request('/api/fleet/freights/x','admin','PATCH',{insuranceCostCents:-1}),ctx)).status,400);
+ assert.equal((await edit.PATCH(await request('/api/fleet/freights/x','seller','PATCH',{insuranceCostCents:1}),ctx)).status,403);
+ const audit=await queryAll("select new_value from audit_logs where entity_type='FLEET_FREIGHT' and entity_id=? and action='UPDATED'",[id]) as {new_value:string}[];
+ assert.equal(JSON.parse(audit[0].new_value).icmsCostCents,7000);
+});
+
+test('CEP calcula rota sem chave Google, usa longitude/latitude e rejeita coordenadas ausentes',async()=>{
+ const route=await import('../../app/api/fleet/route-lookup/route.ts');const original=globalThis.fetch;const key=process.env.GOOGLE_MAPS_API_KEY;delete process.env.GOOGLE_MAPS_API_KEY;
+ const urls:string[]=[];
+ try {
+  globalThis.fetch=async(input)=>{
+   const url=String(input);urls.push(url);
+   if(url.includes('viacep')) return Response.json({logradouro:'Rua Teste',localidade:'São Paulo',uf:'SP'});
+   if(url.includes('brasilapi')) return Response.json({street:'Rua Teste',city:'São Paulo',state:'SP',location:{coordinates:url.includes('09820000')?{longitude:'-46.5',latitude:'-23.6'}:{longitude:'-43.2',latitude:'-22.9'}}});
+   return Response.json({code:'Ok',routes:[{distance:510123.7}]});
+  };
+  const response=await route.POST(await request('/api/fleet/route-lookup','admin','POST',{originCep:'09820000',destinationCep:'20210020'}));
+  assert.equal(response.status,200);const data=await response.json();assert.equal(data.distanceMeters,510124);assert.match(data.attribution,/OpenStreetMap/);
+  assert.ok(urls.some(u=>u.includes('/driving/-46.5,-23.6;-43.2,-22.9?')));
+  const {cepCoordinates}=await import('../../lib/server/cep-routing.ts');
+  for(const value of [{},{latitude:'',longitude:''},{latitude:null,longitude:null},{latitude:91,longitude:-46},{latitude:-23,longitude:'NaN'}]) assert.equal(cepCoordinates(value),null);
+  const invalid=await route.POST(await request('/api/fleet/route-lookup','admin','POST',{originCep:'12',destinationCep:'20210020'}));assert.equal(invalid.status,400);
+ }finally{globalThis.fetch=original;if(key===undefined)delete process.env.GOOGLE_MAPS_API_KEY;else process.env.GOOGLE_MAPS_API_KEY=key;}
 });

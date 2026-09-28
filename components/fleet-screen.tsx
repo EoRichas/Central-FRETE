@@ -28,6 +28,7 @@ import {
 } from "@/lib/domain/fleet";
 import { formatMoney, formatPercent } from "@/lib/format";
 import { FreightTable } from "@/components/fleet-freight-table";
+import { FleetFreightDetail } from "@/components/fleet-freight-detail";
 import { FreightModal } from "@/components/fleet-freight-modal";
 import {
   FleetAssetsPanel,
@@ -54,6 +55,7 @@ function FleetOperationsScreen() {
   const fleet = api.data?.fleet;
   const [selectedTab, setTab] = useState<FleetTab>("overview");
   const tab = fleet?.freightOnly ? "freights" : selectedTab;
+  const [viewingId, setViewingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [priority, setPriority] = useState("");
@@ -107,7 +109,9 @@ function FleetOperationsScreen() {
     setMutationError(null);
     setFreightModalOpen(true);
   }
-  function finishMutation(message: string) {
+  function finishMutation(message: string, id?: string, savedCompetency?: string) {
+    if (savedCompetency) setCompetency(savedCompetency);
+    if (id) setViewingId(id);
     setFreightModalOpen(false);
     setVehicleModalOpen(false);
     setDriverModalOpen(false);
@@ -122,6 +126,7 @@ function FleetOperationsScreen() {
     if (!window.confirm(`Excluir o frete de ${freight.origin} para ${freight.destination}? Uma venda vinculada será preservada.`)) return;
     setMutationError(null);
     await apiMutation(`/api/fleet/freights/${freight.id}`, { method: "DELETE" });
+    setViewingId(null);
     finishMutation("Frete excluído.");
   }
   function openVehicle(vehicle: FleetVehicle | null) {
@@ -145,8 +150,13 @@ function FleetOperationsScreen() {
     ? allTabs.filter((item) => item.id === "freights")
     : allTabs;
 
+  const viewedFreight = fleet?.freights.find(f => f.id === viewingId);
   return (
     <>
+      {viewedFreight ? <>
+        <PageHeader eyebrow="Frota" title="Detalhes do frete" description={`${viewedFreight.origin} → ${viewedFreight.destination}`} actions={<><button className="button secondary" onClick={() => setViewingId(null)}>Voltar à Frota</button>{fleet?.canEditFreights || fleet?.canEditFreightFinancials || fleet?.canManagePayments ? <button className="button primary" onClick={() => openEditFreight(viewedFreight)}>Editar frete</button> : null}</>} />
+        <FleetFreightDetail freight={viewedFreight} />
+      </> : <>
       <PageHeader
         eyebrow="Operação logística"
         title="Frota"
@@ -265,6 +275,7 @@ function FleetOperationsScreen() {
                     freights={fleet.freights.slice(0, 6)}
                     canManage={fleet.canEditFreights || fleet.canManagePayments}
                     onEdit={openEditFreight}
+                    onView={f => setViewingId(f.id)}
                   />
                 ) : (
                   <EmptyState
@@ -327,6 +338,7 @@ function FleetOperationsScreen() {
                   freights={filteredFreights}
                   canManage={fleet.canEditFreights || fleet.canManagePayments}
                   onEdit={openEditFreight}
+                  onView={f => setViewingId(f.id)}
                 />
               </section>
             </>
@@ -340,6 +352,7 @@ function FleetOperationsScreen() {
           )}
         </div>
       )}
+      </>}
       {freightModalOpen && fleet && (
         <FreightModal
           key={editingFreight?.id ?? "new"}

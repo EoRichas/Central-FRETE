@@ -44,7 +44,7 @@ export function FreightModal({
   freight: FleetFreight | null;
   fleet: FleetData;
   onClose: () => void;
-  onSaved: (message: string) => void;
+  onSaved: (message: string, id?: string, competency?: string) => void;
   onDelete: (freight: FleetFreight) => Promise<void>;
 }) {
   const editing = Boolean(freight);
@@ -89,10 +89,12 @@ export function FreightModal({
       : distanceToInput(freight.odometerEndMeters),
   );
   const routeSequence = useRef(0);
+  const hasOdometer = Boolean(kmStart.trim() && kmEnd.trim());
+  const [routeAttribution, setRouteAttribution] = useState("");
   function distanceValues() {
     const values = {
-      distanceMeters: distanceInputToMeters(distance || "0"),
-      routeDistanceMeters,
+      distanceMeters: hasOdometer ? 0 : distanceInputToMeters(distance || "0"),
+      routeDistanceMeters: hasOdometer ? null : routeDistanceMeters,
       odometerStartMeters: kmStart.trim()
         ? distanceInputToMeters(kmStart)
         : null,
@@ -104,9 +106,9 @@ export function FreightModal({
     const sequence = ++routeSequence.current;
     const from = originCep.replace(/\D/g, "");
     const to = destinationCep.replace(/\D/g, "");
-    if (financialOnly || !/^\d{8}$/.test(from) || !/^\d{8}$/.test(to)) return;
+    if (financialOnly || hasOdometer || !/^\d{8}$/.test(from) || !/^\d{8}$/.test(to)) return;
     // Opening an existing operation preserves its saved manual adjustment.
-    if (from === freight?.originCep && to === freight?.destinationCep) return;
+    if (from === freight?.originCep && to === freight?.destinationCep && freight?.routeDistanceMeters != null) return;
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       setRouting(true);
@@ -128,6 +130,7 @@ export function FreightModal({
         if (result.distanceMeters != null)
           setDistance(distanceToInput(result.distanceMeters));
         setRouteNotice(result.notice || "Distância rodoviária calculada.");
+        setRouteAttribution(result.attribution || "");
       } catch (error) {
         if (!controller.signal.aborted && sequence === routeSequence.current)
           setRouteNotice(
@@ -147,6 +150,8 @@ export function FreightModal({
     originCep,
     destinationCep,
     financialOnly,
+    hasOdometer,
+    freight?.routeDistanceMeters,
     freight?.originCep,
     freight?.destinationCep,
   ]);
@@ -181,6 +186,10 @@ export function FreightModal({
   const [otherCost, setOtherCost] = useState(
     centsToInput(freight?.otherCostCents),
   );
+  const [insuranceCostCents, setInsuranceCostCents] = useState(centsToInput(freight?.insuranceCostCents));
+  const [invoiceCostCents, setInvoiceCostCents] = useState(centsToInput(freight?.invoiceCostCents));
+  const [icmsCostCents, setIcmsCostCents] = useState(centsToInput(freight?.icmsCostCents));
+  const [cteMdfeCostCents, setCteMdfeCostCents] = useState(centsToInput(freight?.cteMdfeCostCents));
   const [actualFuel, setActualFuel] = useState(
     centsToInput(freight?.actualFuelCostCents),
   );
@@ -192,7 +201,7 @@ export function FreightModal({
   const [error, setError] = useState<string | null>(null);
 
   async function calculateRoute(from = origin, to = destination) {
-    if (!from || !to) return;
+    if (hasOdometer || (!from || !to) && !(originCep && destinationCep)) return;
     const sequence = ++routeSequence.current;
     setRouting(true);
     setRouteNotice("");
@@ -200,12 +209,14 @@ export function FreightModal({
       const result = await apiMutation<{
         distanceMeters: number | null;
         notice?: string;
+        origin: string; destination: string; attribution?: string;
       }>("/api/fleet/route-lookup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ origin: from, destination: to }),
+        body: JSON.stringify(/^\d{8}$/.test(originCep.replace(/\D/g,"")) && /^\d{8}$/.test(destinationCep.replace(/\D/g,"")) ? {originCep,destinationCep} : { origin: from, destination: to }),
       });
       if (sequence !== routeSequence.current) return;
+      setRouteAttribution(result.attribution || "");
       setRouteDistanceMeters(result.distanceMeters);
       if (result.distanceMeters != null)
         setDistance(distanceToInput(result.distanceMeters));
@@ -224,6 +235,7 @@ export function FreightModal({
   }
   async function lookupCep(side: "origin" | "destination") {
     const cep = side === "origin" ? originCep : destinationCep;
+    const sequence = ++routeSequence.current;
     setRouting(true);
     setRouteNotice("");
     try {
@@ -231,6 +243,7 @@ export function FreightModal({
         `/api/fleet/route-lookup?cep=${encodeURIComponent(cep)}`,
         { method: "GET" },
       );
+      if (sequence !== routeSequence.current) return;
       if (side === "origin") setOrigin(result.address);
       else setDestination(result.address);
       await calculateRoute(
@@ -238,9 +251,9 @@ export function FreightModal({
         side === "destination" ? result.address : destination,
       );
     } catch (e) {
-      setRouteNotice(e instanceof Error ? e.message : "Preencha manualmente.");
+      if (sequence === routeSequence.current) setRouteNotice(e instanceof Error ? e.message : "Preencha manualmente.");
     } finally {
-      setRouting(false);
+      if (sequence === routeSequence.current) setRouting(false);
     }
   }
 
@@ -254,6 +267,10 @@ export function FreightModal({
           pickupCostCents: moneyInputToCents(pickupCost || "0"),
           deliveryCostCents: moneyInputToCents(deliveryCost || "0"),
           otherCostCents: moneyInputToCents(otherCost || "0"),
+          insuranceCostCents: moneyInputToCents(insuranceCostCents || "0"),
+          invoiceCostCents: moneyInputToCents(invoiceCostCents || "0"),
+          icmsCostCents: moneyInputToCents(icmsCostCents || "0"),
+          cteMdfeCostCents: moneyInputToCents(cteMdfeCostCents || "0"),
           actualFuelCostCents: fuelInputToInteger(
             actualFuel,
             "Valor pago combustível",
@@ -293,6 +310,10 @@ export function FreightModal({
         pickupCostCents: moneyInputToCents(pickupCost || "0"),
         deliveryCostCents: moneyInputToCents(deliveryCost || "0"),
         otherCostCents: moneyInputToCents(otherCost || "0"),
+        insuranceCostCents: moneyInputToCents(insuranceCostCents || "0"),
+        invoiceCostCents: moneyInputToCents(invoiceCostCents || "0"),
+        icmsCostCents: moneyInputToCents(icmsCostCents || "0"),
+        cteMdfeCostCents: moneyInputToCents(cteMdfeCostCents || "0"),
         actualFuelCostCents: fuelInputToInteger(
           actualFuel,
           "Valor pago combustível",
@@ -332,7 +353,7 @@ export function FreightModal({
         tollCents: moneyInputToCents(toll || "0"),
         driverCommissionCents: moneyInputToCents(driverCommission || "0"),
       };
-      await apiMutation(
+      const saved = await apiMutation<{id: string}>(
         editing ? `/api/fleet/freights/${freight!.id}` : "/api/fleet/freights",
         {
           method: editing ? "PATCH" : "POST",
@@ -340,7 +361,7 @@ export function FreightModal({
           body: JSON.stringify(payload),
         },
       );
-      onSaved(editing ? "Frete atualizado." : "Frete cadastrado.");
+      onSaved(editing ? "Frete atualizado." : "Frete cadastrado.", saved.id, pickupDate.slice(0,7));
     } catch (submitError) {
       setError(
         submitError instanceof Error
@@ -444,7 +465,7 @@ export function FreightModal({
               <Field label="CEP de origem">
                 <input
                   value={originCep}
-                  onChange={(e) => { ++routeSequence.current; setRouting(false); setRouteDistanceMeters(null); setOriginCep(e.target.value); }}
+                  onChange={(e) => { ++routeSequence.current; setRouting(false); setRouteDistanceMeters(null); setDistance(""); setOriginCep(e.target.value); }}
                   maxLength={9}
                   inputMode="numeric"
                 />
@@ -460,7 +481,7 @@ export function FreightModal({
               <Field label="CEP de destino">
                 <input
                   value={destinationCep}
-                  onChange={(e) => { ++routeSequence.current; setRouting(false); setRouteDistanceMeters(null); setDestinationCep(e.target.value); }}
+                  onChange={(e) => { ++routeSequence.current; setRouting(false); setRouteDistanceMeters(null); setDistance(""); setDestinationCep(e.target.value); }}
                   maxLength={9}
                   inputMode="numeric"
                 />
@@ -477,13 +498,14 @@ export function FreightModal({
             <button
               type="button"
               className="button secondary"
-              disabled={routing}
+              disabled={routing || hasOdometer}
               onClick={() => calculateRoute()}
             >
               {routing ? "Consultando rota…" : "Recalcular distância"}
             </button>
-            {routeNotice && <p role="status">{routeNotice}</p>}
-            {routeDistanceMeters != null && (
+            {!hasOdometer && routeNotice && <p role="status">{routeNotice}</p>}
+            {!hasOdometer && routeAttribution && <p className="fleet-update-note"><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">{routeAttribution}</a></p>}
+            {!hasOdometer && routeDistanceMeters != null && (
               <p role="status">
                 <strong>
                   Distância pela rota: {formatDistance(routeDistanceMeters)}
@@ -495,7 +517,7 @@ export function FreightModal({
                 <input
                   inputMode="decimal"
                   value={kmStart}
-                  onChange={(e) => setKmStart(e.target.value)}
+                  onChange={(e) => { if (kmEnd.trim()) { ++routeSequence.current; setRouting(false); } setKmStart(e.target.value); }}
                   placeholder="125.300"
                 />
               </Field>
@@ -503,7 +525,7 @@ export function FreightModal({
                 <input
                   inputMode="decimal"
                   value={kmEnd}
-                  onChange={(e) => setKmEnd(e.target.value)}
+                  onChange={(e) => { if (kmStart.trim()) { ++routeSequence.current; setRouting(false); } setKmEnd(e.target.value); }}
                   placeholder="125.795"
                 />
               </Field>
@@ -617,13 +639,14 @@ export function FreightModal({
               </div>
             </Field>
             <Field
-              label="Distância manual / calculada"
+              label={hasOdometer ? "Distância realizada" : "Distância manual / calculada"}
               hint="Em km: 1200 ou 1.200. Para decimais, use vírgula (1200,5)."
             >
               <div className="fleet-unit-field">
                 <input
                   disabled={financialOnly}
-                  value={distance}
+                  readOnly={hasOdometer}
+                  value={hasOdometer ? (() => { try { return distanceToInput(distanceValues().distanceMeters); } catch { return ""; } })() : distance}
                   onChange={(event) => { ++routeSequence.current; setRouting(false); setDistance(event.target.value); }}
                   inputMode="decimal"
                   placeholder="0"
@@ -691,6 +714,12 @@ export function FreightModal({
                 placeholder="0,00"
               />
             </Field>
+          </div>
+          <div className="form-grid four">
+            <Field label="Seguro (R$)"><input value={insuranceCostCents} onChange={e => setInsuranceCostCents(e.target.value)} inputMode="decimal" placeholder="0,00" /></Field>
+            <Field label="Nota Fiscal (R$)"><input value={invoiceCostCents} onChange={e => setInvoiceCostCents(e.target.value)} inputMode="decimal" placeholder="0,00" /></Field>
+            <Field label="ICMS (R$)"><input value={icmsCostCents} onChange={e => setIcmsCostCents(e.target.value)} inputMode="decimal" placeholder="0,00" /></Field>
+            <Field label="CTE/MDF (R$)"><input value={cteMdfeCostCents} onChange={e => setCteMdfeCostCents(e.target.value)} inputMode="decimal" placeholder="0,00" /></Field>
           </div>
           <div className="form-grid three">
             <Field label="Litros abastecidos" hint="Até 3 casas decimais.">
@@ -794,7 +823,7 @@ export function FreightModal({
             >
               Cancelar
             </button>
-            <button className="button primary" disabled={saving}>
+            <button className="button primary" disabled={saving || routing}>
               {saving
                 ? "Salvando…"
                 : editing

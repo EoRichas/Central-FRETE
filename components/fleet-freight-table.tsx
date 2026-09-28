@@ -19,10 +19,12 @@ export function FreightTable({
   freights,
   canManage,
   onEdit,
+  onView,
 }: {
   freights: FleetFreight[];
   canManage: boolean;
   onEdit: (freight: FleetFreight) => void;
+  onView?: (freight: FleetFreight) => void;
 }) {
   if (!freights.length) {
     return (
@@ -61,7 +63,7 @@ export function FreightTable({
                 <small>Faturamento: {formatDate(freight.billingDate)}</small>
               </td>
               <td data-label="Rota">
-                <strong>{freight.origin}</strong>
+                {onView ? <button className="text-button" onClick={() => onView(freight)} aria-label={`Ver frete de ${freight.origin} para ${freight.destination}`}>{freight.origin}</button> : <strong>{freight.origin}</strong>}
                 <small>→ {freight.destination}</small>
               </td>
               <td data-label="Frota / motorista">
@@ -85,9 +87,9 @@ export function FreightTable({
                     freight.cargoPlate,
                   ).map((v, i) => (
                     <span className="cargo-summary" key={i}>
-                      {[v.model, v.plate, v.identification]
+                      {[v.model, v.plate]
                         .filter(Boolean)
-                        .join(" · ") || "Identificação não informada"}
+                        .join(" · ") || "Veículo não informado"}
                     </span>
                   ))}
                 </small>

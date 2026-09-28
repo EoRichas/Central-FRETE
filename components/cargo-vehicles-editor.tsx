@@ -15,10 +15,9 @@ export function CargoVehiclesEditor({ vehicles, onChange, disabled = false }: {
     <p className="fleet-update-note" aria-live="polite">Quantidade: <strong>{vehicles.length}</strong> {vehicles.length === 1 ? 'veículo' : 'veículos'}. Cada linha representa uma unidade da carga.</p>
     {vehicles.map((vehicle, index) => <div className="cargo-row" key={`${id}-${index}`}>
       <span className="cargo-index">{index + 1}</span>
-      <div className="form-grid three">
+      <div className="form-grid two">
         <Field label={`Modelo ${index + 1}`}><input value={vehicle.model ?? ''} maxLength={80} onChange={e => update(index, 'model', e.target.value)} /></Field>
         <Field label={`Placa ${index + 1}`}><input value={vehicle.plate ?? ''} maxLength={8} onChange={e => update(index, 'plate', e.target.value)} /></Field>
-        <Field label={`Identificação ${index + 1}`}><input value={vehicle.identification ?? ''} maxLength={120} onChange={e => update(index, 'identification', e.target.value)} placeholder="Chassi ou referência" /></Field>
       </div>
       {!disabled && <button type="button" className="button secondary compact-button" disabled={vehicles.length === 1} aria-label={`Remover veículo ${index + 1}`} onClick={() => onChange(vehicles.filter((_, i) => i !== index))}>Remover</button>}
     </div>)}

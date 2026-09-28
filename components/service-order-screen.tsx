@@ -26,7 +26,7 @@ export function ServiceOrderScreen({id}: {id:string}) {
     <PageHeader eyebrow="Documento da venda" title="Ordem de Serviço" description="A OS utiliza os dados da venda. Cada versão emitida fica preservada para consulta." actions={<Link className="button secondary" href={`/vendas/${id}`}>Voltar à venda</Link>} />
     <section className="panel detail-card form-stack">
       {error && <p className="form-error" role="alert">{error}</p>}
-      {report?.stale && <p className="form-error" role="status">A venda, o cliente ou a carga foi alterado após a emissão. A versão anterior está preservada. Gere uma nova versão antes de enviar os dados atualizados.</p>}
+      {report?.stale && <p className="form-error" role="status">Os dados ou o modelo da OS foram atualizados após a emissão. A versão anterior está preservada. Gere uma nova versão antes de enviar os dados atualizados.</p>}
       <div className="order-actions">
         {(!report?.latest || report.stale) && <button className="button primary" disabled={busy} onClick={issue}>{busy ? 'Gerando…' : report?.latest ? 'Gerar nova versão da OS' : 'Gerar OS'}</button>}
         {report?.latest && <>

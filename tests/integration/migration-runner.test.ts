@@ -16,6 +16,7 @@ test('runner aplica migration uma vez, gera 201/202 e não reabre scripts anuais
   assert.equal((await insert('first')).rows[0].sale_number,'201');
   assert.equal((await insert('second')).rows[0].sale_number,'202');
   await pg.exec("insert into freight_costs(id,sale_id,category,amount_cents,confirmed,payment_status) values('cte','first','CTE_MDFE',1000,0,'EM_ABERTO')");
+  assert.equal((await pg.query("select column_name from information_schema.columns where table_name='fleet_freights' and column_name in ('insurance_cost_cents','invoice_cost_cents','icms_cost_cents','cte_mdfe_cost_cents')")).rows.length,4);
   const before=await pg.query('select * from central_schema_migrations order by name');
   await migrateDatabase({databaseUrl:'postgres://test:test@localhost/test',databaseHost:'local-test'});
   assert.deepEqual((await pg.query('select * from central_schema_migrations order by name')).rows,before.rows);
