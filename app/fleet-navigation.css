@@ -22,3 +22,11 @@
   .fleet-module :is(.fleet-table, .sales-table) td > small { max-width: 270px; text-align: left; }
   .fleet-module .fleet-monthly-filters { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Month text and calendar button need enough space in every sales filter row. */
+.sales-filter-panel { grid-template-columns: minmax(190px, 1.4fr) minmax(215px, 1fr) repeat(3, minmax(145px, 1fr)); }
+.fleet-module .sales-filter-panel { grid-template-columns: repeat(auto-fit, minmax(min(100%, 215px), 1fr)); }
+.sales-filter-panel .competency-filter input { width: 100%; min-width: 0; }
+@media (max-width: 1100px) { .sales-filter-panel { grid-template-columns: repeat(auto-fit, minmax(min(100%, 215px), 1fr)); } }
+
+.fleet-module .compact-filter input[type="month"] { min-width: 215px; }

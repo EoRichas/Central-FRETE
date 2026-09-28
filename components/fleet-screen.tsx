@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { roleCan } from "@/lib/domain/permissions";
 import type { CurrentUser } from "@/lib/contracts";
 import { SalesScreen } from "@/components/sales-screen";
@@ -78,6 +79,7 @@ function FleetOperationsScreen() {
       const matchesSearch =
         !normalized ||
         [
+          freight.saleNumber,
           freight.vehiclePlate,
           freight.driverName,
           freight.clientName,
@@ -123,7 +125,7 @@ function FleetOperationsScreen() {
     api.refresh();
   }
   async function deleteFreight(freight: FleetFreight) {
-    if (!window.confirm(`Excluir o frete de ${freight.origin} para ${freight.destination}? Uma venda vinculada será preservada.`)) return;
+    if (!window.confirm(`Excluir o frete de ${freight.origin} para ${freight.destination}? A OS própria deste frete será removida. Uma venda vinculada e sua OS serão preservadas.`)) return;
     setMutationError(null);
     await apiMutation(`/api/fleet/freights/${freight.id}`, { method: "DELETE" });
     setViewingId(null);
@@ -155,7 +157,7 @@ function FleetOperationsScreen() {
     <>
     <div className="fleet-module">
       {viewedFreight ? <>
-        <PageHeader eyebrow="Frota" title="Detalhes do frete" description={`${viewedFreight.origin} → ${viewedFreight.destination}`} actions={<><button className="button secondary" onClick={() => setViewingId(null)}>Voltar à Frota</button>{fleet?.canEditFreights || fleet?.canEditFreightFinancials || fleet?.canManagePayments ? <button className="button primary" onClick={() => openEditFreight(viewedFreight)}>Editar frete</button> : null}</>} />
+        <PageHeader eyebrow={`Venda ${viewedFreight.saleNumber}`} title="Detalhes do frete" description={`${viewedFreight.origin} → ${viewedFreight.destination}`} actions={<><button className="button secondary" onClick={() => setViewingId(null)}>Voltar à Frota</button>{!fleet?.freightOnly && <Link className="button secondary" href={`/frota/fretes/${viewedFreight.id}/os`}>Visualizar OS</Link>}{fleet?.canEditFreights || fleet?.canEditFreightFinancials || fleet?.canManagePayments ? <button className="button primary" onClick={() => openEditFreight(viewedFreight)}>Editar frete</button> : null}</>} />
         <FleetFreightDetail freight={viewedFreight} />
       </> : <>
       <PageHeader
@@ -174,7 +176,7 @@ function FleetOperationsScreen() {
                 type="month"
                 value={competency}
                 onChange={(event) =>
-                  setCompetency(event.target.value || (tab === "monthly" ? currentCompetency() : ""))
+                  setCompetency(event.target.value || currentCompetency())
                 }
               />
             </label>

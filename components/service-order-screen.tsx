@@ -5,8 +5,8 @@ import { apiMutation, useApi } from '@/components/use-api';
 import { ErrorState, LoadingState, PageHeader } from '@/components/ui';
 import type { ServiceOrderReport } from '@/lib/domain/service-order';
 
-export function ServiceOrderScreen({id}: {id:string}) {
-  const endpoint = `/api/sales/${id}/service-order`;
+export function ServiceOrderScreen({id, source = "sale"}: {id:string; source?: "sale" | "fleet"}) {
+  const endpoint = source === "fleet" ? `/api/fleet/freights/${id}/service-order` : `/api/sales/${id}/service-order`;
   const api = useApi<ServiceOrderReport>(endpoint);
   const [busy,setBusy] = useState(false);
   const [error,setError] = useState('');
@@ -21,7 +21,7 @@ export function ServiceOrderScreen({id}: {id:string}) {
   const report=api.data;
   const pdf=`${endpoint}?format=pdf`;
   return <>
-    <PageHeader eyebrow="Documento da venda" title="Ordem de Serviço" description="Visualize, imprima ou salve a OS desta venda." actions={<Link className="button secondary" href={`/vendas/${id}`}>Voltar à venda</Link>} />
+    <PageHeader eyebrow="Documento da venda" title="Ordem de Serviço" description="Visualize, imprima ou salve a OS desta venda." actions={<Link className="button secondary" href={source === "fleet" ? "/frota" : `/vendas/${id}`}>{source === "fleet" ? "Voltar à Frota" : "Voltar à venda"}</Link>} />
     <section className="panel detail-card form-stack">
       {error && <p className="form-error" role="alert">{error}</p>}
       {report?.stale && <p className="form-error" role="status">Os dados da venda foram alterados. Atualize a OS antes de enviá-la.</p>}

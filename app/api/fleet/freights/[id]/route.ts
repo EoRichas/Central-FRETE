@@ -76,6 +76,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const previous = await freightSnapshot(id);
     if (!previous) throw new ApiError(404, "Frete da frota não encontrado.");
     const payload = asObject(await request.json());
+    if (payload.saleNumber !== undefined) throw new ApiError(400, "O número da venda não pode ser alterado.");
     const submitted = parseFleetFreightPayload({ ...previous, ...payload,
       cargoVehicles: payload.cargoVehicles === undefined ? previous.cargoVehicles ?? undefined : payload.cargoVehicles });
     const data = user.role === "FINANCEIRO"
@@ -203,6 +204,8 @@ export async function DELETE(request: Request, context: RouteContext) {
           JSON.stringify({id: previous.id, freightAmountCents: previous.freightAmountCents}),
           request.headers.get("x-request-id") ?? crypto.randomUUID(),
         ),
+      db.prepare("delete from service_order_versions where order_id in (select id from service_orders where fleet_freight_id=?)").bind(id),
+      db.prepare("delete from service_orders where fleet_freight_id=?").bind(id),
       db.prepare("delete from fleet_freights where id = ?").bind(id),
     ]);
     return Response.json({ id, deleted: true, storageCleanupPending: await drainStorageCleanup() });

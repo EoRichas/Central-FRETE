@@ -20,6 +20,7 @@ export async function migrateDatabase(configuration) {
     "012_sales_channels_global_numbering_costs.sql",
     "013_fleet_document_costs.sql",
     "014_complete_global_sale_numbers.sql",
+    "015_fleet_numbers_and_orders.sql",
   ];
   const migrations = await Promise.all(
     migrationFiles.map((file) =>

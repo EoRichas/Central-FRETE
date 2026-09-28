@@ -123,7 +123,7 @@ export async function renderServiceOrderPdf(order: ServiceOrderVersion): Promise
       [['1',date(s.financialDueDate),money(s.freightAmountCents),`Venda ${s.saleNumber}`]],
     [30,100,110,271.28]);
   section('Condições do transporte',40);
-  paragraph(formatRouteLocationType(s.originLocationType,s.destinationLocationType),9,bold);
+  paragraph(s.originLocationType || s.destinationLocationType ? formatRouteLocationType(s.originLocationType,s.destinationLocationType).replace(' → ', ' A ') : 'Não informado',9,bold);
   if(s.operationalDeadlineDays != null) paragraph(`Prazo: ${s.operationalDeadlineDays} dias.`);
   if(s.notes) paragraph(s.notes);
   const pages=doc.getPages();

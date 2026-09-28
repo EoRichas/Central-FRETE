@@ -55,6 +55,7 @@ type VehicleCostRow = {
 
 type FreightRow = {
   linkedFleetSaleId: string | null;
+  saleNumber: string;
   tripId: string | null;
   yardCostCents: number;
   pickupCostCents: number;
@@ -145,7 +146,7 @@ export async function loadFleetData(
         `select trip_id as tripId, yard_cost_cents as yardCostCents, pickup_cost_cents as pickupCostCents,
           delivery_cost_cents as deliveryCostCents, other_cost_cents as otherCostCents, insurance_cost_cents as insuranceCostCents, invoice_cost_cents as invoiceCostCents, icms_cost_cents as icmsCostCents, cte_mdfe_cost_cents as cteMdfeCostCents, actual_fuel_cost_cents as actualFuelCostCents, cargo_vehicles as cargoVehicles,
           fuel_liters_milli as fuelLitersMilli, fuel_pump_amount_cents as fuelPumpAmountCents,
-          id, vehicle_id as vehicleId, vehicle_plate as vehiclePlate,
+          id, sale_number as saleNumber, vehicle_id as vehicleId, vehicle_plate as vehiclePlate,
           driver_id as driverId, driver_name as driverName,
           client_name as clientName, cargo_vehicle_model as cargoVehicleModel,
           cargo_plate as cargoPlate, origin, destination, origin_cep as originCep, destination_cep as destinationCep, payment_status as paymentStatus,
