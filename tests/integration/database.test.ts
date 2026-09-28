@@ -768,3 +768,76 @@ test('histórico mensal recupera meses antigos e custos fiscais sem duplicar cus
  assert.equal(closed.history.length,2);
  assert.ok(closed.history.some((h:import('../../lib/domain/fleet-results.ts').MonthlyClosing)=>calculateMonthlyResult(h.snapshot).resultCents===172000));
 });
+
+// The suite above exercises the historical 012 behavior before this corrective
+// upgrade, including the legacy identifiers and documents that it left behind.
+test('014 converte todos os legados, preserva OS e vínculos, impede números manuais e mantém sequência compartilhada',async()=>{
+ const migration=await readFile(new URL('../../database/014_complete_global_sale_numbers.sql',import.meta.url),'utf8');
+ await pg.exec("insert into freight_sales(id,sale_number,sale_channel,sale_date,competency,seller_name,origin,destination,financial_due_date,operational_status,freight_amount_cents,commission_basis_points,created_by) values('legacy-fleet','2021-7','FROTA','2021-01-01','2021-01','SELLER','A','B','2021-01-02','CONFIRMAR',100,0,'admin')");
+ const before=await queryAll('select id,sale_number,sale_channel from freight_sales order by sale_date,created_at,id') as {id:string;sale_number:string;sale_channel:string}[];
+ const counter=Number((await queryFirst('select last_value from global_sale_number_counter where id=1') as {last_value:number}).last_value);
+ const snapshots=await queryAll('select * from service_order_versions order by order_id,version');
+ const payments=await queryAll('select * from payment_transactions order by id');
+ const costs=await queryAll('select * from freight_costs order by id');
+ // Any failure must roll back renumbering, audit, counter and trigger together.
+ await pg.exec("alter table audit_logs add constraint test_block_014 check(actor_email <> 'migration:014')");
+ await assert.rejects(pg.exec(migration));await pg.exec('ROLLBACK');
+ assert.deepEqual(await queryAll('select id,sale_number,sale_channel from freight_sales order by sale_date,created_at,id'),before);
+ assert.equal(Number((await queryFirst('select last_value from global_sale_number_counter where id=1') as {last_value:number}).last_value),counter);
+ await pg.exec('alter table audit_logs drop constraint test_block_014');
+ await pg.exec(migration);
+ const after=await queryAll('select id,sale_number,sale_channel from freight_sales order by sale_date,created_at,id') as typeof before;
+ let next=counter;
+ for(let index=0;index<before.length;index++){
+  const old=before[index];const current=after[index];
+  assert.equal(current.id,old.id);assert.equal(current.sale_channel,old.sale_channel);
+  const canonical=/^[1-9][0-9]*$/.test(old.sale_number) && Number(old.sale_number)>=201;
+  assert.equal(current.sale_number,canonical?old.sale_number:String(++next));
+ }
+ assert.ok(after.every(s=>/^[1-9][0-9]*$/.test(s.sale_number) && Number(s.sale_number)>=201));
+ assert.equal(new Set(after.map(s=>s.sale_number)).size,after.length);
+ assert.deepEqual(await queryAll('select * from service_order_versions order by order_id,version'),snapshots);
+ assert.deepEqual(await queryAll('select * from payment_transactions order by id'),payments);
+ assert.deepEqual(await queryAll('select * from freight_costs order by id'),costs);
+ const audit=await queryAll("select entity_id,previous_value,new_value from audit_logs where actor_email='migration:014' order by entity_id") as {entity_id:string;previous_value:string;new_value:string}[];
+ assert.equal(audit.length,next-counter);
+ for(const entry of audit){assert.equal(JSON.parse(entry.previous_value).saleNumber,before.find(s=>s.id===entry.entity_id)!.sale_number);assert.equal(JSON.parse(entry.new_value).saleNumber,after.find(s=>s.id===entry.entity_id)!.sale_number);}
+ await pg.exec(migration);
+ assert.deepEqual(await queryAll('select id,sale_number,sale_channel from freight_sales order by sale_date,created_at,id'),after);
+ assert.equal((await queryAll("select id from audit_logs where actor_email='migration:014'")).length,audit.length);
+ await assert.rejects(pg.exec("update freight_sales set sale_number='999999' where id='legacy-fleet'"),/não pode ser alterado/);
+ await assert.rejects(pg.exec("insert into freight_sales(id,sale_number,sale_date,competency,seller_name,origin,destination,financial_due_date,operational_status,freight_amount_cents,commission_basis_points,created_by) values('manual-number','999999','2026-09-28','2026-09','SELLER','A','B','2026-09-30','CONFIRMAR',100,0,'admin')"),/gerado automaticamente/);
+ const sales=await import('../../app/api/sales/route.ts');const edit=await import('../../app/api/sales/[id]/route.ts');
+ const newIds:string[]=[];
+ for(const saleChannel of ['FROTA','CEGONHA','FROTA','CEGONHA']){
+  const response=await sales.POST(await request('/api/sales','seller','POST',{...salePayload,saleChannel}));
+  assert.equal(response.status,201,await response.clone().text());const sale=await response.json();
+  assert.equal(sale.saleNumber,String(++next));newIds.push(sale.id);
+ }
+ assert.equal((await sales.POST(await request('/api/sales','admin','POST',{...salePayload,saleChannel:'CEGONHA',saleNumber:'999999'}))).status,400);
+ assert.equal((await edit.PATCH(await request('/api/sales/x','admin','PATCH',{...salePayload,saleNumber:'999999'}),{params:Promise.resolve({id:newIds[1]})})).status,400);
+ const {issueOrder,readOrderVersion,orderReport}=await import('../../lib/server/service-orders.ts');
+ assert.equal((await orderReport('migrate-issued')).stale,true);
+ const issued=await issueOrder('migrate-issued',{id:'admin',email:'admin@example.test',name:'Admin',role:'ADMIN'});
+ assert.equal(issued.latest!.version,2);assert.equal(issued.latest!.snapshot.saleNumber,after.find(s=>s.id==='migrate-issued')!.sale_number);
+ assert.deepEqual((await readOrderVersion('migrate-issued',1))!.snapshot,{schemaVersion:1,saleNumber:'2020-3'});
+});
+
+test('importação usa numeração automática e mantém referência da planilha sem reutilizar o número',async()=>{
+ const {CENTRAL_FRETE_IMPORT}=await import('../../data/central-frete-import.ts');
+ const original={...CENTRAL_FRETE_IMPORT};
+ const before=Number((await queryFirst('select last_value from global_sale_number_counter where id=1') as {last_value:number}).last_value);
+ Object.assign(CENTRAL_FRETE_IMPORT,{importKey:'numbering-import-test',workbookName:'fixture.xlsx',sourceSheet:'VENDAS',sourceHash:'fixture-hash',validRows:1,providers:[{id:'numbering-import-provider',name:'PRESTADOR TESTE'}],sales:[{
+  id:'numbering-import-sale',importKey:'numbering-import-row',sourceRow:2,saleNumber:'2026-9000',saleDate:'2026-09-28',competency:'2026-09',sellerName:'SELLER',vehicle:'UNO',plate:'ABC1D23',initialProviderId:'numbering-import-provider',initialProviderName:'PRESTADOR TESTE',origin:'A',destination:'B',dueDate:'2026-09-30',operationalStatus:'CONFIRMAR',legacyOperationalStatus:'CONFIRMAR',freightAmountCents:10000,commissionBasisPoints:0,paymentMethod:'PIX',costs:[],advance:{amountCents:100,occurredAt:'2026-09-28',notes:'TESTE'}
+ }]});
+ try{
+  const api=await import('../../app/api/import/central-frete/route.ts');
+  const result=await api.POST(await request('/api/import/central-frete','admin','POST'));
+  assert.equal(result.status,201,await result.clone().text());
+  const sale=await queryFirst("select sale_number,notes,source_row from freight_sales where id='numbering-import-sale'") as {sale_number:string;notes:string;source_row:number};
+  assert.equal(sale.sale_number,String(before+1));assert.match(sale.notes,/REFERÊNCIA ORIGINAL: 2026-9000/);assert.equal(sale.source_row,2);
+  const again=await api.POST(await request('/api/import/central-frete','admin','POST'));
+  assert.equal((await again.json()).alreadyImported,true);
+  assert.equal(Number((await queryFirst('select last_value from global_sale_number_counter where id=1') as {last_value:number}).last_value),before+1);
+ }finally{Object.assign(CENTRAL_FRETE_IMPORT,original);}
+});

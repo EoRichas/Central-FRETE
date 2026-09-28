@@ -101,6 +101,17 @@ export function FreightTable({
               </td>
               <td data-label="Custos da operação">
                 <strong>{formatMoney(freight.totalCostCents)}</strong>
+                <small>
+                  Comissão: {formatMoney(freight.driverCommissionCents)}
+                </small>
+                <small>Pátio: {formatMoney(freight.yardCostCents ?? 0)}</small>
+                <small>
+                  Coleta: {formatMoney(freight.pickupCostCents ?? 0)} · Entrega:{" "}
+                  {formatMoney(freight.deliveryCostCents ?? 0)}
+                </small>
+                <small>
+                  Outros: {formatMoney(freight.otherCostCents ?? 0)}
+                </small>
                 <small>{`Combustível ${freight.fuelCostSource === "REALIZADO" ? "realizado" : freight.fuelCostSource === "ESTIMADO" ? "estimado" : "histórico"}: ${formatMoney(freight.fuelCostCents)}`}</small>
               </td>
               <td data-label="Resultado / margem">

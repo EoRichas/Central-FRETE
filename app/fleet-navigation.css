@@ -1,28 +1,24 @@
-/* Keep every column accessible without a horizontal scrollbar. */
-.fleet-module { min-width: 0; max-width: 100%; container-type: inline-size; }
+/* Keep horizontal scrolling inside the tables, never on the page. */
+.fleet-module { width: 100%; min-width: 0; max-width: 100%; }
+.fleet-module .fleet-stack > * { min-width: 0; max-width: 100%; }
 .fleet-module .fleet-tabs { display: flex; flex-wrap: wrap; width: fit-content; max-width: 100%; }
 .fleet-module .fleet-tabs button { white-space: normal; }
-.fleet-module .responsive-table { min-width: 0; max-width: 100%; overflow: visible; }
-.fleet-module .responsive-table table { width: 100%; min-width: 0; table-layout: fixed; }
-.fleet-module .responsive-table th,
-.fleet-module .responsive-table td { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
-.fleet-module .responsive-table td small { max-width: none; white-space: normal; overflow: visible; }
-.fleet-module .fleet-table th:last-child { width: 52px; }
+.fleet-module .filter-panel { grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); }
+.fleet-module .responsive-table { width: 100%; min-width: 0; max-width: 100%; overflow-x: auto; }
+.fleet-module .fleet-table { min-width: 1420px; }
+.fleet-module .sales-table { min-width: 1100px; }
 .fleet-monthly-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .fleet-monthly-filters label, .fleet-monthly-filters select { min-width: 0; max-width: 100%; }
 
-@container (max-width: 1100px) {
-  .fleet-module .responsive-table table,
-  .fleet-module .responsive-table tbody { display: block; }
-  .fleet-module .responsive-table thead { display: none; }
-  .fleet-module .responsive-table tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 12px; gap: 8px 16px; border-bottom: 1px solid var(--line); }
-  .fleet-module .responsive-table td { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 8px; border: 0; width: auto; }
-  .fleet-module .responsive-table td::before { content: attr(data-label); display: block; color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; }
-  .fleet-module .responsive-table td > * { max-width: 100%; text-align: left; }
-  .fleet-module .responsive-table td[colspan] { grid-column: 1 / -1; }
-  .fleet-module .responsive-table td[colspan]::before { display: none; }
-}
-@container (max-width: 560px) {
-  .fleet-module .responsive-table tr { grid-template-columns: minmax(0, 1fr); }
+/* The sales/freight lists remain wide tables on small screens as well. */
+@media (max-width: 700px) {
+  .fleet-module :is(.fleet-table, .sales-table) { display: table; }
+  .fleet-module :is(.fleet-table, .sales-table) thead { display: table-header-group; }
+  .fleet-module :is(.fleet-table, .sales-table) tbody { display: table-row-group; }
+  .fleet-module :is(.fleet-table, .sales-table) tr { display: table-row; margin: 0; padding: 0; border: 0; border-radius: 0; box-shadow: none; }
+  .fleet-module :is(.fleet-table, .sales-table) td { display: table-cell; padding: 13px; text-align: left; border-bottom: 1px solid var(--line); }
+  .fleet-module :is(.fleet-table, .sales-table) td::before { display: none; }
+  .fleet-module :is(.fleet-table, .sales-table) td > strong,
+  .fleet-module :is(.fleet-table, .sales-table) td > small { max-width: 270px; text-align: left; }
   .fleet-module .fleet-monthly-filters { grid-template-columns: minmax(0, 1fr); }
 }

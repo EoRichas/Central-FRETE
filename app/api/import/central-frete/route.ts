@@ -73,7 +73,7 @@ export async function POST(request: Request) {
           )
           .bind(
             sale.id,
-            sale.saleNumber,
+            null, // Imported sales use the same automatic counter.
             sale.saleDate,
             sale.competency,
             sale.sellerName,
@@ -86,7 +86,7 @@ export async function POST(request: Request) {
             sale.dueDate,
             sale.operationalStatus,
             sale.legacyOperationalStatus,
-            "CLIENTE NÃO INFORMADO NA PLANILHA DE ORIGEM.",
+            `CLIENTE NÃO INFORMADO NA PLANILHA DE ORIGEM. REFERÊNCIA ORIGINAL: ${sale.saleNumber}.`,
             sale.freightAmountCents,
             sale.commissionBasisPoints,
             sale.importKey,

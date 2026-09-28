@@ -62,7 +62,7 @@ export async function renderServiceOrderPdf(order: ServiceOrderVersion): Promise
     const fit=background.scale(scale);
     page.drawPage(background,{x:(SERVICE_ORDER_LAYOUT.width-fit.width)/2,y:(SERVICE_ORDER_LAYOUT.height-fit.height)/2,...fit});
     centered('ORDEM DE SERVIÇO',640,17,bold,blue);
-    centered(`Venda ${s.saleNumber}  •  Versão ${order.version}  •  ${date(s.saleDate)}`,619,10,normal,muted);
+    centered(`Venda ${s.saleNumber}  •  ${date(s.saleDate)}`,619,10,normal,muted);
     page.drawLine({start:{x:left,y:606},end:{x:left+width,y:606},thickness:.8,color:line});
     y=top;
   }
@@ -129,7 +129,7 @@ export async function renderServiceOrderPdf(order: ServiceOrderVersion): Promise
   const pages=doc.getPages();
   for(let i=0;i<pages.length;i++) {
     page=pages[i];
-    text(`Emitida em ${date(order.createdAt)} • OS ${s.saleNumber} v${order.version}`,left,209,8,normal,muted);
+    text(`Emitida em ${date(order.createdAt)} • OS ${s.saleNumber}`,left,209,8,normal,muted);
     const pagination=`${i+1} / ${pages.length}`;
     text(pagination,left+width-normal.widthOfTextAtSize(pagination,8),209,8,normal,muted);
   }
