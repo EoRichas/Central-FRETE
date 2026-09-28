@@ -58,4 +58,6 @@ export type MonthlyClosing = {
 };
 export type MonthlyReport = {
   current: MonthlySource; history: MonthlyClosing[]; canManage: boolean;
+  periods: {competency: string; closed: boolean; hasVehicleHistory: boolean}[];
+  vehicleHistory: {id: string; vehiclePlate: string; competency: string; distanceMeters: number; monthlyCostCents: number}[];
 };

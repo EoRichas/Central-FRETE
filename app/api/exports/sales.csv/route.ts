@@ -16,8 +16,8 @@ export async function GET(request: Request) {
   try {
     const user = await authorize(request);
     const url = new URL(request.url);
-    const competency = url.searchParams.get("competency") || currentCompetency();
-    if (!isCompetency(competency)) throw new ApiError(400, "Competência inválida.");
+    const competency = url.searchParams.get("period") === "all" ? undefined : url.searchParams.get("competency") || currentCompetency();
+    if (competency && !isCompetency(competency)) throw new ApiError(400, "Competência inválida.");
     const sales: Awaited<ReturnType<typeof listSales>> = [];
     for (let offset = 0; ; offset += 500) {
       const page = await listSales(user, { competency, saleChannel: url.searchParams.has("saleChannel") ? enumValue(url.searchParams.get("saleChannel"), "Canal", SALE_CHANNELS) : undefined, limit: 500, offset });

@@ -3,16 +3,16 @@ import type { FleetBillingData, FleetFreight } from "@/lib/domain/fleet";
 import { formatMoney, formatDate } from "@/lib/format";
 export function FleetBilling({
   data,
-  onEdit,
+  onOpen,
 }: {
   data: FleetBillingData;
-  onEdit: (freight: FleetFreight) => void;
+  onOpen: (freight: FleetFreight) => void;
 }) {
   return (
     <section className="panel table-panel">
       <header className="fleet-panel-header">
         <div>
-          <h2>Faturamento do mês</h2>
+          <h2>Faturamento do período</h2>
           <p>
             {formatMoney(data.revenueCents)} · {data.freightCount} fretes.
             Competência pela data de faturamento, igual ao fechamento mensal.
@@ -47,7 +47,7 @@ export function FleetBilling({
                   <button
                     type="button"
                     className="text-button"
-                    onClick={() => onEdit(f)}
+                    onClick={() => onOpen(f)}
                   >
                     Abrir frete
                   </button>
@@ -66,7 +66,7 @@ export function FleetBilling({
         <div>
           <h2>Comissões dos motoristas</h2>
           <p>
-            {formatMoney(data.commissionCents)} gerados no mês. Não indica
+            {formatMoney(data.commissionCents)} gerados no período. Não indica
             pagamento da comissão ao motorista.
           </p>
         </div>
@@ -80,7 +80,7 @@ export function FleetBilling({
           <ul>
             {driver.freights.map((f) => (
               <li key={f.id}>
-                <button className="text-button" onClick={() => onEdit(f)}>
+                <button className="text-button" onClick={() => onOpen(f)}>
                   {formatDate(f.billingDate)} · {f.clientName} ·{" "}
                   {f.vehiclePlate} · {formatMoney(f.driverCommissionCents)}
                 </button>
