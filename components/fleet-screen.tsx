@@ -1,4 +1,7 @@
 "use client";
+import { roleCan } from "@/lib/domain/permissions";
+import type { CurrentUser } from "@/lib/contracts";
+import { SalesScreen } from "@/components/sales-screen";
 import { StorageCleanupNotice } from "@/components/storage-cleanup-notice";
 import { useMemo, useState } from "react";
 import { FleetMonthlyPanel } from "@/components/fleet-monthly-panel";
@@ -32,9 +35,18 @@ import {
   DriverModal,
 } from "@/components/fleet-assets";
 
-type FleetTab = "overview" | "freights" | "assets" | "monthly" | "billing";
+type FleetTab = "sales" | "overview" | "freights" | "assets" | "monthly" | "billing";
 
 export function FleetScreen() {
+  const me = useApi<{user: CurrentUser}>("/api/me");
+  if (me.loading) return <LoadingState label="Carregando acesso à Frota…" />;
+  if (me.error) return <ErrorState message={me.error} retry={me.refresh} />;
+  if (!me.data) return null;
+  if (roleCan(me.data.user.role, "FLEET_SALES_ONLY")) return <SalesScreen saleChannel="FROTA" initialCompetency={currentCompetency()} initialFinancialStatus="" />;
+  return <FleetOperationsScreen />;
+}
+
+function FleetOperationsScreen() {
   const [competency, setCompetency] = useState(currentCompetency);
   const api = useApi<{ fleet: FleetData }>(
     `/api/fleet?competency=${competency}`,
@@ -122,6 +134,7 @@ export function FleetScreen() {
   }
 
   const allTabs: Array<{ id: FleetTab; label: string }> = [
+    { id: "sales", label: "Vendas" },
     { id: "overview", label: "Visão geral" },
     { id: "freights", label: "Fretes" },
     { id: "assets", label: "Veículos e motoristas" },
@@ -154,7 +167,7 @@ export function FleetScreen() {
                 }
               />
             </label>
-            {fleet?.canEditFreights && (
+            {fleet?.canEditFreights && tab !== "sales" && (
               <button className="button primary" onClick={openNewFreight}>
                 <Icons.plus /> Novo frete
               </button>
@@ -195,6 +208,7 @@ export function FleetScreen() {
               </button>
             ))}
           </div>
+          {tab === "sales" && <SalesScreen saleChannel="FROTA" initialCompetency={competency} initialFinancialStatus="" />}
           {tab === "overview" && !fleet.freightOnly && (
             <>
               <section className="kpi-grid fleet-kpis">

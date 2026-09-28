@@ -1,3 +1,4 @@
+import type { SaleChannel } from "@/lib/domain/sales";
 import type { CargoVehicle } from "@/lib/domain/cargo-vehicles";
 import type {
   FinancialStatus,
@@ -94,6 +95,7 @@ export type InstallmentRecord = {
 };
 
 export type SaleRecord = {
+  saleChannel: SaleChannel;
   cargoVehicles: CargoVehicle[];
   fleetFreightId: string | null;
   id: string;

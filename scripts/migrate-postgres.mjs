@@ -17,6 +17,7 @@ export async function migrateDatabase(configuration) {
     "010_fleet_cargo_sales_orders.sql",
     "011_sale_origin_location_type.sql",
     "../supabase/migrations/20260923220518_fleet_operation_integrity.sql",
+    "012_sales_channels_global_numbering_costs.sql",
   ];
   const migrations = await Promise.all(
     migrationFiles.map((file) =>
@@ -33,7 +34,29 @@ export async function migrateDatabase(configuration) {
 
   try {
     console.info(`Preparando as tabelas do Central Frete em ${config.databaseHost}.`);
-    for (const migration of migrations) await sql.unsafe(migration);
+    // Run historical data migrations once. Replaying 009 after 012 would incorrectly
+    // mark new, unpaid CTE/MDF costs as paid and restore the old annual trigger.
+    await sql.unsafe(`CREATE TABLE IF NOT EXISTS public.central_schema_migrations (
+      name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now()
+    ); ALTER TABLE public.central_schema_migrations ENABLE ROW LEVEL SECURITY;
+    REVOKE ALL ON public.central_schema_migrations FROM anon,authenticated;`);
+    await sql.unsafe("SELECT pg_advisory_lock(hashtext('central-frete-migration-runner'))");
+    try {
+      for (let index=0; index<migrationFiles.length; index++) {
+        const name=migrationFiles[index];
+        const applied=await sql.unsafe('SELECT name FROM public.central_schema_migrations WHERE name=$1',[name]);
+        if (applied.length) continue;
+        // Each source already encloses its changes in BEGIN/COMMIT. Add the ledger
+        // record before that COMMIT so schema and ledger are committed together.
+        const marker=`INSERT INTO public.central_schema_migrations(name) VALUES ('${name.replaceAll("'", "''")}');`;
+        await sql.unsafe(migrations[index].replace(/COMMIT;\s*$/i, `${marker}\nCOMMIT;`));
+      }
+    } catch (error) {
+      await sql.unsafe("ROLLBACK");
+      throw error;
+    } finally {
+      await sql.unsafe("SELECT pg_advisory_unlock(hashtext('central-frete-migration-runner'))");
+    }
     console.info("Estrutura PostgreSQL criada ou atualizada com sucesso.");
   } finally {
     await sql.end({ timeout: 5 });

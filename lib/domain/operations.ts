@@ -39,6 +39,7 @@ export const FIXED_COST_ROWS = [
     label: "SEGURO ALLIANZ",
   },
   { key: "ICMS", category: "ICMS", label: "ICMS" },
+  { key: "CTE_MDFE", category: "CTE_MDFE", label: "CTE / MDF" },
   {
     key: "COLETA_ORIGEM",
     category: "COLETA_ORIGEM",
@@ -98,13 +99,7 @@ export const COST_CATEGORIES = [
   "OUTRAS_DESPESAS",
 ] as const;
 
-export const ICMS_COST_CATEGORIES = [
-  "ICMS",
-  "CTE",
-  "MDFE",
-  "CTE_MDFE",
-  "ICMS_CTE_MDFE",
-] as const;
+export const ICMS_COST_CATEGORIES = ["ICMS"] as const;
 
 export const OPERATION_PAYMENT_CATEGORIES = [
   "COLETA_ORIGEM",
@@ -123,9 +118,11 @@ export const EDITABLE_OPERATION_COST_CATEGORIES = [
   ...PAYMENT_CONTROL_COST_CATEGORIES,
   "NOTA_FISCAL_IMPOSTO",
   "OUTRAS_DESPESAS",
+  "SEGURO_ALLIANZ", "ICMS", "CTE_MDFE", "CTE", "MDFE", "ICMS_CTE_MDFE",
 ] as const;
 
 export const DIRECT_PAID_OPERATION_COST_CATEGORIES = [
+  "NOTA_FISCAL_IMPOSTO",
   "SEGURO_ALLIANZ",
   ...ICMS_COST_CATEGORIES,
 ] as const;
@@ -152,10 +149,12 @@ export function isIcmsCostCategory(category: string) {
 }
 
 export function normalizeCostCategory(category: string) {
-  return isIcmsCostCategory(category) ? "ICMS" : category;
+  return category;
 }
 
 export function costCategoryLabel(category: string) {
+  if (category === "ICMS_CTE_MDFE") return "ICMS / CTE / MDF (LEGADO COMBINADO)";
+  if (category === "CTE" || category === "MDFE") return `${category} (LEGADO)`;
   if (isIcmsCostCategory(category)) return "ICMS";
   if (category === "PRESTADOR_SERVICO") {
     return "PRESTADOR DE SERVIÇO";
@@ -182,4 +181,13 @@ export function calculateDestinationArrivalDate(
   if (Number.isNaN(date.getTime())) return "";
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
+}
+
+export function formatRouteLocationType(origin: OriginLocationType | null | undefined, destination: OriginLocationType | null | undefined): string {
+  if (origin === 'PATIO' && destination === 'PATIO') return 'PÁTIO A PÁTIO';
+  if (origin === 'PORTA' && destination === 'PORTA') return 'PORTA A PORTA';
+  return `${origin ? ORIGIN_LOCATION_TYPE_LABELS[origin] : 'NÃO INFORMADO'} → ${destination ? ORIGIN_LOCATION_TYPE_LABELS[destination] : 'NÃO INFORMADO'}`;
+}
+export function visibleOperationCosts<T extends { amountCents: number }>(costs: T[]): T[] {
+  return costs.filter(cost => cost.amountCents > 0);
 }

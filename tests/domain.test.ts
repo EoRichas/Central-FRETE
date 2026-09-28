@@ -76,10 +76,10 @@ test("resume a frota ponderando a margem pelo faturamento", () => {
   });
 });
 
-test("preserva o cálculo de prazo e a normalização de ICMS", () => {
+test("preserva o cálculo de prazo e separa CTE/MDF de ICMS", () => {
   assert.equal(calculateDestinationArrivalDate("2026-08-25", 5), "2026-08-30");
   assert.equal(calculateDestinationArrivalDate("2026-08-25", 0), "");
-  assert.equal(normalizeCostCategory("CTE_MDFE"), "ICMS");
+  assert.equal(normalizeCostCategory("CTE_MDFE"), "CTE_MDFE");
   assert.equal(isEditableOperationCostCategory("NOTA_FISCAL_IMPOSTO"), true);
   assert.equal(isEditableOperationCostCategory("OUTRAS_DESPESAS"), true);
 });

@@ -1,5 +1,6 @@
 "use client";
 
+import { roleCan } from "@/lib/domain/permissions";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
@@ -25,10 +26,10 @@ const navigation: Array<{
   roles: Role[];
 }> = [
   { href: "/inicio", label: "Início", icon: Icons.home, roles: ["ADMIN", "GERENCIA", "VENDEDOR", "FINANCEIRO"] },
-  { href: "/vendas", label: "Vendas Cegonha", icon: Icons.truck, roles: ["ADMIN", "GERENCIA", "VENDEDOR", "FINANCEIRO"] },
+  { href: "/vendas", label: "Vendas Cegonha", icon: Icons.truck, roles: ["ADMIN", "GERENCIA", "VENDEDOR", "FINANCEIRO", "OPERACIONAL"] },
   { href: "/clientes", label: "Clientes", icon: Icons.users, roles: ["ADMIN", "GERENCIA"] },
   { href: "/prestadores", label: "Prestadores", icon: Icons.briefcase, roles: ["ADMIN", "GERENCIA", "VENDEDOR"] },
-  { href: "/frota", label: "Frota", icon: Icons.fleet, roles: ["ADMIN", "GERENCIA", "FINANCEIRO", "OPERACIONAL"] },
+  { href: "/frota", label: "Frota", icon: Icons.fleet, roles: ["ADMIN", "GERENCIA", "FINANCEIRO", "OPERACIONAL", "VENDEDOR"] },
   { href: "/financeiro", label: "Financeiro", icon: Icons.wallet, roles: ["ADMIN", "GERENCIA", "FINANCEIRO"] },
   { href: "/vendedores", label: "Comissões", icon: Icons.users, roles: ["ADMIN", "GERENCIA", "VENDEDOR", "FINANCEIRO"] },
   { href: "/relatorios", label: "Relatórios", icon: Icons.chart, roles: ["ADMIN", "GERENCIA", "FINANCEIRO"] },
@@ -36,9 +37,11 @@ const navigation: Array<{
 ];
 
 function canAccessPath(pathname: string, role: Role) {
-  if (role === "VENDEDOR" && /^\/vendas\/[^/]+\/editar\/?$/.test(pathname)) {
+  if (role !== "ADMIN" && /^\/vendas\/[^/]+\/editar\/?$/.test(pathname)) {
     return false;
   }
+  if (pathname === "/frota/vendas/nova" && !roleCan(role, "CREATE_FLEET_SALE")) return false;
+  if (pathname === "/vendas/nova" && !roleCan(role, "CREATE_CEGONHA_SALE")) return false;
   const item = navigation.find(
     (entry) => pathname === entry.href || pathname.startsWith(`${entry.href}/`),
   );

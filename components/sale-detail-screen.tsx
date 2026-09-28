@@ -1,5 +1,6 @@
 "use client";
 
+import { roleCan } from "@/lib/domain/permissions";
 import Link from "next/link";
 import { useState } from "react";
 import type {
@@ -12,8 +13,8 @@ import {
   costCategoryLabel,
   isEditableOperationCostCategory,
   isOperationPaymentCategory,
-  FIXED_COST_ROWS,
-  normalizeCostCategory,
+  visibleOperationCosts,
+  isDirectPaidOperationCostCategory,
   ORIGIN_LOCATION_TYPE_LABELS,
 } from "@/lib/domain/operations";
 import {
@@ -254,14 +255,9 @@ export function SaleDetailScreen({ id }: { id: string }) {
         cost.category === "PRESTADOR_SERVICO" && cost.providerSlot === slot,
     ) ?? legacyProviderCosts[slot - 1],
   );
-  const operationRows = FIXED_COST_ROWS.flatMap<{key: string; label: string; slot: number; cost: CostRecord | undefined}>((row) => {
-    if (row.category === "PRESTADOR_SERVICO") {
-      const slot = Number(row.key.slice(-1));
-      return [{ key: row.key, label: row.label, slot, cost: providerCosts[slot - 1] }];
-    }
-    return sale.costs.filter((cost) => normalizeCostCategory(cost.category) === row.category)
-      .map((cost) => ({ key: cost.id, label: row.label, slot: 0, cost }));
-  });
+  const operationRows = visibleOperationCosts(sale.costs).map(cost => ({
+    key: cost.id, label: costCategoryLabel(cost.category), slot: cost.category === "PRESTADOR_SERVICO" ? cost.providerSlot ?? 0 : 0, cost,
+  }));
   const selectedProviderCost = providerSlot
     ? providerCosts[providerSlot - 1]
     : undefined;
@@ -274,10 +270,10 @@ export function SaleDetailScreen({ id }: { id: string }) {
         description={`${sale.sellerName} · ${formatDate(sale.saleDate)} · ${sale.vehicle ?? "VEÍCULO NÃO INFORMADO"}${sale.plate ? ` / ${sale.plate}` : ""}`}
         actions={
           <>
-            <Link className="button secondary" href="/vendas">
+            <Link className="button secondary" href={sale.saleChannel === "FROTA" ? "/frota" : "/vendas"}>
               Voltar
             </Link>
-            <Link className="button secondary" href={`/vendas/${sale.id}/os`}>Visualizar OS</Link>
+            {user && roleCan(user.role, "VIEW_SERVICE_ORDERS") && <Link className="button secondary" href={`/vendas/${sale.id}/os`}>Visualizar OS</Link>}
             {canEditSale && (
               <Link className="table-action" href={`/vendas/${sale.id}/editar`} aria-label="Editar venda" title="Editar venda">
                 <Icons.chevron />
@@ -341,7 +337,7 @@ export function SaleDetailScreen({ id }: { id: string }) {
           <tbody>{operationRows.map(({ key, label, slot, cost }) => <tr key={key}>
             <td data-label="Linha"><strong>{label}</strong></td>
             <td data-label="Referência"><strong>{cost?.providerName ?? cost?.description ?? (cost ? label : "NÃO CADASTRADO")}</strong>{cost?.pixDetails && <small>PIX: {cost.pixDetails}</small>}</td>
-            <td data-label="Situação">{cost ? <StatusBadge status={slot ? cost.paymentStatus : cost.confirmed ? "PAGO" : "EM_ABERTO"} /> : "—"}</td>
+            <td data-label="Situação">{cost ? <StatusBadge status={cost.confirmed ? "PAGO" : "EM_ABERTO"} /> : "—"}</td>
             <td data-label="Data">{formatDate(slot ? cost?.paidAt : cost?.occurredOn)}</td>
             <td data-label="Valor"><strong>{cost ? formatMoney(cost.amountCents) : "—"}</strong></td>
             <td data-label="Ações">{slot && canManageProviders ? (cost ? <button type="button" className="table-action" aria-label={`Editar ${label}`} title={`Editar ${label}`} onClick={() => openProviderCost(slot, cost)}><Icons.chevron /></button> : <button type="button" className="button secondary compact-button" onClick={() => openProviderCost(slot, cost)}>Cadastrar</button>) : cost && canManageOperationCosts && isEditableOperationCostCategory(cost.category) ? <button type="button" className="table-action" aria-label={`Editar ${label}`} title={`Editar ${label}`} onClick={() => openOperationCost(cost)}><Icons.chevron /></button> : null}</td>
@@ -451,7 +447,7 @@ export function SaleDetailScreen({ id }: { id: string }) {
             <div className="form-grid two">
               <Field label="Valor"><div className="money-field"><span>R$</span><input name="amount" inputMode="decimal" defaultValue={centsToInput(operationCost.amountCents)} placeholder="0,00" required /></div></Field>
               <Field label="Data do pagamento"><input name="occurredOn" type="date" defaultValue={operationCost.occurredOn ?? ""} /></Field>
-              <Field label="Situação"><select value={operationCostStatus} onChange={(event) => setOperationCostStatus(event.target.value as "EM_ABERTO" | "PAGO")}><option value="EM_ABERTO">Em aberto</option><option value="PAGO">Pago</option></select></Field><Field label="Comprovante já anexado" hint="Use um comprovante enviado na seção Anexos desta venda."><select name="proofId"><option value="">Selecione</option>{sale.attachments.filter(a => isProofMimeType(a.mimeType)).map(a => <option key={a.id} value={a.id}>{a.fileName}</option>)}</select></Field>
+              <Field label="Situação"><select disabled={isDirectPaidOperationCostCategory(operationCost.category)} value={operationCostStatus} onChange={(event) => setOperationCostStatus(event.target.value as "EM_ABERTO" | "PAGO")}><option value="EM_ABERTO">Em aberto</option><option value="PAGO">Pago</option></select></Field><Field label="Comprovante já anexado" hint="Use um comprovante enviado na seção Anexos desta venda."><select name="proofId"><option value="">Selecione</option>{sale.attachments.filter(a => isProofMimeType(a.mimeType)).map(a => <option key={a.id} value={a.id}>{a.fileName}</option>)}</select></Field>
             </div>
             <ProofUpload name="proof" disabled={saving} />
             {error && <p className="form-error" role="alert">{error}</p>}
