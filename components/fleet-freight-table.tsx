@@ -17,14 +17,10 @@ function formatDistance(distanceMeters: number) {
 
 export function FreightTable({
   freights,
-  canManage,
-  onEdit,
-  onView,
+  onOpen,
 }: {
   freights: FleetFreight[];
-  canManage: boolean;
-  onEdit: (freight: FleetFreight) => void;
-  onView?: (freight: FleetFreight) => void;
+  onOpen: (freight: FleetFreight) => void;
 }) {
   if (!freights.length) {
     return (
@@ -47,11 +43,7 @@ export function FreightTable({
             <th>Frete</th>
             <th>Custos da operação</th>
             <th>Resultado / margem</th>
-            {canManage && (
-              <th>
-                <span className="sr-only">Ações</span>
-              </th>
-            )}
+            <th><span className="sr-only">Ações</span></th>
           </tr>
         </thead>
         <tbody>
@@ -63,7 +55,7 @@ export function FreightTable({
                 <small>Faturamento: {formatDate(freight.billingDate)}</small>
               </td>
               <td data-label="Rota">
-                {onView ? <button className="text-button" onClick={() => onView(freight)} aria-label={`Ver frete de ${freight.origin} para ${freight.destination}`}>{freight.origin}</button> : <strong>{freight.origin}</strong>}
+                <button type="button" className="text-button" onClick={() => onOpen(freight)} aria-label={`Ver frete de ${freight.origin} para ${freight.destination}`}>{freight.origin}</button>
                 <small>→ {freight.destination}</small>
               </td>
               <td data-label="Frota / motorista">
@@ -109,17 +101,6 @@ export function FreightTable({
               </td>
               <td data-label="Custos da operação">
                 <strong>{formatMoney(freight.totalCostCents)}</strong>
-                <small>
-                  Comissão: {formatMoney(freight.driverCommissionCents)}
-                </small>
-                <small>Pátio: {formatMoney(freight.yardCostCents ?? 0)}</small>
-                <small>
-                  Coleta: {formatMoney(freight.pickupCostCents ?? 0)} · Entrega:{" "}
-                  {formatMoney(freight.deliveryCostCents ?? 0)}
-                </small>
-                <small>
-                  Outros: {formatMoney(freight.otherCostCents ?? 0)}
-                </small>
                 <small>{`Combustível ${freight.fuelCostSource === "REALIZADO" ? "realizado" : freight.fuelCostSource === "ESTIMADO" ? "estimado" : "histórico"}: ${formatMoney(freight.fuelCostCents)}`}</small>
               </td>
               <td data-label="Resultado / margem">
@@ -132,21 +113,19 @@ export function FreightTable({
                 </strong>
                 <small>{formatPercent(freight.marginBasisPoints)}</small>
               </td>
-              {canManage && (
-                <td data-label="Ações">
+              <td data-label="Ações">
                   <div className="table-actions">
                     <button
                       type="button"
                       className="table-action"
-                      aria-label={`Editar frete de ${freight.origin} para ${freight.destination}`}
-                      title="Editar frete"
-                      onClick={() => onEdit(freight)}
+                      aria-label={`Ver frete de ${freight.origin} para ${freight.destination}`}
+                      title="Ver detalhes do frete"
+                      onClick={() => onOpen(freight)}
                     >
                       <Icons.chevron />
                     </button>
                   </div>
-                </td>
-              )}
+              </td>
             </tr>
           ))}
         </tbody>

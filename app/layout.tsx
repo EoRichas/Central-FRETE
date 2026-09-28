@@ -13,6 +13,7 @@ import "./action-refinements.css";
 import "./login-refinements.css";
 import "./ui-fixes-20260917.css";
 import "./cargo-orders.css";
+import "./fleet-navigation.css";
 
 export const metadata: Metadata = {
   title: {

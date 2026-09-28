@@ -725,3 +725,46 @@ test('CEP calcula rota sem chave Google, usa longitude/latitude e rejeita coorde
   const invalid=await route.POST(await request('/api/fleet/route-lookup','admin','POST',{originCep:'12',destinationCep:'20210020'}));assert.equal(invalid.status,400);
  }finally{globalThis.fetch=original;if(key===undefined)delete process.env.GOOGLE_MAPS_API_KEY;else process.env.GOOGLE_MAPS_API_KEY=key;}
 });
+
+test('consulta de todos os meses preserva canal e permissões e identifica vendas vinculadas',async()=>{
+ const sales=await import('../../app/api/sales/route.ts');
+ const fleetApi=await import('../../app/api/fleet/route.ts');
+ const exporter=await import('../../app/api/exports/sales.csv/route.ts');
+ const created=await sales.POST(await request('/api/sales','seller','POST',{...salePayload,saleDate:'2020-02-01',saleChannel:'FROTA'}));
+ assert.equal(created.status,201,await created.clone().text());const sale=await created.json();
+ const other=await sales.POST(await request('/api/sales','admin','POST',{...salePayload,sellerName:'ADMIN',saleDate:'2020-02-01',saleChannel:'FROTA'}));
+ assert.equal(other.status,201,await other.clone().text());const otherSale=await other.json();
+ const linkedFreight=await queryFirst("select id from fleet_freights where client_name='CLIENTE CUSTOS'") as {id:string};
+ await pg.query('update freight_sales set fleet_freight_id=$1 where id=$2',[linkedFreight.id,sale.id]);
+ const listed=await (await sales.GET(await request('/api/sales?period=all&saleChannel=FROTA','seller'))).json();
+ assert.ok(listed.sales.some((s:{id:string})=>s.id===sale.id));
+ assert.ok(!listed.sales.some((s:{id:string})=>s.id===otherSale.id));
+ assert.ok(listed.sales.every((s:{saleChannel:string})=>s.saleChannel==='FROTA'));
+ const scoped=await (await sales.GET(await request('/api/sales?competency=2026-09&saleChannel=FROTA','seller'))).json();
+ assert.ok(!scoped.sales.some((s:{id:string})=>s.id===sale.id));
+ const fleet=await (await fleetApi.GET(await request('/api/fleet?period=all','finance'))).json();
+ assert.equal(fleet.fleet.freights.find((f:{id:string})=>f.id===linkedFreight.id).linkedFleetSaleId,sale.id);
+ assert.ok(fleet.fleet.freights.some((f:{linkedFleetSaleId:string|null})=>f.linkedFleetSaleId===null));
+ assert.ok(fleet.fleet.billing.freights.every((f:{billingDate:string|null})=>f.billingDate));
+ assert.equal((await fleetApi.GET(await request('/api/fleet?period=all','seller'))).status,403);
+ const csv=await exporter.GET(await request('/api/exports/sales.csv?period=all&saleChannel=FROTA','seller'));
+ assert.equal(csv.status,200);assert.match(await csv.text(),/2020-02-01/);
+});
+
+test('histórico mensal recupera meses antigos e custos fiscais sem duplicar custos históricos',async()=>{
+ const monthly=await import('../../app/api/fleet/monthly/route.ts');
+ const {calculateMonthlyResult}=await import('../../lib/domain/fleet-results.ts');
+ const response=await monthly.GET(await request('/api/fleet/monthly?competency=2026-04','finance'));
+ assert.equal(response.status,200,await response.clone().text());
+ const report=await response.json() as import('../../lib/domain/fleet-results.ts').MonthlyReport;
+ assert.ok(['2026-04','2026-05','2026-06'].every(month=>report.periods.some(p=>p.competency===month && p.hasVehicleHistory)));
+ assert.equal(report.periods.find(p=>p.competency==='2026-11')?.closed,true);
+ assert.deepEqual(report.vehicleHistory.find(h=>h.id==='calc-history'),{id:'calc-history',vehiclePlate:'CAL1C23',competency:'2026-04',distanceMeters:14345000,monthlyCostCents:1054963});
+ assert.equal(calculateMonthlyResult(report.current).resultCents,0);
+ const current=await (await monthly.GET(await request('/api/fleet/monthly?competency=2031-01','finance'))).json();
+ const totals=calculateMonthlyResult(current.current);
+ assert.equal(totals.directCostCents,22000);assert.equal(totals.transportCostCents,11000);assert.equal(totals.resultCents,67000);
+ const closed=await (await monthly.GET(await request('/api/fleet/monthly?competency=2026-11','finance'))).json();
+ assert.equal(closed.history.length,2);
+ assert.ok(closed.history.some((h:import('../../lib/domain/fleet-results.ts').MonthlyClosing)=>calculateMonthlyResult(h.snapshot).resultCents===172000));
+});

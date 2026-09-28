@@ -34,8 +34,8 @@ export async function GET(request: Request) {
   try {
     const user = await authorize(request);
     const url = new URL(request.url);
-    const competency = url.searchParams.get("competency") || currentCompetency();
-    if (!isCompetency(competency)) throw new ApiError(400, "Competência inválida.");
+    const competency = url.searchParams.get("period") === "all" ? undefined : url.searchParams.get("competency") || currentCompetency();
+    if (competency && !isCompetency(competency)) throw new ApiError(400, "Competência inválida.");
     const sort = url.searchParams.get("sort") || "number-asc";
     if (!SALE_SORTS.includes(sort as SaleSort)) throw new ApiError(400, "Ordenação inválida.");
     const saleChannel = url.searchParams.has("saleChannel") ? enumValue(url.searchParams.get("saleChannel"), "Canal da venda", SALE_CHANNELS) : undefined;

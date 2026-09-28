@@ -54,6 +54,7 @@ type VehicleCostRow = {
 };
 
 type FreightRow = {
+  linkedFleetSaleId: string | null;
   tripId: string | null;
   yardCostCents: number;
   pickupCostCents: number;
@@ -155,6 +156,7 @@ export async function loadFleetData(
           route_distance_meters as routeDistanceMeters, odometer_start_meters as odometerStartMeters, odometer_end_meters as odometerEndMeters, distance_meters as distanceMeters, toll_cents as tollCents,
           driver_commission_cents as driverCommissionCents,
           created_at as createdAt, updated_at as updatedAt
+         , (select s.id from freight_sales s where s.fleet_freight_id=fleet_freights.id and s.sale_channel='FROTA' limit 1) as linkedFleetSaleId
          from fleet_freights
          order by pickup_date desc, created_at desc
          `,
@@ -224,7 +226,7 @@ export async function loadFleetData(
   });
 
   const freights = allFreights.filter(row => !competency || row.pickupDate.slice(0, 7) === competency);
-  const billingFreights = allFreights.filter(row => !competency || row.billingDate?.slice(0,7) === competency);
+  const billingFreights = allFreights.filter(row => row.billingDate && (!competency || row.billingDate.slice(0,7) === competency));
   const commissionDrivers = drivers.map(driver => {
     const members = billingFreights.filter(f => f.driverId === driver.id);
     return {id: driver.id, name: driver.name, commissionCents: members.reduce((sum,f) => sum+f.driverCommissionCents,0), freights: members};

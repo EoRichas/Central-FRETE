@@ -43,14 +43,14 @@ export function FleetScreen() {
   if (me.loading) return <LoadingState label="Carregando acesso à Frota…" />;
   if (me.error) return <ErrorState message={me.error} retry={me.refresh} />;
   if (!me.data) return null;
-  if (roleCan(me.data.user.role, "FLEET_SALES_ONLY")) return <SalesScreen saleChannel="FROTA" initialCompetency={currentCompetency()} initialFinancialStatus="" />;
+  if (roleCan(me.data.user.role, "FLEET_SALES_ONLY")) return <div className="fleet-module"><SalesScreen saleChannel="FROTA" initialCompetency={currentCompetency()} initialFinancialStatus="" /></div>;
   return <FleetOperationsScreen />;
 }
 
 function FleetOperationsScreen() {
   const [competency, setCompetency] = useState(currentCompetency);
   const api = useApi<{ fleet: FleetData }>(
-    `/api/fleet?competency=${competency}`,
+    `/api/fleet?${competency ? `competency=${competency}` : "period=all"}`,
   );
   const fleet = api.data?.fleet;
   const [selectedTab, setTab] = useState<FleetTab>("overview");
@@ -139,8 +139,8 @@ function FleetOperationsScreen() {
   }
 
   const allTabs: Array<{ id: FleetTab; label: string }> = [
-    { id: "sales", label: "Vendas" },
     { id: "overview", label: "Visão geral" },
+    { id: "sales", label: "Vendas" },
     { id: "freights", label: "Fretes" },
     { id: "assets", label: "Veículos e motoristas" },
     { id: "monthly", label: "Fechamento mensal" },
@@ -150,9 +150,10 @@ function FleetOperationsScreen() {
     ? allTabs.filter((item) => item.id === "freights")
     : allTabs;
 
-  const viewedFreight = fleet?.freights.find(f => f.id === viewingId);
+  const viewedFreight = fleet?.freights.find(f => f.id === viewingId) ?? fleet?.billing.freights.find(f => f.id === viewingId);
   return (
     <>
+    <div className="fleet-module">
       {viewedFreight ? <>
         <PageHeader eyebrow="Frota" title="Detalhes do frete" description={`${viewedFreight.origin} → ${viewedFreight.destination}`} actions={<><button className="button secondary" onClick={() => setViewingId(null)}>Voltar à Frota</button>{fleet?.canEditFreights || fleet?.canEditFreightFinancials || fleet?.canManagePayments ? <button className="button primary" onClick={() => openEditFreight(viewedFreight)}>Editar frete</button> : null}</>} />
         <FleetFreightDetail freight={viewedFreight} />
@@ -173,7 +174,7 @@ function FleetOperationsScreen() {
                 type="month"
                 value={competency}
                 onChange={(event) =>
-                  setCompetency(event.target.value || currentCompetency())
+                  setCompetency(event.target.value || (tab === "monthly" ? currentCompetency() : ""))
                 }
               />
             </label>
@@ -212,13 +213,19 @@ function FleetOperationsScreen() {
                 role="tab"
                 aria-selected={tab === item.id}
                 className={tab === item.id ? "active" : ""}
-                onClick={() => setTab(item.id)}
+                onClick={() => { if (item.id === "monthly" && !competency) setCompetency(currentCompetency()); setTab(item.id); }}
               >
                 {item.label}
               </button>
             ))}
           </div>
-          {tab === "sales" && <SalesScreen saleChannel="FROTA" initialCompetency={competency} initialFinancialStatus="" />}
+          {tab === "sales" && <>
+            <SalesScreen saleChannel="FROTA" initialCompetency={competency} selectedCompetency={competency} onCompetencyChange={setCompetency} initialFinancialStatus="" />
+            <section className="panel table-panel">
+              <header className="fleet-panel-header"><div><h2>Fretes cadastrados na Frota</h2><p>Operações sem venda comercial Frota vinculada. Filtro pelo mês da coleta; os demais filtros acima se aplicam à lista de vendas.</p></div></header>
+              <FreightTable freights={fleet.freights.filter(f => !f.linkedFleetSaleId)} onOpen={f => setViewingId(f.id)} />
+            </section>
+          </>}
           {tab === "overview" && !fleet.freightOnly && (
             <>
               <section className="kpi-grid fleet-kpis">
@@ -273,9 +280,7 @@ function FleetOperationsScreen() {
                 {fleet.freights.length ? (
                   <FreightTable
                     freights={fleet.freights.slice(0, 6)}
-                    canManage={fleet.canEditFreights || fleet.canManagePayments}
-                    onEdit={openEditFreight}
-                    onView={f => setViewingId(f.id)}
+                    onOpen={f => setViewingId(f.id)}
                   />
                 ) : (
                   <EmptyState
@@ -336,23 +341,22 @@ function FleetOperationsScreen() {
               <section className="panel table-panel">
                 <FreightTable
                   freights={filteredFreights}
-                  canManage={fleet.canEditFreights || fleet.canManagePayments}
-                  onEdit={openEditFreight}
-                  onView={f => setViewingId(f.id)}
+                  onOpen={f => setViewingId(f.id)}
                 />
               </section>
             </>
           )}
           {tab === "assets" && !fleet.freightOnly && <FleetAssetsPanel fleet={fleet} openVehicle={openVehicle} openDriver={openDriver} />}
         {tab === "monthly" && !fleet.freightOnly && (
-            <FleetMonthlyPanel key={competency} competency={competency} />
+            <FleetMonthlyPanel key={competency} competency={competency} onCompetencyChange={setCompetency} />
           )}
           {tab === "billing" && !fleet.freightOnly && (
-            <FleetBilling data={fleet.billing} onEdit={openEditFreight} />
+            <FleetBilling data={fleet.billing} onOpen={f => setViewingId(f.id)} />
           )}
         </div>
       )}
       </>}
+    </div>
       {freightModalOpen && fleet && (
         <FreightModal
           key={editingFreight?.id ?? "new"}

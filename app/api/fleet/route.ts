@@ -8,8 +8,9 @@ const FLEET_VIEW_ROLES = ["ADMIN", "GERENCIA", "FINANCEIRO", "OPERACIONAL"] as c
 export async function GET(request: Request) {
   try {
     const user = await authorize(request, [...FLEET_VIEW_ROLES]);
-    const competency = new URL(request.url).searchParams.get("competency") || currentCompetency();
-    if (!isCompetency(competency)) throw new ApiError(400, "Competência inválida.");
+    const params = new URL(request.url).searchParams;
+    const competency = params.get("period") === "all" ? undefined : params.get("competency") || currentCompetency();
+    if (competency && !isCompetency(competency)) throw new ApiError(400, "Competência inválida.");
     const isManager = user.role === "ADMIN" || user.role === "GERENCIA";
     const isOperational = user.role === "OPERACIONAL";
     const fleet = await loadFleetData(
