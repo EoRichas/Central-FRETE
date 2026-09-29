@@ -1,3 +1,4 @@
+import { resolveFreightClient } from "@/lib/server/registry-validation";
 import { drainStorageCleanup } from "@/lib/server/storage-cleanup";
 import { cargoVehiclesOrLegacy } from "@/lib/domain/cargo-vehicles";
 import { authorize } from "@/lib/server/auth";
@@ -28,6 +29,7 @@ type FreightSnapshot = {
   vehiclePlate: string;
   driverId: string | null;
   driverName: string;
+  clientId: string | null;
   clientName: string;
   cargoVehicleModel: string | null;
   cargoPlate: string | null;
@@ -56,7 +58,7 @@ async function freightSnapshot(id: string) {
           fuel_liters_milli as fuelLitersMilli, fuel_pump_amount_cents as fuelPumpAmountCents,
       id, vehicle_id as vehicleId, vehicle_plate as vehiclePlate,
       driver_id as driverId, driver_name as driverName,
-      client_name as clientName, cargo_vehicle_model as cargoVehicleModel,
+      client_id as clientId, client_name as clientName, cargo_vehicle_model as cargoVehicleModel,
       cargo_plate as cargoPlate, origin, destination,
       origin_cep as originCep, destination_cep as destinationCep,
       pickup_date as pickupDate, delivery_date as deliveryDate,
@@ -85,6 +87,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           vehicleId: previous.vehicleId ?? submitted.vehicleId,
           driverId: previous.driverId ?? submitted.driverId,
           tripId: previous.tripId,
+          clientId: previous.clientId,
           clientName: previous.clientName,
           cargoVehicleModel: previous.cargoVehicleModel,
           cargoPlate: previous.cargoPlate,
@@ -106,6 +109,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           actualFuelCostCents: submitted.actualFuelCostCents,
         }
       : submitted;
+    Object.assign(data, await resolveFreightClient(data, previous));
     const { vehicle, driver } = await resolveFleetReferences(
       data.vehicleId,
       data.driverId,
@@ -121,7 +125,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         .prepare(
           `update fleet_freights set
             vehicle_id = ?, vehicle_plate = ?, driver_id = ?, driver_name = ?,
-            client_name = ?, cargo_vehicle_model = ?, cargo_plate = ?,
+            client_id = ?, client_name = ?, cargo_vehicle_model = ?, cargo_plate = ?,
             origin = ?, destination = ?, pickup_date = ?, delivery_date = ?,
             billing_date = ?, operational_status = ?, priority = ?,
             freight_amount_cents = ?, distance_meters = ?, toll_cents = ?,
@@ -136,6 +140,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           vehicle.plate,
           driver.id,
           driver.name,
+          data.clientId,
           data.clientName,
           data.cargoVehicleModel,
           data.cargoPlate,

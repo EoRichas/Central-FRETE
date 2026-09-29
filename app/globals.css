@@ -758,3 +758,16 @@ td > small { max-width: 270px; margin-top: 2px; overflow: hidden; color: var(--m
 /* Keep the final expense aligned and compact on wide and narrow screens. */
 .fixed-cost-row.other-expense-compact { grid-column: 1 / -1; justify-self: center; width: min(100%, 560px); border-right: 0; }
 .fleet-commission-detail { margin: 12px 20px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+
+/* Customer lookup follows existing form tokens and works without a native select. */
+.client-autocomplete { position: relative; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.client-autocomplete > input { width: 100%; }
+.client-search-hint { color: var(--muted); font-size: 11px; line-height: 1.4; }
+.client-suggestions { position: absolute; top: 66px; inset-inline: 0; z-index: 30; background: var(--surface, #fff); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); box-shadow: 0 8px 24px #102f4a20; overflow: hidden; }
+.client-suggestions ul { margin: 0; padding: 4px; list-style: none; max-height: 260px; overflow-y: auto; }
+.client-suggestions li { padding: 10px; min-height: 44px; border-radius: 4px; display: flex; flex-direction: column; gap: 4px; cursor: pointer; overflow-wrap: anywhere; }
+.client-suggestions li:hover, .client-suggestions li[aria-selected="true"] { background: var(--surface-subtle); }
+.client-suggestions strong { color: var(--ink); font-size: 12px; }
+.client-suggestions small, .client-search-status { color: var(--muted); font-size: 11px; }
+.client-search-status { padding: 10px 12px; border-top: 1px solid var(--line); }
+.client-search-status button { color: var(--ink); text-decoration: underline; padding: 6px; }

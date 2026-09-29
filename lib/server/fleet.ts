@@ -83,6 +83,7 @@ type FreightRow = {
   vehiclePlate: string;
   driverId: string | null;
   driverName: string;
+  clientId: string | null;
   clientName: string;
   cargoVehicleModel: string | null;
   cargoPlate: string | null;
@@ -151,7 +152,7 @@ export async function loadFleetData(
           fuel_liters_milli as fuelLitersMilli, fuel_pump_amount_cents as fuelPumpAmountCents,
           id, sale_number as saleNumber, vehicle_id as vehicleId, vehicle_plate as vehiclePlate,
           driver_id as driverId, driver_name as driverName,
-          client_name as clientName, cargo_vehicle_model as cargoVehicleModel,
+          client_id as clientId, client_name as clientName, cargo_vehicle_model as cargoVehicleModel,
           cargo_plate as cargoPlate, origin, destination, origin_cep as originCep, destination_cep as destinationCep, payment_status as paymentStatus,
           paid_at as paidAt, proof_attachment_id as proofAttachmentId,
           pickup_date as pickupDate, delivery_date as deliveryDate,
@@ -268,5 +269,23 @@ export async function loadFleetData(
     canEditFreightFinancials,
     canManagePayments,
     freightOnly,
+  };
+}
+
+// Only the data needed to create a freight: no customer operations, billing or personal driver details.
+export async function loadFleetCreationData(): Promise<import("@/lib/domain/fleet").FleetFreightFormData> {
+  const [parameters, vehicles, drivers, costs] = await Promise.all([
+    loadParameters(),
+    queryAll<VehicleRow>("select id, plate, active from fleet_vehicles where active=1 order by plate"),
+    queryAll<{id:string;name:string}>("select id, name from fleet_drivers where active=1 order by name"),
+    queryAll<VehicleCostRow>(`select id, vehicle_id as vehicleId, competency, distance_meters as distanceMeters,
+      monthly_cost_cents as monthlyCostCents, include_in_rate_average as includeInRateAverage
+      from fleet_vehicle_costs where include_in_rate_average=1`),
+  ]);
+  return {
+    parameters: {...parameters, officeMonthlyCostCents:null, updatedByName:null},
+    vehicles: vehicles.map(vehicle => ({...vehicle, active:true, costs:[], averageCostPerKmCents:averageVehicleCostPerKmCents(costs.filter(c=>c.vehicleId===vehicle.id).map(c=>({...c, includeInRateAverage:true, costPerKmCents:c.distanceMeters>0?c.monthlyCostCents/(c.distanceMeters/1000):0})))})),
+    drivers: drivers.map(driver=>({...driver, active:true, vehicleId:null, cpf:null, address:null, phone:null})),
+    canEditFreights:true, canEditFreightFinancials:false, canManagePayments:false, canDeleteFreights:false,
   };
 }

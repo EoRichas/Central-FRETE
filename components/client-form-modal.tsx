@@ -15,7 +15,7 @@ export function ClientFormModal({
   open: boolean;
   defaultChannel?: ClientChannel;
   onClose: () => void;
-  onCreated: (id: string) => void;
+  onCreated: (id: string, legalName: string, channel: ClientChannel, active: boolean) => void;
 }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,8 +58,9 @@ export function ClientFormModal({
           ],
         }),
       });
+      const legalName = String(form.get("legalName") ?? "").trim().toLocaleUpperCase("pt-BR");
       formElement.reset();
-      onCreated(result.id);
+      onCreated(result.id, legalName, form.get("saleChannel") as ClientChannel, form.get("active") === "true");
       onClose();
     } catch (submitError) {
       setError(

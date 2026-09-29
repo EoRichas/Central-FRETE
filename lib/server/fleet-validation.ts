@@ -83,6 +83,7 @@ export function parseFleetFreightPayload(payload: Record<string, unknown>) {
     actualFuelCostCents: payload.actualFuelCostCents == null || payload.actualFuelCostCents === "" ? null : resultMoney(payload.actualFuelCostCents, "Diesel realizado"),
     vehicleId: entityId(payload.vehicleId, "Veículo da frota"),
     driverId: entityId(payload.driverId, "Motorista"),
+    clientId: optionalString(payload.clientId),
     clientName: boundedRequiredUpper(payload.clientName, "Cliente", 140),
     cargoVehicleModel: cargoVehicles[0].model,
     cargoPlate: cargoVehicles[0].plate,

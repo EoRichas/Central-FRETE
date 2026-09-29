@@ -22,10 +22,18 @@ export function registryAddressText(address:RegistryAddress|null,legacy:unknown)
 }
 export async function validateSaleClient(id:string|null,channel:SaleChannel,previousId?:string|null){
   if(!id)return;
-  const client=await queryFirst<{active:number;saleChannel:string}>('select active,sale_channel as saleChannel from clients where id=?',[id]);
+  const client=await queryFirst<{active:number;saleChannel:string;legalName:string}>('select legal_name as legalName,active,sale_channel as saleChannel from clients where id=?',[id]);
   if(!client)throw new ApiError(400,'Cliente não encontrado.');
   // Keep historical relationships editable after the client's classification changes.
-  if(id===previousId)return;
+  if(id===previousId)return client;
   if(!client.active)throw new ApiError(400,'Cliente inativo.');
   if(client.saleChannel!=='AMBOS'&&client.saleChannel!==channel)throw new ApiError(400,'Cliente não disponível para o canal desta venda.');
+  return client;
+}
+
+export async function resolveFreightClient(data: {clientId: string | null; clientName: string}, previous?: {clientId: string | null; clientName: string}) {
+  if (previous && data.clientId === previous.clientId && data.clientName === previous.clientName) return {clientId: previous.clientId, clientName: previous.clientName};
+  if (!data.clientId) throw new ApiError(400, 'Busque e selecione um cliente cadastrado para a Frota.');
+  const client = await validateSaleClient(data.clientId, 'FROTA', previous?.clientId);
+  return {clientId: data.clientId, clientName: client!.legalName};
 }

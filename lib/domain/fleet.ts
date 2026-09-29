@@ -97,6 +97,7 @@ export type FleetFreightBase = {
   vehiclePlate: string;
   driverId: string | null;
   driverName: string;
+  clientId?: string | null;
   clientName: string;
   cargoVehicleModel: string | null;
   cargoPlate: string | null;
@@ -282,3 +283,6 @@ export type FleetBillingData = {
   freights: FleetFreight[];
   drivers: {id: string; name: string; commissionCents: number; freights: FleetFreight[]}[];
 };
+
+export type FleetFreightFormData = Pick<FleetData, "vehicles" | "drivers" | "parameters" | "canEditFreights" | "canEditFreightFinancials" | "canManagePayments" | "canDeleteFreights">;
+export type SellerFreightSummary = Pick<FleetFreight, "id" | "saleNumber" | "clientName" | "origin" | "destination" | "pickupDate" | "freightAmountCents">;
