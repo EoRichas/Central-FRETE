@@ -29,9 +29,10 @@ function formatDocument(value: string | null) {
 }
 
 export function ClientsScreen() {
+  const [channel,setChannel] = useState("");
   const [query, setQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
-  const clientsApi = useApi<{ clients: ClientRecord[] }>("/api/clients");
+  const clientsApi = useApi<{ clients: ClientRecord[] }>(`/api/clients${channel ? `?channel=${channel}` : ""}`);
   const clients = useMemo(
     () =>
       (clientsApi.data?.clients ?? []).filter(
@@ -68,6 +69,7 @@ export function ClientsScreen() {
             />
           </div>
         </label>
+        <label><span>Canal de atendimento</span><select value={channel} onChange={e=>setChannel(e.target.value)}><option value="">Todos</option><option value="FROTA">Frota</option><option value="CEGONHA">Cegonha</option><option value="AMBOS">Ambos</option></select></label>
         <div className="filter-stat">
           <strong>{clients.length}</strong>
           <span>clientes encontrados</span>
@@ -114,7 +116,7 @@ export function ClientsScreen() {
                   <div>
                     <strong>{client.legalName}</strong>
                     <small>
-                      {client.tradeName || formatDocument(client.cpfCnpj)}
+                      {client.tradeName || formatDocument(client.cpfCnpj)} · {client.saleChannel === "AMBOS" ? "Ambos" : client.saleChannel === "FROTA" ? "Frota" : "Cegonha"}
                     </small>
                   </div>
                 </div>

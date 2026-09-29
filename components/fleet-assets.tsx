@@ -1,4 +1,6 @@
 "use client";
+import { AddressFields, ActiveSelect } from "@/components/registry-fields";
+import { addressFromForm } from "@/lib/domain/registry";
 import { Icons } from "@/components/icons";
 import { useState } from "react";
 import { FleetVehicleHistory } from "@/components/fleet-vehicle-history";
@@ -66,7 +68,7 @@ export function VehicleModal({
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             plate: form.get("plate"),
-            active: form.get("active") === "on",
+            active: form.get("active") === "true",
           }),
         },
       );
@@ -97,13 +99,7 @@ export function VehicleModal({
               required
             />
           </Field>
-          <Field label="Ativo">
-            <input
-              name="active"
-              type="checkbox"
-              defaultChecked={vehicle?.active ?? true}
-            />
-          </Field>
+          <ActiveSelect active={vehicle?.active ?? true}/>
         </fieldset>
         {vehicle && <FleetVehicleHistory vehicle={vehicle} />}
         {error && (
@@ -178,9 +174,11 @@ export function DriverModal({
           body: JSON.stringify({
             name: form.get("name"),
             cpf: form.get("cpf"),
-            address: form.get("address"),
+            address: driver?.address,
+            addressDetails: addressFromForm(form) ?? driver?.addressDetails ?? null,
+            email: form.get("email"), whatsapp: form.get("whatsapp"), notes: form.get("notes"),
             phone: form.get("phone"),
-            active: form.get("active") === "on",
+            active: form.get("active") === "true",
           }),
         },
       );
@@ -200,8 +198,12 @@ export function DriverModal({
       open
       onClose={onClose}
       title={driver ? "Editar motorista" : "Novo motorista"}
+      description="Dados pessoais, contatos e endereço do motorista."
+      wide
     >
       <form className="modal-body form-stack" onSubmit={submit}>
+        <div className="section-divider">Dados pessoais e contato</div>
+        <div className="form-grid three">
         <Field label="Nome completo">
           <input name="name" defaultValue={driver?.name ?? ""} required />
         </Field>
@@ -213,14 +215,6 @@ export function DriverModal({
             required
           />
         </Field>
-        <Field label="Endereço completo">
-          <input
-            name="address"
-            defaultValue={driver?.address ?? ""}
-            maxLength={300}
-            required
-          />
-        </Field>
         <Field label="Telefone com DDD">
           <input
             name="phone"
@@ -229,14 +223,14 @@ export function DriverModal({
             required
           />
         </Field>
+        <Field label="WhatsApp"><input name="whatsapp" type="tel" defaultValue={driver?.whatsapp ?? ""}/></Field>
+        <Field label="E-mail"><input name="email" type="email" defaultValue={driver?.email ?? ""}/></Field>
+        </div>
+        <div className="section-divider">Endereço</div>
+        <AddressFields initial={driver?.addressDetails} legacy={driver?.address} required={!driver?.address}/>
+        <Field label="Observações"><textarea name="notes" rows={3} defaultValue={driver?.notes ?? ""}/></Field>
         <p className="fleet-update-note">O veículo é vinculado ao motorista dentro de cada frete.</p>
-        <Field label="Ativo">
-          <input
-            name="active"
-            type="checkbox"
-            defaultChecked={driver?.active ?? true}
-          />
-        </Field>
+        <ActiveSelect active={driver?.active ?? true}/>
         {error && (
           <p className="form-error" role="alert">
             {error}

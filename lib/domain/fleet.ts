@@ -62,6 +62,10 @@ export type FleetVehicle = {
 };
 
 export type FleetDriver = {
+  addressDetails?: import("./registry").RegistryAddress | null;
+  email?: string | null;
+  whatsapp?: string | null;
+  notes?: string | null;
   cpf: string | null;
   address: string | null;
   phone: string | null;
@@ -274,7 +278,7 @@ export function summarizeFleet(freights: FleetFreight[]): FleetSummary {
 
 export type FleetBillingData = {
   revenueCents: number; freightCount: number; commissionCents: number;
-  sales: {id: string; saleNumber: string; saleDate: string; clientName: string | null; freightAmountCents: number}[];
+  sales: {id: string; saleNumber: string; saleDate: string; billingDate:string; clientName: string | null; freightAmountCents: number}[];
   freights: FleetFreight[];
   drivers: {id: string; name: string; commissionCents: number; freights: FleetFreight[]}[];
 };

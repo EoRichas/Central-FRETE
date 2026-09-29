@@ -1,3 +1,4 @@
+import { validateSaleClient } from "@/lib/server/registry-validation";
 import { roleCan } from "@/lib/domain/permissions";
 import { SALE_CHANNELS, SALE_SORTS, type SaleSort } from "@/lib/domain/sales";
 import { parseSaleCargo } from "@/lib/server/sale-cargo";
@@ -107,14 +108,10 @@ export async function POST(request: Request) {
     const originYardEntryDate = payload.originYardEntryDate
       ? dateOnly(payload.originYardEntryDate, "Entrada no pátio de origem")
       : null;
+    const billingDate = payload.billingDate ? dateOnly(payload.billingDate, 'Data do faturamento') : null;
+    if(billingDate && new Date(`${billingDate}T12:00:00Z`).toISOString().slice(0,10)!==billingDate)throw new ApiError(400,'Data do faturamento inválida.');
     const clientId = String(payload.clientId ?? "").trim() || null;
-    if (clientId) {
-      const client = await queryFirst<{ id: string }>(
-        `select id from clients where id = ? and active = 1`,
-        [clientId],
-      );
-      if (!client) throw new ApiError(400, "Cliente não encontrado ou inativo.");
-    }
+    await validateSaleClient(clientId,saleChannel);
 
     const rawCosts = Array.isArray(payload.costs) ? payload.costs : [];
     const costs = rawCosts.map((raw, index) => {
@@ -198,8 +195,8 @@ export async function POST(request: Request) {
             pickup_address_snapshot, delivery_address_snapshot,
             operational_deadline_days, origin_yard_entry_date, delivery_deadline,
             financial_due_date, operational_status, notes, freight_amount_cents,
-            commission_basis_points, costs_pending, created_by, cargo_vehicles, fleet_freight_id, destination_location_type, sale_channel
-          ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::text::jsonb, ?, ?, ?) returning sale_number as saleNumber`,
+            commission_basis_points, costs_pending, created_by, cargo_vehicles, fleet_freight_id, destination_location_type, sale_channel, billing_date
+          ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::text::jsonb, ?, ?, ?, ?) returning sale_number as saleNumber`,
         )
         .bind(
           saleId,
@@ -229,7 +226,7 @@ export async function POST(request: Request) {
           commissionBasisPoints,
           costsPending ? 1 : 0,
           user.id,
-          JSON.stringify(cargo.cargoVehicles), cargo.fleetFreightId, destinationLocationType, saleChannel,
+          JSON.stringify(cargo.cargoVehicles), cargo.fleetFreightId, destinationLocationType, saleChannel, billingDate,
         ),
       db
         .prepare(
@@ -317,7 +314,7 @@ export async function POST(request: Request) {
           user.id,
           user.email,
           JSON.stringify({
-            numbering: "AUTOMATIC_GLOBAL", saleChannel, actorRole: user.role, fleetFreightId: cargo.fleetFreightId,
+            numbering: "AUTOMATIC_GLOBAL", saleChannel, billingDate, actorRole: user.role, fleetFreightId: cargo.fleetFreightId,
             freightAmountCents,
             commissionBasisPoints,
             costCount: costs.length,

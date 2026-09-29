@@ -11,8 +11,8 @@ export async function POST(request: Request) {
     const db = await getD1();
     await db.batch([
       db
-        .prepare("insert into fleet_drivers (id, name, active, cpf, address, phone, vehicle_id) values (?, ?, ?, ?, ?, ?, ?)")
-        .bind(id, data.name, data.active ? 1 : 0, data.cpf, data.address, data.phone, data.vehicleId),
+        .prepare("insert into fleet_drivers (id, name, active, cpf, address, phone, vehicle_id, address_details, email, whatsapp, notes) values (?, ?, ?, ?, ?, ?, ?, ?::text::jsonb, ?, ?, ?)")
+        .bind(id, data.name, data.active ? 1 : 0, data.cpf, data.address, data.phone, data.vehicleId, data.addressDetails ? JSON.stringify(data.addressDetails) : null, data.email, data.whatsapp, data.notes),
       db
         .prepare(
           `insert into audit_logs (

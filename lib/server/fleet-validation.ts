@@ -1,3 +1,5 @@
+import { parseRegistryAddress, registryAddressText } from "@/lib/server/registry-validation";
+import { lower, upper, digits } from "@/lib/server/validation";
 import { effectiveFleetDistance } from "@/lib/domain/fleet-distance";
 import { parseCargoVehicles, nullableInteger } from "@/lib/server/cargo-validation";
 import { resultMoney } from "@/lib/server/fleet-results-validation";
@@ -166,6 +168,7 @@ export function parseFleetVehiclePayload(payload: Record<string, unknown>) {
 }
 
 export function parseFleetDriverPayload(payload: Record<string, unknown>) {
+  const addressDetails = parseRegistryAddress(payload.addressDetails);
   const cpf = String(payload.cpf ?? "").replace(/\D/g, "");
   if (!validCpf(cpf)) throw new ApiError(400, "Informe um CPF válido.");
   const phone = String(payload.phone ?? "").replace(/\D/g, "");
@@ -175,7 +178,9 @@ export function parseFleetDriverPayload(payload: Record<string, unknown>) {
   return {
     cpf,
     phone,
-    address: boundedRequiredUpper(payload.address, "Endereço", 300),
+    address: registryAddressText(addressDetails,payload.address),
+    addressDetails,
+    email: lower(payload.email), whatsapp: digits(payload.whatsapp), notes: upper(payload.notes),
     vehicleId: null,
     name: boundedRequiredUpper(payload.name, "Nome do motorista", 120),
     active: "active" in payload

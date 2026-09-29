@@ -1,3 +1,5 @@
+import { parseRegistryAddress, registryAddressText } from "@/lib/server/registry-validation";
+import { booleanValue } from "@/lib/server/fleet-validation";
 import { authorize } from "@/lib/server/auth";
 import { getD1, jsonError, queryAll } from "@/lib/server/d1";
 import { asObject, digits, lower, requiredUpper } from "@/lib/server/validation";
@@ -7,6 +9,7 @@ type ProviderRow = {
   name: string;
   referenceName: string | null;
   yardAddress: string | null;
+  addressDetails: import("@/lib/domain/registry").RegistryAddress | null;
   document: string | null;
   phone: string | null;
   email: string | null;
@@ -20,7 +23,7 @@ export async function GET(request: Request) {
     await authorize(request, ["ADMIN", "GERENCIA", "VENDEDOR", "FINANCEIRO"]);
     const providers = await queryAll<ProviderRow>(
       `select id, name, reference_name as referenceName,
-        yard_address as yardAddress, document, phone, email, active
+        yard_address as yardAddress, address_details as addressDetails, document, phone, email, active
        from providers order by active desc, name limit 300`,
     );
     return Response.json({
@@ -39,7 +42,9 @@ export async function POST(request: Request) {
     const user = await authorize(request, ["ADMIN"]);
     const payload = asObject(await request.json());
     const id = crypto.randomUUID();
+    const addressDetails = parseRegistryAddress(payload.addressDetails);
     const data = {
+      addressDetails,
       name: requiredUpper(
         payload.companyName ?? payload.name,
         "Empresa do prestador",
@@ -48,18 +53,19 @@ export async function POST(request: Request) {
         payload.referenceName,
         "Nome de referência",
       ),
-      yardAddress: requiredUpper(payload.yardAddress, "Endereço do pátio"),
+      yardAddress: registryAddressText(addressDetails,payload.yardAddress),
       document: digits(payload.document),
       phone: digits(payload.phone),
       email: lower(payload.email),
+      active: payload.active === undefined ? true : booleanValue(payload.active,"Situação"),
     };
     const db = await getD1();
     await db.batch([
       db
         .prepare(
           `insert into providers (
-            id, name, reference_name, yard_address, document, phone, email, active
-          ) values (?, ?, ?, ?, ?, ?, ?, 1)`,
+            id, name, reference_name, yard_address, document, phone, email, active, address_details
+          ) values (?, ?, ?, ?, ?, ?, ?, ?, ?::text::jsonb)`,
         )
         .bind(
           id,
@@ -68,7 +74,7 @@ export async function POST(request: Request) {
           data.yardAddress,
           data.document,
           data.phone,
-          data.email,
+          data.email, data.active ? 1 : 0, data.addressDetails ? JSON.stringify(data.addressDetails) : null,
         ),
       db
         .prepare(

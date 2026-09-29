@@ -1,5 +1,6 @@
 "use client";
 
+import { AddressFields, ClientChannelSelect } from "@/components/registry-fields";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -79,6 +80,7 @@ export function ClientDetailScreen({ id }: { id: string }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           notes: form.get("notes"),
+          saleChannel: form.get("saleChannel"),
           active: form.get("active") === "true",
         }),
       });
@@ -223,6 +225,7 @@ export function ClientDetailScreen({ id }: { id: string }) {
 
       <Modal open={editOpen} onClose={() => setEditOpen(false)} title="Editar cliente" description="Atualize a situação ou observações do cadastro.">
         <form className="modal-body form-stack" onSubmit={saveClient}>
+          <ClientChannelSelect value={client.saleChannel}/>
           <Field label="Situação">
             <select name="active" defaultValue={client.active ? "true" : "false"}>
               <option value="true">Ativo</option>
@@ -248,16 +251,10 @@ export function ClientDetailScreen({ id }: { id: string }) {
           <div className="form-grid three">
             <Field label="Tipo"><select name="type" defaultValue="EMPRESA"><option value="EMPRESA">EMPRESA</option><option value="COLETA">COLETA</option><option value="ENTREGA">ENTREGA</option></select></Field>
             <Field label="Nome de referência" hint="Ex.: matriz, depósito ou obra."><input name="label" /></Field>
-            <Field label="CEP"><input name="cep" inputMode="numeric" /></Field>
-            <Field label="Logradouro"><input name="street" required /></Field>
-            <Field label="Número"><input name="number" required /></Field>
-            <Field label="Complemento"><input name="complement" /></Field>
-            <Field label="Bairro"><input name="district" required /></Field>
-            <Field label="Cidade"><input name="city" required /></Field>
-            <Field label="UF"><input name="state" maxLength={2} required /></Field>
             <Field label="Contato no local"><input name="contactName" /></Field>
             <Field label="Telefone do local"><input name="phone" inputMode="tel" /></Field>
           </div>
+          <AddressFields/>
           {error && <p className="form-error" role="alert">{error}</p>}
           <footer className="modal-actions">
             <button type="button" className="button secondary" onClick={() => setAddressOpen(false)}>Cancelar</button>

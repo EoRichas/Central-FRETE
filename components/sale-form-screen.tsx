@@ -108,7 +108,7 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
   const editing = Boolean(initialSale);
   const [cargoVehicles, setCargoVehicles] = useState(() => cargoVehiclesOrLegacy(initialSale?.cargoVehicles, initialSale?.vehicle ?? null, initialSale?.plate ?? null));
   const [fleetFreightId, setFleetFreightId] = useState(initialSale?.fleetFreightId ?? '');
-  const clientsApi = useApi<{ clients: ClientRecord[] }>("/api/clients");
+  const clientsApi = useApi<{ clients: ClientRecord[] }>(`/api/clients?saleChannel=${saleChannel}`);
   const meApi = useApi<{ user: CurrentUser }>("/api/me");
   const sellersApi = useApi<{sellers: {id: string; name: string}[]}>(meApi.data?.user.role === "OPERACIONAL" ? "/api/sales/sellers" : null);
   const [sellerId, setSellerId] = useState("");
@@ -230,6 +230,7 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
         cargoVehicles, fleetFreightId: fleetFreightId || null,
         saleChannel, sellerId,
         saleDate: form.get("saleDate"),
+        billingDate: saleChannel === "FROTA" ? form.get("billingDate") || null : initialSale?.billingDate ?? null,
         sellerName: meApi.data?.user.role === "OPERACIONAL" ? sellersApi.data?.sellers.find(s => s.id === sellerId)?.name : form.get("sellerName"),
         clientId: clientId || null,
         initialProviderName: form.get("initialProviderName"),
@@ -332,6 +333,7 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
               <Field label="Cliente">
                 <select value={clientId} onChange={(event) => setClientId(event.target.value)}>
                   <option value="">Cliente não informado</option>
+                  {initialSale?.clientId && !filteredClients.some(c=>c.id===initialSale.clientId) && <option value={initialSale.clientId}>{initialSale.clientName} (cadastro anterior)</option>}
                   {filteredClients.map((client) => <option key={client.id} value={client.id}>{client.legalName}</option>)}
                 </select>
               </Field>
@@ -345,6 +347,7 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
           <div className="operation-section-grid">
             <div className="form-grid four operation-identification-grid">
               <Field label="Número da venda" hint="Sequência automática compartilhada entre Cegonha e Frota."><input value={initialSale?.saleNumber ?? "Automático ao salvar"} readOnly /></Field>
+              {saleChannel === "FROTA" && <Field label="Data do faturamento" hint={fleetFreightId ? "No faturamento, prevalece a data da operação vinculada." : "Preencha quando a venda for faturada."}><input name="billingDate" type="date" defaultValue={initialSale?.billingDate ?? ""}/></Field>}
               <Field label="Data da venda"><input name="saleDate" type="date" defaultValue={initialSale?.saleDate ?? today} required /></Field>
               <Field label="Vendedor">{meApi.data?.user.role === "OPERACIONAL" ? <><select value={sellerId} onChange={e => setSellerId(e.target.value)} required><option value="">Selecione um vendedor</option>{sellersApi.data?.sellers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select>{sellersApi.error && <span role="alert">{sellersApi.error}</span>}</> : <input name="sellerName" value={sellerNameValue} onChange={(event) => setSellerName(event.target.value)} readOnly={meApi.data?.user.role === "VENDEDOR"} required />}</Field>
               <Field label="Status operacional"><select name="operationalStatus" defaultValue={initialSale?.operationalStatus ?? "CONFIRMAR"}>{OPERATIONAL_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></Field>
@@ -433,7 +436,7 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
           <button className="button primary" disabled={saving || deleting}>{saving ? "Salvando venda…" : editing ? "Salvar alterações" : "Salvar venda"}</button>
         </div>
       </form>
-      <ClientFormModal open={clientModal} onClose={() => setClientModal(false)} onCreated={(id) => { setClientId(id); clientsApi.refresh(); }} />
+      <ClientFormModal defaultChannel={saleChannel} open={clientModal} onClose={() => setClientModal(false)} onCreated={(id) => { setClientId(id); clientsApi.refresh(); }} />
     </>
   );
 }

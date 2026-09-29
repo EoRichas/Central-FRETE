@@ -1,5 +1,7 @@
 "use client";
 
+import { AddressFields, ActiveSelect } from "@/components/registry-fields";
+import { addressFromForm } from "@/lib/domain/registry";
 import { useState } from "react";
 import { Icons } from "@/components/icons";
 import {
@@ -40,7 +42,7 @@ export function ProvidersScreen() {
         {
         method: editingProvider ? "PATCH" : "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(Object.fromEntries(form)),
+        body: JSON.stringify({...Object.fromEntries(form), addressDetails: addressFromForm(form) ?? editingProvider?.addressDetails ?? null, yardAddress: editingProvider?.yardAddress}),
         },
       );
       formElement.reset();
@@ -177,6 +179,7 @@ export function ProvidersScreen() {
         open={open}
         onClose={closeModal}
         title={editingProvider ? "Editar prestador" : "Novo prestador"}
+        wide
         description={
           editingProvider
             ? "Atualize a empresa, a referência, o pátio e a situação cadastral."
@@ -194,9 +197,6 @@ export function ProvidersScreen() {
           <Field label="Nome de referência">
             <input name="referenceName" defaultValue={editingProvider?.referenceName ?? ""} required />
           </Field>
-          <Field label="Endereço do pátio">
-            <textarea name="yardAddress" rows={3} defaultValue={editingProvider?.yardAddress ?? ""} required />
-          </Field>
           <div className="form-grid two">
             <Field label="CPF / CNPJ">
               <input name="document" inputMode="numeric" defaultValue={editingProvider?.document ?? ""} />
@@ -208,14 +208,9 @@ export function ProvidersScreen() {
           <Field label="E-mail">
             <input name="email" type="email" defaultValue={editingProvider?.email ?? ""} />
           </Field>
-          {editingProvider && (
-            <Field label="Situação">
-              <select name="active" defaultValue={editingProvider.active ? "true" : "false"}>
-                <option value="true">Ativo</option>
-                <option value="false">Inativo</option>
-              </select>
-            </Field>
-          )}
+          <ActiveSelect active={editingProvider?.active ?? true}/>
+          <div className="section-divider">Endereço do pátio</div>
+          <AddressFields initial={editingProvider?.addressDetails} legacy={editingProvider?.yardAddress} required={!editingProvider?.yardAddress}/>
           {error && (
             <p className="form-error" role="alert">
               {error}

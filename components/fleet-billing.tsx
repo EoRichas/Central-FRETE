@@ -16,11 +16,11 @@ export function FleetBilling({
           <h2>Faturamento do período</h2>
           <p>
             {formatMoney(data.revenueCents)} · {data.freightCount} fretes.
-            Fretes pela data de faturamento ou, provisoriamente, pela coleta. Vendas Frota pela competência da venda. Vendas vinculadas contam uma vez.
+            Somente fretes com data de faturamento ou status Faturado e vendas Frota com data de faturamento. Vendas vinculadas contam uma vez.
           </p>
         </div>
       </header>
-      {data.freights.some(f => !f.billingDate) && <p className="form-error" role="status">Total provisório: há fretes sem data de faturamento. Abra o frete para corrigir a data.</p>}
+      {data.freights.some(f => !f.billingDate) && <p className="form-error" role="status">Há fretes marcados como Faturado sem data. Eles usam provisoriamente o mês da coleta; preencha a data para corrigir a competência.</p>}
       <div className="responsive-table">
         <table>
           <thead>
@@ -39,7 +39,7 @@ export function FleetBilling({
             {data.freights.map((f) => (
               <tr key={f.id}>
                 <td data-label="Venda">{f.saleNumber}</td>
-                <td data-label="Data">{formatDate(f.billingDate || f.pickupDate)}{!f.billingDate && <small>Coleta · faturamento pendente</small>}</td>
+                <td data-label="Data">{formatDate(f.billingDate || f.pickupDate)}{!f.billingDate && <small>Faturado · data não informada</small>}</td>
                 <td data-label="Cliente">{f.clientName}</td>
                 <td data-label="Veículo">{f.vehiclePlate}</td>
                 <td data-label="Motorista">{f.driverName}</td>
@@ -60,7 +60,7 @@ export function FleetBilling({
             ))}
             {data.sales.map(s => <tr key={`sale:${s.id}`}>
               <td data-label="Venda">{s.saleNumber}</td>
-              <td data-label="Data">{formatDate(s.saleDate)}<small>Venda Frota</small></td>
+              <td data-label="Data">{formatDate(s.billingDate)}<small>Venda Frota</small></td>
               <td data-label="Cliente">{s.clientName || 'Não informado'}</td>
               <td data-label="Veículo">Não informado</td><td data-label="Motorista">Não informado</td>
               <td data-label="Valor">{formatMoney(s.freightAmountCents)}</td>
