@@ -1,4 +1,5 @@
 "use client";
+import { useTransientMessage } from "@/components/use-transient-message";
 
 import { useState } from "react";
 import type { Role } from "@/lib/contracts";
@@ -37,7 +38,7 @@ export function SettingsScreen() {
   const [savingUser, setSavingUser] = useState(false);
   const [deletingUser, setDeletingUser] = useState<string | null>(null);
   const [editingUser, setEditingUser] = useState<UserRow | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useTransientMessage();
   const [error, setError] = useState<string | null>(null);
 
   async function addUser(event: React.FormEvent<HTMLFormElement>) {

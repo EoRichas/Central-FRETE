@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
+import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
 import { renderServiceOrderPdf as renderLegacyOrder } from './service-order-pdf-legacy';
 import fontkit from '@pdf-lib/fontkit';
 import type { ServiceOrderVersion } from '@/lib/domain/service-order';
@@ -23,6 +23,7 @@ export async function renderServiceOrderPdf(order: ServiceOrderVersion): Promise
   ]);
   const normal = await doc.embedFont(regularBytes,{subset:true});
   const bold = await doc.embedFont(boldBytes,{subset:true});
+  const stationeryFont = await doc.embedFont(StandardFonts.Helvetica);
   const [background] = await doc.embedPdf(backgroundBytes, [0]);
   const s = order.snapshot;
   doc.setTitle(`Ordem de Serviço ${s.saleNumber} | Central Express`);
@@ -61,15 +62,17 @@ export async function renderServiceOrderPdf(order: ServiceOrderVersion): Promise
     const scale=Math.min(SERVICE_ORDER_LAYOUT.width/background.width,SERVICE_ORDER_LAYOUT.height/background.height);
     const fit=background.scale(scale);
     page.drawPage(background,{x:(SERVICE_ORDER_LAYOUT.width-fit.width)/2,y:(SERVICE_ORDER_LAYOUT.height-fit.height)/2,...fit});
-    if (s.issuer.contactSource === 'USER') {
+    if (s.issuer.contactSource) {
       // The original stationery contains a rasterized fixed phone. Mask only
       // that line and render the contact saved in this document's snapshot.
-      page.drawRectangle({x:76,y:147,width:160,height:16,color:rgb(1,1,1)});
+      const currentContact = s.issuer.contactSource !== 'USER';
+      // Match the off-white stationery and the neighbouring footer's typography.
+      page.drawRectangle({x:76,y:147,width:160,height:16,color:currentContact ? rgb(252/255,252/255,252/255) : rgb(1,1,1)});
       const digits = s.issuer.contact || '';
       const local = digits.startsWith('55') && digits.length > 11 ? digits.slice(2) : digits;
       const formatted = local.length === 11 ? `(${local.slice(0,2)}) ${local.slice(2,7)}-${local.slice(7)}`
         : local.length === 10 ? `(${local.slice(0,2)}) ${local.slice(2,6)}-${local.slice(6)}` : digits;
-      text(formatted || 'Telefone não informado',78,152,9,normal,blue);
+      text(formatted || 'Telefone não informado',78,152,currentContact ? 9.5 : 9,currentContact ? stationeryFont : normal,currentContact ? rgb(.035,.10,.29) : blue);
     }
     centered('ORDEM DE SERVIÇO',640,17,bold,blue);
     centered(`Venda ${s.saleNumber}  •  ${date(s.saleDate)}`,619,10,normal,muted);

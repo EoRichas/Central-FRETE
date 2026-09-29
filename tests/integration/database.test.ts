@@ -569,11 +569,11 @@ test('tipo de destino é independente, editável e incluído em novas OS; condi�
  const removed=await edit.DELETE(await request('/api/sales/x','admin','DELETE'),ctx);assert.equal(removed.status,200,await removed.clone().text());
 });
 
-test('faturamento mensal não trunca em 500 e comissões incluem apenas motoristas cadastrados',async()=>{
+test('faturamento mensal não trunca em 500 e preserva comissões sem cadastro de motorista',async()=>{
  await pg.exec(`insert into fleet_freights(id,vehicle_plate,driver_id,driver_name,client_name,origin,destination,pickup_date,billing_date,operational_status,freight_amount_cents,distance_meters,driver_commission_cents)
  select 'billing-'||i,'ABC1D23',case when i<=600 then 'results-driver' else null end,'MOTORISTA','CLIENTE','A','B','2031-01-01','2031-02-01','FATURADO',1000,1000,100 from generate_series(1,601) i`);
  const {loadFleetData}=await import('../../lib/server/fleet.ts');const fleet=await loadFleetData(true,true,true,false,'2031-02');
- assert.equal(fleet.freights.length,0);assert.equal(fleet.billing.freightCount,601);assert.equal(fleet.billing.revenueCents,601000);assert.equal(fleet.billing.commissionCents,60000);assert.equal(fleet.billing.drivers[0].freights.length,600);
+ assert.equal(fleet.freights.length,0);assert.equal(fleet.billing.freightCount,601);assert.equal(fleet.billing.revenueCents,601000);assert.equal(fleet.billing.commissionCents,60100);assert.equal(fleet.billing.drivers.find(d=>d.id==='results-driver')!.freights.length,600);assert.equal(fleet.billing.drivers.length,2);
  assert.equal('possibleMatchCount' in fleet.summary,false);assert.equal('matchWindowDays' in fleet.parameters,false);
 });
 
@@ -902,12 +902,13 @@ test('telefone cadastrado sem email chega à OS; versões antigas e permissões 
  const {issueOrder,readOrderVersion,orderReport}=await import('../../lib/server/service-orders.ts');
  const actor={id,email:'contato.teste@centralfrete.local',name:data.name,role:'ADMIN' as const};
  const freight=await queryFirst('select id from fleet_freights where not exists(select 1 from freight_sales where fleet_freight_id=fleet_freights.id) limit 1') as {id:string};
+ await pg.query('update fleet_freights set created_by=$1 where id=$2',[id,freight.id]);
  const before=await issueOrder(freight.id,actor,'fleet');
  assert.equal(before.latest!.snapshot.issuer.contact,'11988887766');
- assert.equal(before.latest!.snapshot.issuer.contactSource,'USER');
+ assert.equal(before.latest!.snapshot.issuer.contactSource,'CREATOR');
  const edited=await userApi.PATCH(await request('/api/users/x','admin','PATCH',{...data,phone:'(11) 97777-6655',active:true,password:''}),{params:Promise.resolve({id})});
  assert.equal(edited.status,200,await edited.clone().text());
- assert.equal((await orderReport(freight.id,'fleet',id)).stale,true);
+ assert.equal((await orderReport(freight.id,'fleet')).stale,true);
  const after=await issueOrder(freight.id,actor,'fleet');
  assert.equal(after.latest!.snapshot.issuer.contact,'11977776655');
  assert.equal((await readOrderVersion(freight.id,before.latest!.version,'fleet'))!.snapshot.issuer.contact,'11988887766');
@@ -972,4 +973,70 @@ test('apuração soma mais de 500 vendas e frota uma vez, mostra datas pendentes
  await pg.exec("update fleet_freights set billing_date='2040-04-02' where id='month-fallback';");
  assert.equal((await loadFleetData(true,true,true,false,'2040-03')).billing.freightCount,0);
  assert.equal((await loadFleetData(true,true,true,false,'2040-04')).billing.freightCount,1);
+});
+
+test('faturamento e fechamento incluem vendas Frota, fretes antigos e comissão sem cadastro, sem duplicação',async()=>{
+ await pg.exec(`insert into fleet_freights(id,vehicle_plate,driver_name,client_name,origin,destination,pickup_date,billing_date,operational_status,freight_amount_cents,distance_meters,driver_commission_cents,actual_fuel_cost_cents)
+ values('consolidated-freight','TES1T23','MOTORISTA HISTÓRICO','CLIENTE FROTA','A','B','2041-01-01','2041-02-01','FATURADO',10000,1000,2000,0),
+ ('consolidated-fallback','TES1T23','SEM CADASTRO','CLIENTE SEM DATA','A','B','2041-02-01',null,'SEM_PREVISAO',3000,1000,700,0);
+ insert into freight_sales(id,sale_date,competency,seller_name,origin,destination,financial_due_date,operational_status,freight_amount_cents,commission_basis_points,costs_pending,sale_channel,created_by)
+ select 'consolidated-sale-'||i,'2041-02-01','2041-02','TESTE','A','B','2041-02-28','SEM_PREVISAO',1000,0,0,'FROTA','admin' from generate_series(1,501) i;
+ insert into freight_sales(id,sale_date,competency,seller_name,origin,destination,financial_due_date,operational_status,freight_amount_cents,commission_basis_points,costs_pending,sale_channel,fleet_freight_id,created_by)
+ values('consolidated-linked','2041-01-01','2041-01','TESTE','A','B','2041-01-30','SEM_PREVISAO',10000,0,0,'FROTA','consolidated-freight','admin'),
+ ('consolidated-cegonha','2041-02-01','2041-02','TESTE','A','B','2041-02-28','SEM_PREVISAO',5000,0,0,'CEGONHA',null,'admin');`);
+ const fleetApi=await import('../../app/api/fleet/route.ts');
+ const monthlyApi=await import('../../app/api/fleet/monthly/route.ts');
+ const {calculateMonthlyResult}=await import('../../lib/domain/fleet-results.ts');
+ const response=await fleetApi.GET(await request('/api/fleet?competency=2041-02','finance'));
+ assert.equal(response.status,200,await response.clone().text());
+ const {fleet}=await response.json() as {fleet:import('../../lib/domain/fleet.ts').FleetData};
+ assert.equal(fleet.billing.sales.length,501);assert.equal(fleet.billing.freightCount,503);
+ assert.equal(fleet.billing.revenueCents,514000);assert.equal(fleet.billing.commissionCents,2700);
+ assert.equal(fleet.billing.drivers.reduce((sum,d)=>sum+d.commissionCents,0),2700);
+ assert.equal(fleet.billing.drivers.length,2);
+ assert.equal(fleet.billing.freights.find(f=>f.id==='consolidated-freight')!.driverCommissionCents,2000);
+ const monthly=await (await monthlyApi.GET(await request('/api/fleet/monthly?competency=2041-02','finance'))).json() as import('../../lib/domain/fleet-results.ts').MonthlyReport;
+ const totals=calculateMonthlyResult(monthly.current);
+ assert.equal(totals.fleetSalesRevenueCents,501000);assert.equal(totals.fleetRevenueCents,13000);
+ assert.equal(totals.fleetRevenueCents+totals.fleetSalesRevenueCents,fleet.billing.revenueCents);
+ assert.equal(totals.revenueCents,519000);assert.equal(totals.driverCommissionCents,2700);
+ assert.equal(totals.variableCostCents,2700);assert.equal(monthly.current.unbilledCount,1);
+ assert.ok(monthly.current.freights.every(f=>f.saleNumber && f.date));
+ assert.equal(monthly.current.sales?.find(s=>s.id==='consolidated-sale-1')?.saleChannel,'FROTA');
+ const january=await (await fleetApi.GET(await request('/api/fleet?competency=2041-01','finance'))).json();
+ assert.equal(january.fleet.billing.revenueCents,0); // linked sale follows the operation's billing month
+ assert.equal((await fleetApi.GET(await request('/api/fleet?competency=2041-02','seller'))).status,403);
+});
+
+test('OS usa vendedora da venda e não troca contato entre visualizadores ou emissores',async()=>{
+ await pg.exec(`update users set phone='11911112222' where id='seller'; update users set phone='11933334444' where id='admin'; update users set phone='11955556666' where id='finance';
+ insert into freight_sales(id,sale_date,competency,seller_id,seller_name,origin,destination,financial_due_date,operational_status,freight_amount_cents,commission_basis_points,costs_pending,created_by)
+ values('seller-phone-sale','2041-03-01','2041-03','seller','SELLER','A','B','2041-03-30','SEM_PREVISAO',1000,0,0,'admin');`);
+ const api=await import('../../app/api/sales/[id]/service-order/route.ts');
+ const context={params:Promise.resolve({id:'seller-phone-sale'})};
+ const issue=async(actor:string)=>(await api.POST(await request('/api/sales/seller-phone-sale/service-order',actor,'POST'),context)).json();
+ const first=await issue('finance');
+ assert.equal(first.latest.snapshot.issuer.contact,'11911112222');assert.equal(first.latest.snapshot.issuer.contactSource,'SELLER');
+ for(const actor of ['admin','seller','finance']) {
+   const report=await (await api.GET(await request('/api/sales/seller-phone-sale/service-order',actor),context)).json();
+   assert.equal(report.stale,false);assert.equal(report.latest.snapshot.issuer.contact,'11911112222');
+   assert.equal((await issue(actor)).latest.version,first.latest.version);
+ }
+ await pg.exec("update users set phone='11977778888' where id='finance'");
+ assert.equal((await issue('finance')).latest.version,first.latest.version);
+ await pg.exec("update users set phone='11922229999' where id='seller'");
+ const after=await issue('admin');assert.equal(after.latest.version,first.latest.version+1);assert.equal(after.latest.snapshot.issuer.contact,'11922229999');
+ const {readOrderVersion,orderReport}=await import('../../lib/server/service-orders.ts');
+ assert.equal((await readOrderVersion('seller-phone-sale',first.latest.version))!.snapshot.issuer.contact,'11911112222');
+ // Legacy name-only sales use a unique exact match; missing/ambiguous names stay empty.
+ await pg.exec("update freight_sales set seller_id=null where id='seller-phone-sale'");
+ assert.equal((await issue('finance')).latest.snapshot.issuer.contact,'11922229999');
+ await pg.exec("insert into users(id,email,name,role,phone) values('seller-homonym','homonym@example.test','SELLER','VENDEDOR','11999990000')");
+ assert.equal((await issue('admin')).latest.snapshot.issuer.contact,null);
+ await pg.exec("update freight_sales set seller_id='seller' where id='seller-phone-sale'; update users set phone=null where id='seller'");
+ assert.equal((await issue('admin')).latest.snapshot.issuer.contact,null);
+ assert.equal((await orderReport('seller-phone-sale')).stale,false);
+ // Documents issued with the former viewer-contact rule are detected as stale without overwriting history.
+ await pg.exec(`update service_order_versions set snapshot=jsonb_set(snapshot,'{issuer,contactSource}','"USER"'::jsonb) where order_id='${first.latest.orderId}' and version=${(await issue('admin')).latest.version}`);
+ assert.equal((await orderReport('seller-phone-sale')).stale,true);
 });

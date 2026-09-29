@@ -9,7 +9,7 @@ export async function GET(request: Request, context: Context) {
     const {id} = await context.params;
     await authorizeOrder(user,id);
     const url = new URL(request.url);
-    if (url.searchParams.get('format') !== 'pdf') return Response.json(await orderReport(id,'sale',user.id),{headers:{'Cache-Control':'no-store'}});
+    if (url.searchParams.get('format') !== 'pdf') return Response.json(await orderReport(id,'sale'),{headers:{'Cache-Control':'no-store'}});
     const inputVersion = url.searchParams.get('version');
     const version = inputVersion === null ? undefined : Number(inputVersion);
     if (version !== undefined && (!Number.isSafeInteger(version) || version < 1)) throw new ApiError(400,'Versão inválida.');

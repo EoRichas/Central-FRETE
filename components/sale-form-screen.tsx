@@ -113,7 +113,7 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
   const sellersApi = useApi<{sellers: {id: string; name: string}[]}>(meApi.data?.user.role === "OPERACIONAL" ? "/api/sales/sellers" : null);
   const [sellerId, setSellerId] = useState("");
   const canCreateClient = Boolean(meApi.data && roleCan(meApi.data.user.role, "MANAGE_CLIENTS"));
-  const fleetOptions = useApi<{freights: {id:string;label:string}[]}>(meApi.data?.user.role === "ADMIN" ? "/api/sales/fleet-options" : null);
+  const fleetOptions = useApi<{freights: {id:string;label:string}[]}>(saleChannel === "FROTA" && meApi.data?.user.role === "ADMIN" ? "/api/sales/fleet-options" : null);
   const [sellerName, setSellerName] = useState(initialSale?.sellerName ?? "");
   const [clientId, setClientId] = useState(initialSale?.clientId ?? "");
   const [pickupAddress, setPickupAddress] = useState(
@@ -351,7 +351,7 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
               <Field label="Prestador inicial"><input name="initialProviderName" defaultValue={initialSale?.initialProviderName ?? ""} /></Field>
               <Field label="Prazo operacional (dias)"><input type="number" min={1} max={365} inputMode="numeric" value={operationalDeadlineDays} onChange={(event) => { const value = event.target.value; setOperationalDeadlineDays(value); const calculated = calculateDestinationArrivalDate(originYardEntryDate, value); if (calculated) setDestinationArrivalDate(calculated); }} /></Field>
             </div>
-            {meApi.data?.user.role === 'ADMIN' && <Field label="Operação da Frota (opcional)" hint="Quando vinculada, a venda e a OS consultam os veículos diretamente no frete."><select value={fleetFreightId} onChange={e => setFleetFreightId(e.target.value)}><option value="">Sem vínculo com a Frota</option>{initialSale?.fleetFreightId && <option value={initialSale.fleetFreightId}>Operação vinculada</option>}{fleetOptions.data?.freights.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}</select>{fleetOptions.error && <span role="alert">{fleetOptions.error}</span>}</Field>}
+            {saleChannel === 'FROTA' && meApi.data?.user.role === 'ADMIN' && <Field label="Operação da Frota (opcional)" hint="Quando vinculada, a venda e a OS consultam os veículos diretamente no frete."><select value={fleetFreightId} onChange={e => setFleetFreightId(e.target.value)}><option value="">Sem vínculo com a Frota</option>{initialSale?.fleetFreightId && <option value={initialSale.fleetFreightId}>Operação vinculada</option>}{fleetOptions.data?.freights.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}</select>{fleetOptions.error && <span role="alert">{fleetOptions.error}</span>}</Field>}
             {fleetFreightId ? <p className="fleet-update-note">Os veículos transportados serão consultados na operação da Frota vinculada.</p> : <CargoVehiclesEditor vehicles={cargoVehicles} onChange={setCargoVehicles} />}
             <div className="operation-timing-grid">
               <Field label="Entrada no pátio de origem"><input type="date" value={originYardEntryDate} onChange={(event) => { const value = event.target.value; setOriginYardEntryDate(value); const calculated = calculateDestinationArrivalDate(value, operationalDeadlineDays); if (calculated) setDestinationArrivalDate(calculated); }} /></Field>

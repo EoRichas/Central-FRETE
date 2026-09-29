@@ -28,9 +28,9 @@ export type MonthlyEntry = {
 };
 export type MonthlySource = {
   dateBasis?: 'BILLING_OR_PICKUP';
-  sales?: {id:string; revenueCents:number; costCents:number; costsPending:boolean}[];
+  sales?: {id:string; saleNumber?:string; saleChannel?:'FROTA'|'CEGONHA'; client?:string|null; date?:string; revenueCents:number; costCents:number; costsPending:boolean}[];
   competency: string;
-  freights: { id: string; client: string; revenueCents: number; directCostCents: number;
+  freights: { id: string; saleNumber?:string; date?:string; driverCommissionCents?:number; client: string; revenueCents: number; directCostCents: number;
     standaloneCostCents: number; fuelPending: boolean }[];
   trips: { id: string; name: string; costCents: number }[];
   entries: MonthlyEntry[];
@@ -52,7 +52,9 @@ export function calculateMonthlyResult(source: MonthlySource) {
   for (const value of [revenueCents, variableCostCents, fixedCostCents, resultCents]) {
     if (!Number.isSafeInteger(value)) throw new Error('Total mensal excede o limite de precisão.');
   }
-  return { fleetRevenueCents, salesRevenueCents, salesCostCents,
+  const fleetSalesRevenueCents = (source.sales ?? []).filter(s => s.saleChannel === 'FROTA').reduce((sum,s) => sum+s.revenueCents,0);
+  const driverCommissionCents = source.freights.reduce((sum,f) => sum+(f.driverCommissionCents ?? 0),0);
+  return { fleetRevenueCents, salesRevenueCents, salesCostCents, fleetSalesRevenueCents, driverCommissionCents,
     pendingSalesCount: (source.sales ?? []).filter(s => s.costsPending).length, otherRevenueCents, directCostCents, transportCostCents,
     otherVariableCents, fixedCostCents, revenueCents, variableCostCents, resultCents,
     pendingFuelCount: source.freights.filter(f => f.fuelPending).length };
