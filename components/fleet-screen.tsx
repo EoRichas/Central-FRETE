@@ -1,4 +1,5 @@
 "use client";
+import { useTransientMessage } from "@/components/use-transient-message";
 import Link from "next/link";
 import { roleCan } from "@/lib/domain/permissions";
 import type { CurrentUser } from "@/lib/contracts";
@@ -71,7 +72,7 @@ function FleetOperationsScreen() {
   const [driverModalOpen, setDriverModalOpen] = useState(false);
   const [editingDriver, setEditingDriver] = useState<FleetDriver | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [success, setSuccess] = useTransientMessage();
 
   const filteredFreights = useMemo(() => {
     const normalized = search.trim().toLocaleUpperCase("pt-BR");
@@ -227,7 +228,7 @@ function FleetOperationsScreen() {
                   <span>Faturamento</span>
                   <strong>{formatMoney(fleet.billing.revenueCents)}</strong>
                   <small>
-                    {fleet.billing.freightCount} fretes · faturamento ou coleta provisória
+                    {fleet.billing.freightCount} fretes e vendas Frota no período
                   </small>
                   <button
                     className="text-button"
@@ -239,7 +240,7 @@ function FleetOperationsScreen() {
                 <article className="kpi-card">
                   <span>Comissões dos motoristas</span>
                   <strong>{formatMoney(fleet.billing.commissionCents)}</strong>
-                  <small>Geradas pelos fretes faturados no mês</small>
+                  <small>Comissões dos fretes incluídos no período</small>
                   <button
                     className="text-button"
                     onClick={() => setTab("billing")}

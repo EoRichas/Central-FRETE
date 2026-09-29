@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import type { FleetBillingData, FleetFreight } from "@/lib/domain/fleet";
 import { formatMoney, formatDate } from "@/lib/format";
 export function FleetBilling({
@@ -15,7 +16,7 @@ export function FleetBilling({
           <h2>Faturamento do período</h2>
           <p>
             {formatMoney(data.revenueCents)} · {data.freightCount} fretes.
-            Competência pela data de faturamento; sem essa data, a coleta é usada provisoriamente.
+            Fretes pela data de faturamento ou, provisoriamente, pela coleta. Vendas Frota pela competência da venda. Vendas vinculadas contam uma vez.
           </p>
         </div>
       </header>
@@ -24,6 +25,7 @@ export function FleetBilling({
         <table>
           <thead>
             <tr>
+              <th>Venda</th>
               <th>Data</th>
               <th>Cliente</th>
               <th>Veículo</th>
@@ -36,6 +38,7 @@ export function FleetBilling({
           <tbody>
             {data.freights.map((f) => (
               <tr key={f.id}>
+                <td data-label="Venda">{f.saleNumber}</td>
                 <td data-label="Data">{formatDate(f.billingDate || f.pickupDate)}{!f.billingDate && <small>Coleta · faturamento pendente</small>}</td>
                 <td data-label="Cliente">{f.clientName}</td>
                 <td data-label="Veículo">{f.vehiclePlate}</td>
@@ -55,9 +58,18 @@ export function FleetBilling({
                 </td>
               </tr>
             ))}
-            {!data.freights.length && (
+            {data.sales.map(s => <tr key={`sale:${s.id}`}>
+              <td data-label="Venda">{s.saleNumber}</td>
+              <td data-label="Data">{formatDate(s.saleDate)}<small>Venda Frota</small></td>
+              <td data-label="Cliente">{s.clientName || 'Não informado'}</td>
+              <td data-label="Veículo">Não informado</td><td data-label="Motorista">Não informado</td>
+              <td data-label="Valor">{formatMoney(s.freightAmountCents)}</td>
+              <td data-label="Situação"><Link href={`/vendas/${s.id}`}>Ver recebimentos</Link></td>
+              <td data-label="Detalhes"><Link className="text-button" href={`/vendas/${s.id}`}>Abrir venda</Link></td>
+            </tr>)}
+            {!data.freights.length && !data.sales.length && (
               <tr>
-                <td colSpan={7}>Nenhum frete nesta competência. Confira o mês selecionado.</td>
+                <td colSpan={8}>Nenhum frete nesta competência. Confira o mês selecionado.</td>
               </tr>
             )}
           </tbody>
@@ -91,7 +103,7 @@ export function FleetBilling({
         </details>
       ))}
       {!data.drivers.length && (
-        <p>Nenhuma comissão de motorista cadastrado nesta competência.</p>
+        <p>Nenhuma comissão de motorista nesta competência.</p>
       )}
     </section>
   );

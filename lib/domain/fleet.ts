@@ -274,6 +274,7 @@ export function summarizeFleet(freights: FleetFreight[]): FleetSummary {
 
 export type FleetBillingData = {
   revenueCents: number; freightCount: number; commissionCents: number;
+  sales: {id: string; saleNumber: string; saleDate: string; clientName: string | null; freightAmountCents: number}[];
   freights: FleetFreight[];
   drivers: {id: string; name: string; commissionCents: number; freights: FleetFreight[]}[];
 };

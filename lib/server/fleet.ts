@@ -4,6 +4,7 @@ import { loadFleetTrips } from "@/lib/server/fleet-trips";
 import { calculateTripResult } from "@/lib/domain/fleet-results";
 import type {
   FleetData,
+  FleetBillingData,
   FleetDriver,
   FleetFreight,
   FleetOperationalStatus,
@@ -123,7 +124,7 @@ export async function loadFleetData(
   competency?: string,
   canEditFreightFinancials = false,
 ): Promise<FleetData> {
-  const [parameters, vehicleRows, driverRows, costRows, freightRows, trips] =
+  const [parameters, vehicleRows, driverRows, costRows, freightRows, trips, billingSales] =
     await Promise.all([
       loadParameters(),
       queryAll<VehicleRow>(
@@ -163,6 +164,16 @@ export async function loadFleetData(
          `,
       ),
       loadFleetTrips(),
+      // Commercial Frota sales without an operation are real revenue too.
+      // Linked sales are represented by their freight, once, on its billing date.
+      freightOnly ? Promise.resolve([]) : queryAll<FleetBillingData['sales'][number]>(
+        `select s.id,s.sale_number as saleNumber,s.sale_date as saleDate,
+          c.legal_name as clientName,s.freight_amount_cents as freightAmountCents
+         from freight_sales s left join clients c on c.id=s.client_id
+         where s.sale_channel='FROTA' and s.fleet_freight_id is null
+         ${competency ? 'and s.competency=?' : ''}
+         order by s.sale_date desc,s.id`, competency ? [competency] : [],
+      ),
     ]);
 
   const costsByVehicle = new Map<string, FleetVehicleCost[]>();
@@ -228,14 +239,21 @@ export async function loadFleetData(
 
   const freights = allFreights.filter(row => !competency || row.pickupDate.slice(0, 7) === competency);
   const billingFreights = allFreights.filter(row => !competency || (row.billingDate || row.pickupDate).slice(0,7) === competency);
-  const commissionDrivers = drivers.map(driver => {
-    const members = billingFreights.filter(f => f.driverId === driver.id);
-    return {id: driver.id, name: driver.name, commissionCents: members.reduce((sum,f) => sum+f.driverCommissionCents,0), freights: members};
-  }).filter(driver => driver.freights.length > 0);
+  const driverGroups = new Map<string, FleetBillingData['drivers'][number]>();
+  for (const freight of billingFreights) {
+    // Preserve historical commissions even after the driver's registration is removed.
+    // Missing IDs are grouped separately by recorded name, never matched to a live homonym.
+    const key = freight.driverId ?? `historical:${freight.driverName.trim().toLocaleUpperCase('pt-BR')}`;
+    const group = driverGroups.get(key) ?? {id:key, name:freight.driverName || 'Motorista não informado', commissionCents:0, freights:[]};
+    group.commissionCents += freight.driverCommissionCents;
+    group.freights.push(freight);
+    driverGroups.set(key,group);
+  }
+  const commissionDrivers = [...driverGroups.values()].sort((a,b) => a.name.localeCompare(b.name,'pt-BR'));
   return {
     canDeleteFreights: false,
-    billing: {revenueCents: billingFreights.reduce((sum,f) => sum+f.freightAmountCents,0), freightCount: billingFreights.length,
-      commissionCents: commissionDrivers.reduce((sum,d) => sum+d.commissionCents,0), freights: billingFreights, drivers: commissionDrivers},
+    billing: {revenueCents: billingFreights.reduce((sum,f) => sum+f.freightAmountCents,0) + billingSales.reduce((sum,s) => sum+s.freightAmountCents,0), freightCount: billingFreights.length + billingSales.length, sales: billingSales,
+      commissionCents: billingFreights.reduce((sum,f) => sum+f.driverCommissionCents,0), freights: billingFreights, drivers: commissionDrivers},
     trips,
     tripResults: trips.filter(trip => !competency || trip.operationDate.slice(0, 7) === competency).map(trip => calculateTripResult(trip, allFreights)),
     parameters,

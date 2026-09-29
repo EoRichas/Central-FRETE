@@ -42,8 +42,8 @@ test('PDF histórico e novo preservam texto e paginam carga extensa com o timbra
   if(process.env.CENTRAL_QA_OUTPUT) await writeFile(`${process.env.CENTRAL_QA_OUTPUT}/os-cliente-extensa.pdf`,extended);
  });
 
-test('OS usa telefone do emissor no rodapé em todas as páginas',async()=>{
- const snapshot:ServiceOrderSnapshot={...legacy,schemaVersion:3,layoutVersion:'central-express-client-20260928',saleChannel:'FROTA',issuer:{...legacy.issuer,contact:'11988887766',contactSource:'USER'}};
+test('OS usa telefone da vendedora no rodapé em todas as páginas',async()=>{
+ const snapshot:ServiceOrderSnapshot={...legacy,schemaVersion:3,layoutVersion:'central-express-client-20260928',saleChannel:'FROTA',issuer:{...legacy.issuer,contact:'11988887766',contactSource:'SELLER'}};
  const bytes=await renderServiceOrderPdf({orderId:'phone-demo',version:1,createdAt:'2026-09-28T18:00:00Z',snapshot});
  assert.equal((await PDFDocument.load(bytes)).getPageCount(),1);
  if(process.env.CENTRAL_QA_OUTPUT) {await mkdir(process.env.CENTRAL_QA_OUTPUT,{recursive:true});await writeFile(`${process.env.CENTRAL_QA_OUTPUT}/os-telefone.pdf`,bytes);}
