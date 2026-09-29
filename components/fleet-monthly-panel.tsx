@@ -1,13 +1,22 @@
 "use client";
 import { useState } from 'react';
-import { useApi } from '@/components/use-api';
+import { PdfDownloadButton } from '@/components/pdf-download-button';
+import { apiMutation, useApi } from '@/components/use-api';
 import { LoadingState, ErrorState } from '@/components/ui';
 import { calculateMonthlyResult, type MonthlyReport } from '@/lib/domain/fleet-results';
 import { competencyLabel, formatMoney, formatDate } from '@/lib/format';
 
 export function FleetMonthlyPanel({ competency, onCompetencyChange }: { competency: string; onCompetencyChange: (value: string) => void }) {
+  const [classifying,setClassifying] = useState<string|null>(null);
+  const [mutationError,setMutationError] = useState('');
   const [selectedVersion, setSelectedVersion] = useState("live");
   const api = useApi<MonthlyReport>(`/api/fleet/monthly?competency=${competency}`);
+  async function classify(id:string){
+    if(!window.confirm('Confirmar que este lançamento pertence integralmente à Frota? Ele passará a compor a apuração atual.'))return;
+    setClassifying(id);setMutationError('');
+    try{await apiMutation('/api/fleet/monthly',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'CLASSIFY_ENTRY',id,competency,confirmed:true})});api.refresh();}
+    catch(error){setMutationError(error instanceof Error?error.message:'Não foi possível classificar.');}finally{setClassifying(null);}
+  }
   if (api.loading) return <LoadingState label="Apurando o mês…" />;
   if (api.error) return <ErrorState message={api.error} retry={api.refresh} />;
   if (!api.data) return null;
@@ -25,9 +34,11 @@ export function FleetMonthlyPanel({ competency, onCompetencyChange }: { competen
         <option value="live">Apuração atual{closed ? " (consulta)" : ""}</option>
         {api.data.history.map(entry => <option key={entry.id} value={entry.id}>Fechado em {new Date(entry.closedAt).toLocaleString("pt-BR", {timeZone: "America/Sao_Paulo"})}{entry.reopenedAt ? " · Reaberto" : " · Vigente"}</option>)}
       </select></label>
+      <PdfDownloadButton url={`/api/fleet/monthly/pdf?competency=${competency}${selectedClosing ? `&closingId=${encodeURIComponent(selectedClosing.id)}` : ''}`} filename={`Fechamento-Frota-${competency}.pdf`} />
     </section>
+    {mutationError && <p role="alert" className="form-error">{mutationError}</p>}
     <section className="panel table-panel">
-    <header className="fleet-panel-header"><div><h2>Composição do resultado</h2><p>{competencyLabel(competency)} · {selectedClosing ? "Fechamento preservado" : "Apuração atual"} por faturamento; custos históricos compartilhados pela data da viagem.</p>
+    <header className="fleet-panel-header"><div><h2>Composição do resultado</h2><p>{competencyLabel(competency)} · {selectedClosing ? "Fechamento preservado" : "Apuração atual"} somente Frota, por faturamento; custos históricos compartilhados pela data da viagem.</p>
       {selectedClosing && <p>Fechado por {selectedClosing.closedByName} em {new Date(selectedClosing.closedAt).toLocaleString("pt-BR", {timeZone: "America/Sao_Paulo"})}.{selectedClosing.reopenedAt && ` Reaberto: ${selectedClosing.reopenReason || "Motivo não informado"}.`}</p>}
       {closed && !selectedClosing && <p>Existe um fechamento salvo. Esta consulta mostra os dados atuais; selecione o fechamento para conferir os valores preservados.</p>}
       {!api.data.history.length && <p>Não há fechamento salvo para este mês.</p>}
@@ -38,7 +49,7 @@ export function FleetMonthlyPanel({ competency, onCompetencyChange }: { competen
       {source.unbilledCount > 0 && <p role="status">{source.unbilledCount} frete(s) sem data de faturamento. {source.dateBasis ? "Incluídos provisoriamente pelo mês da coleta; corrija antes de fechar." : "Não incluídos neste fechamento antigo."}</p>}
     </div></header>
     <div className="responsive-table"><table><thead><tr><th>Composição</th><th>Valor</th></tr></thead><tbody>
-      {([['Fretes da Frota',totals.fleetRevenueCents],['Vendas Frota sem vínculo operacional',totals.fleetSalesRevenueCents],['Demais vendas sem vínculo operacional',totals.salesRevenueCents-totals.fleetSalesRevenueCents],['Outras receitas',totals.otherRevenueCents],['Faturamento consolidado',totals.revenueCents],['Custos e comissões de Vendas',-totals.salesCostCents],['Comissões dos motoristas',-totals.driverCommissionCents],['Demais despesas diretas dos fretes',-(totals.directCostCents-totals.driverCommissionCents)],['Combustível, pedágio e outros custos de viagem',-totals.transportCostCents],['Outros custos variáveis',-totals.otherVariableCents],['Custos fixos',-totals.fixedCostCents],['Resultado mensal',totals.resultCents]] as const).map(([label,value]) => <tr key={label}><td data-label="Composição">{label === "Resultado mensal" ? <strong>{label}</strong> : label}</td><td data-label="Valor">{label === "Resultado mensal" ? <strong>{formatMoney(value)}</strong> : formatMoney(value)}</td></tr>)}
+      {([['Fretes da Frota',totals.fleetRevenueCents],['Vendas Frota sem vínculo operacional',totals.fleetSalesRevenueCents],['Outras receitas',totals.otherRevenueCents],['Faturamento da Frota',totals.revenueCents],['Custos e comissões das vendas Frota',-totals.salesCostCents],['Comissões dos motoristas',-totals.driverCommissionCents],['Demais despesas diretas dos fretes',-(totals.directCostCents-totals.driverCommissionCents)],['Combustível, pedágio e outros custos de viagem',-totals.transportCostCents],['Outros custos variáveis',-totals.otherVariableCents],['Custos fixos',-totals.fixedCostCents],['Resultado mensal',totals.resultCents]] as const).map(([label,value]) => <tr key={label}><td data-label="Composição">{label === "Resultado mensal" ? <strong>{label}</strong> : label}</td><td data-label="Valor">{label === "Resultado mensal" ? <strong>{formatMoney(value)}</strong> : formatMoney(value)}</td></tr>)}
     </tbody></table></div>
   </section>
   <section className="panel table-panel">
@@ -49,6 +60,11 @@ export function FleetMonthlyPanel({ competency, onCompetencyChange }: { competen
       {!source.freights.length && !source.sales?.length && <tr><td colSpan={6}>Nenhum frete ou venda nesta competência.</td></tr>}
     </tbody></table></div>
   </section>
+  {api.data.unassignedEntries.length > 0 && <section className="panel table-panel">
+    <header className="fleet-panel-header"><div><h2>Lançamentos antigos sem canal</h2><p>Não entram nos totais. Inclua somente valores que pertencem integralmente à Frota.</p></div></header>
+    <div className="responsive-table"><table><thead><tr><th>Descrição</th><th>Valor</th><th>Ação</th></tr></thead><tbody>{api.data.unassignedEntries.map(e=><tr key={e.id}><td>{e.description}</td><td>{formatMoney(e.amountCents)}</td><td>{api.data!.canManage && !closed ? <button className="text-button" disabled={Boolean(classifying)} onClick={()=>classify(e.id)}>{classifying===e.id?'Incluindo…':'Incluir na Frota'}</button> : 'Fechamento salvo: reabra antes de incluir'}</td></tr>)}</tbody></table></div>
+  </section>}
+  {api.data.legacyClosings.length > 0 && <p>{api.data.legacyClosings.length} fechamento(s) anterior(es) com escopo geral ou não identificado estão preservados e não compõem os totais da Frota.</p>}
   {api.data.vehicleHistory.length > 0 && <section className="panel table-panel">
     <header className="fleet-panel-header"><div><h2>Histórico mensal dos veículos</h2><p>Valores já cadastrados para {competencyLabel(competency)}. São referências de custo por quilômetro e não são descontados novamente do resultado acima.</p></div></header>
     <div className="responsive-table"><table><thead><tr><th>Veículo</th><th>Quilometragem</th><th>Custo registrado</th><th>Custo por km</th></tr></thead><tbody>

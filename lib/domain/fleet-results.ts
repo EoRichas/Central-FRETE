@@ -27,12 +27,13 @@ export type MonthlyEntry = {
   id: string; kind: MonthlyEntryKind; description: string; amountCents: number;
 };
 export type MonthlySource = {
+  scope?: 'FROTA';
   dateBasis?: 'BILLING_OR_PICKUP';
   sales?: {id:string; saleNumber?:string; saleChannel?:'FROTA'|'CEGONHA'; client?:string|null; date?:string; revenueCents:number; costCents:number; costsPending:boolean}[];
   competency: string;
-  freights: { id: string; saleNumber?:string; date?:string; driverCommissionCents?:number; client: string; revenueCents: number; directCostCents: number;
+  freights: { id: string; saleNumber?:string; date?:string; driverCommissionCents?:number; driverId?:string|null; driverName?:string; vehiclePlate?:string; fuelCostCents?:number; tollCostCents?:number; client: string; revenueCents: number; directCostCents: number;
     standaloneCostCents: number; fuelPending: boolean }[];
-  trips: { id: string; name: string; costCents: number }[];
+  trips: { id: string; name: string; date?:string; costCents: number }[];
   entries: MonthlyEntry[];
   unbilledCount: number;
 };
@@ -64,6 +65,8 @@ export type MonthlyClosing = {
   closedByName: string; reopenedAt: string | null; reopenReason: string | null;
 };
 export type MonthlyReport = {
+  unassignedEntries: MonthlyEntry[];
+  legacyClosings: {id:string; closedAt:string}[];
   current: MonthlySource; history: MonthlyClosing[]; canManage: boolean;
   periods: {competency: string; closed: boolean; hasVehicleHistory: boolean}[];
   vehicleHistory: {id: string; vehiclePlate: string; competency: string; distanceMeters: number; monthlyCostCents: number}[];
