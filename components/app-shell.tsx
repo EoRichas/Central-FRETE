@@ -1,5 +1,7 @@
 "use client";
 
+import { CurrentUserContext } from "@/components/current-user-context";
+import { fetchSession } from "@/lib/client/session-request";
 import { roleCan } from "@/lib/domain/permissions";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -84,12 +86,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const darkMode = useSyncExternalStore(subscribeTheme, themeSnapshot, serverThemeSnapshot);
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [userLoaded, setUserLoaded] = useState(false);
+  const [sessionRevision, setSessionRevision] = useState(0);
 
   useEffect(() => {
     let stopped = false;
     async function refresh() {
       try {
-        const response = await fetch("/api/me", {cache: "no-store"});
+        const response = await fetchSession();
         if (response.status === 401 || response.status === 403) { window.location.assign(`/login?return_to=${encodeURIComponent(pathname)}`); return; }
         if (!response.ok) throw new Error("Sessão indisponível");
         const payload = await response.json();
@@ -100,7 +103,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     const timer = setInterval(refresh, 30000);
     window.addEventListener("focus", refresh);
     return () => { stopped = true; clearInterval(timer); window.removeEventListener("focus", refresh); };
-  }, [pathname]);
+  }, [pathname, sessionRevision]);
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -201,7 +204,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <h2>Seu perfil não permite abrir esta tela.</h2>
               <p>Este perfil possui acesso somente às áreas autorizadas pelo administrador.</p>
             </section>
-          ) : children}
+          ) : <CurrentUserContext.Provider value={{user, refresh:()=>setSessionRevision(n=>n+1)}}>{children}</CurrentUserContext.Provider>}
         </main>
       </div>
     </div>
