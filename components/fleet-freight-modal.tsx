@@ -1,4 +1,6 @@
 "use client";
+import { ClientAutocomplete } from "@/components/client-autocomplete";
+import type { SelectedClient } from "@/lib/domain/client-search";
 import { useEffect, useRef, useState } from "react";
 import { effectiveFleetDistance } from "@/lib/domain/fleet-distance";
 import { CargoVehiclesEditor } from "@/components/cargo-vehicles-editor";
@@ -14,7 +16,7 @@ import {
   FLEET_PRIORITIES,
   FLEET_PRIORITY_LABELS,
   calculateFleetFreightPreview,
-  type FleetData,
+  type FleetFreightFormData,
   type FleetFreight,
 } from "@/lib/domain/fleet";
 import {
@@ -42,12 +44,13 @@ export function FreightModal({
   onDelete,
 }: {
   freight: FleetFreight | null;
-  fleet: FleetData;
+  fleet: FleetFreightFormData;
   onClose: () => void;
   onSaved: (message: string, id?: string, competency?: string) => void;
   onDelete: (freight: FleetFreight) => Promise<void>;
 }) {
   const editing = Boolean(freight);
+  const [client, setClient] = useState<SelectedClient | null>(freight ? {id: freight.clientId ?? null, legalName: freight.clientName} : null);
   const financialOnly =
     fleet.canEditFreightFinancials && !fleet.canEditFreights;
   const firstVehicle = fleet.vehicles.find((vehicle) => vehicle.active);
@@ -319,9 +322,8 @@ export function FreightModal({
           "Valor pago combustível",
           2,
         ),
-        clientName: financialOnly
-          ? freight!.clientName
-          : form.get("clientName"),
+        clientId: financialOnly ? freight!.clientId ?? null : client?.id ?? null,
+        clientName: financialOnly ? freight!.clientName : client?.legalName ?? "",
         cargoVehicles,
         fuelLitersMilli: fuelInputToInteger(
           fuelLiters,
@@ -447,13 +449,7 @@ export function FreightModal({
                   ))}
                 </select>
               </Field>
-              <Field label="Cliente">
-                <input
-                  name="clientName"
-                  defaultValue={freight?.clientName ?? ""}
-                  required
-                />
-              </Field>
+              <ClientAutocomplete channel="FROTA" value={client} onChange={setClient} required disabled={financialOnly} />
             </div>
             <CargoVehiclesEditor
               vehicles={cargoVehicles}

@@ -1,4 +1,5 @@
 "use client";
+import { SellerFleetScreen } from "@/components/seller-fleet-screen";
 import { useTransientMessage } from "@/components/use-transient-message";
 import Link from "next/link";
 import { roleCan } from "@/lib/domain/permissions";
@@ -45,7 +46,7 @@ export function FleetScreen() {
   if (me.loading) return <LoadingState label="Carregando acesso à Frota…" />;
   if (me.error) return <ErrorState message={me.error} retry={me.refresh} />;
   if (!me.data) return null;
-  if (roleCan(me.data.user.role, "FLEET_SALES_ONLY")) return <section className="panel detail-card"><h2>Vendas Frota</h2><p>As vendas estão disponíveis na área comercial.</p><Link className="button secondary" href="/vendas?canal=FROTA">Abrir vendas</Link></section>;
+  if (roleCan(me.data.user.role, "FLEET_SALES_ONLY")) return <SellerFleetScreen />;
   return <FleetOperationsScreen />;
 }
 

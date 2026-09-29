@@ -28,6 +28,7 @@ export async function GET(request: Request) {
       "GERENCIA",
       "FINANCEIRO",
       "OPERACIONAL",
+      "VENDEDOR",
     ]);
     return Response.json({
       address: await addressForCep(
@@ -47,7 +48,7 @@ export async function GET(request: Request) {
 }
 export async function POST(request: Request) {
   try {
-    await authorize(request, ["ADMIN", "GERENCIA", "OPERACIONAL"]);
+    await authorize(request, ["ADMIN", "GERENCIA", "OPERACIONAL", "VENDEDOR"]);
     const data = asObject(await request.json());
     const [origin, destination] =
       data.originCep || data.destinationCep

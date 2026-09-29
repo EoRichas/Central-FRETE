@@ -8,7 +8,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import type {
-  ClientRecord,
   CostRecord,
   CurrentUser,
   SaleRecord,
@@ -24,6 +23,8 @@ import {
   OPERATIONAL_STATUS_OPTIONS,
 } from "@/lib/domain/operations";
 import { formatMoney, moneyInputToCents } from "@/lib/format";
+import { ClientAutocomplete } from "@/components/client-autocomplete";
+import type { SelectedClient } from "@/lib/domain/client-search";
 import { ClientFormModal } from "@/components/client-form-modal";
 import { Icons } from "@/components/icons";
 import { ErrorState, Field, LoadingState, PageHeader } from "@/components/ui";
@@ -108,14 +109,13 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
   const editing = Boolean(initialSale);
   const [cargoVehicles, setCargoVehicles] = useState(() => cargoVehiclesOrLegacy(initialSale?.cargoVehicles, initialSale?.vehicle ?? null, initialSale?.plate ?? null));
   const [fleetFreightId, setFleetFreightId] = useState(initialSale?.fleetFreightId ?? '');
-  const clientsApi = useApi<{ clients: ClientRecord[] }>(`/api/clients?saleChannel=${saleChannel}`);
   const meApi = useApi<{ user: CurrentUser }>("/api/me");
   const sellersApi = useApi<{sellers: {id: string; name: string}[]}>(meApi.data?.user.role === "OPERACIONAL" ? "/api/sales/sellers" : null);
   const [sellerId, setSellerId] = useState("");
   const canCreateClient = Boolean(meApi.data && roleCan(meApi.data.user.role, "MANAGE_CLIENTS"));
   const fleetOptions = useApi<{freights: {id:string;label:string}[]}>(saleChannel === "FROTA" && meApi.data?.user.role === "ADMIN" ? "/api/sales/fleet-options" : null);
   const [sellerName, setSellerName] = useState(initialSale?.sellerName ?? "");
-  const [clientId, setClientId] = useState(initialSale?.clientId ?? "");
+  const [client, setClient] = useState<SelectedClient | null>(initialSale?.clientId ? { id: initialSale.clientId, legalName: initialSale.clientName ?? "Cliente anterior" } : null);
   const [pickupAddress, setPickupAddress] = useState(
     initialSale?.pickupAddressSnapshot ?? "",
   );
@@ -142,19 +142,10 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
       ? (initialSale.commissionBasisPoints / 100).toFixed(2).replace(".", ",")
       : "7",
   );
-  const [clientSearch, setClientSearch] = useState("");
   const [clientModal, setClientModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const filteredClients = (clientsApi.data?.clients ?? []).filter((client) =>
-    !clientSearch.trim() ||
-    [client.legalName, client.tradeName, client.cpfCnpj]
-      .filter(Boolean)
-      .some((value) =>
-        value!.toLocaleUpperCase("pt-BR").includes(clientSearch.trim().toLocaleUpperCase("pt-BR")),
-      ),
-  );
 
   const sellerNameValue =
     !editing && meApi.data?.user.role === "VENDEDOR"
@@ -232,7 +223,7 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
         saleDate: form.get("saleDate"),
         billingDate: saleChannel === "FROTA" ? form.get("billingDate") || null : initialSale?.billingDate ?? null,
         sellerName: meApi.data?.user.role === "OPERACIONAL" ? sellersApi.data?.sellers.find(s => s.id === sellerId)?.name : form.get("sellerName"),
-        clientId: clientId || null,
+        clientId: client?.id ?? null,
         initialProviderName: form.get("initialProviderName"),
         origin: form.get("origin"),
         originLocationType: form.get("originLocationType") || null,
@@ -322,22 +313,7 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
         <section className="form-section">
           <header><span>01</span><div><h2>Cliente</h2><p>Busque um cliente já cadastrado ou faça um cadastro rápido.</p></div></header>
           <div className="form-grid two">
-            <div className="form-stack">
-              <Field label="Buscar cliente cadastrado">
-                <input
-                  value={clientSearch}
-                  onChange={(event) => setClientSearch(event.target.value)}
-                  placeholder="Nome, razão social ou CPF/CNPJ"
-                />
-              </Field>
-              <Field label="Cliente">
-                <select value={clientId} onChange={(event) => setClientId(event.target.value)}>
-                  <option value="">Cliente não informado</option>
-                  {initialSale?.clientId && !filteredClients.some(c=>c.id===initialSale.clientId) && <option value={initialSale.clientId}>{initialSale.clientName} (cadastro anterior)</option>}
-                  {filteredClients.map((client) => <option key={client.id} value={client.id}>{client.legalName}</option>)}
-                </select>
-              </Field>
-            </div>
+            <ClientAutocomplete channel={saleChannel} value={client} onChange={setClient} />
             {canCreateClient && <div className="field-action"><span>Cadastro rápido</span><button type="button" className="button secondary" onClick={() => setClientModal(true)}><Icons.plus /> Novo cliente</button></div>}
           </div>
         </section>
@@ -436,7 +412,7 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
           <button className="button primary" disabled={saving || deleting}>{saving ? "Salvando venda…" : editing ? "Salvar alterações" : "Salvar venda"}</button>
         </div>
       </form>
-      <ClientFormModal defaultChannel={saleChannel} open={clientModal} onClose={() => setClientModal(false)} onCreated={(id) => { setClientId(id); clientsApi.refresh(); }} />
+      <ClientFormModal defaultChannel={saleChannel} open={clientModal} onClose={() => setClientModal(false)} onCreated={(id, legalName, channel, active) => { if (active && (channel === "AMBOS" || channel === saleChannel)) setClient({id, legalName}); }} />
     </>
   );
 }
