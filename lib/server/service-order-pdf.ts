@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
+import { PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
 import { renderServiceOrderPdf as renderLegacyOrder } from './service-order-pdf-legacy';
 import fontkit from '@pdf-lib/fontkit';
 import type { ServiceOrderVersion } from '@/lib/domain/service-order';
@@ -23,7 +23,6 @@ export async function renderServiceOrderPdf(order: ServiceOrderVersion): Promise
   ]);
   const normal = await doc.embedFont(regularBytes,{subset:true});
   const bold = await doc.embedFont(boldBytes,{subset:true});
-  const stationeryFont = await doc.embedFont(StandardFonts.Helvetica);
   const [background] = await doc.embedPdf(backgroundBytes, [0]);
   const s = order.snapshot;
   doc.setTitle(`Ordem de Serviço ${s.saleNumber} | Central Express`);
@@ -62,18 +61,29 @@ export async function renderServiceOrderPdf(order: ServiceOrderVersion): Promise
     const scale=Math.min(SERVICE_ORDER_LAYOUT.width/background.width,SERVICE_ORDER_LAYOUT.height/background.height);
     const fit=background.scale(scale);
     page.drawPage(background,{x:(SERVICE_ORDER_LAYOUT.width-fit.width)/2,y:(SERVICE_ORDER_LAYOUT.height-fit.height)/2,...fit});
-    if (s.issuer.contactSource) {
-      // The original stationery contains a rasterized fixed phone. Mask only
-      // that line and render the contact saved in this document's snapshot.
-      const currentContact = s.issuer.contactSource !== 'USER';
-      // Match the off-white stationery and the neighbouring footer's typography.
-      page.drawRectangle({x:76,y:147,width:160,height:16,color:currentContact ? rgb(252/255,252/255,252/255) : rgb(1,1,1)});
-      const digits = s.issuer.contact || '';
-      const local = digits.startsWith('55') && digits.length > 11 ? digits.slice(2) : digits;
-      const formatted = local.length === 11 ? `(${local.slice(0,2)}) ${local.slice(2,7)}-${local.slice(7)}`
-        : local.length === 10 ? `(${local.slice(0,2)}) ${local.slice(2,6)}-${local.slice(6)}` : digits;
-      text(formatted || 'Telefone não informado',78,152,currentContact ? 9.5 : 9,currentContact ? stationeryFont : normal,currentContact ? rgb(.035,.10,.29) : blue);
-    }
+    // Replace the raster text as one typographic system. Keep the original
+    // icons, red rule and stationery; no text is drawn over the original glyphs.
+    const paper = rgb(252/255,252/255,252/255);
+    const footerInk = rgb(.035,.10,.29);
+    const footerX = 78;
+    const footerSize = 9.5;
+    for (const band of [
+      {y:169,height:34,width:258}, // two address lines
+      {y:144,height:21,width:160},
+      {y:119,height:21,width:284},
+      {y:94,height:24,width:267},
+    ]) page.drawRectangle({x:76,...band,color:paper});
+    const footerText = (value:string, baseline:number) => text(value,footerX,baseline,footerSize,normal,footerInk);
+    footerText('ESTR. GALVÃO BUENO, 8205 - JARDIM DA REPRESA,',193);
+    footerText('SÃO BERNARDO DO CAMPO - SP CEP: 09842-080',180);
+    // Old snapshots without a contact source used the stationery's fixed phone.
+    const digits = s.issuer.contactSource ? s.issuer.contact || '' : s.issuer.contact || '11933887746';
+    const local = digits.startsWith('55') && digits.length > 11 ? digits.slice(2) : digits;
+    const formatted = local.length === 11 ? `(${local.slice(0,2)}) ${local.slice(2,7)}-${local.slice(7)}`
+      : local.length === 10 ? `(${local.slice(0,2)}) ${local.slice(2,6)}-${local.slice(6)}` : digits;
+    footerText(formatted || 'Telefone não informado',152);
+    footerText('edsonrodrigues@centralexpresstransportes.com.br',128);
+    footerText('https://www.centralexpresstransportes.com.br',105);
     centered('ORDEM DE SERVIÇO',640,17,bold,blue);
     centered(`Venda ${s.saleNumber}  •  ${date(s.saleDate)}`,619,10,normal,muted);
     page.drawLine({start:{x:left,y:606},end:{x:left+width,y:606},thickness:.8,color:line});
@@ -142,7 +152,6 @@ export async function renderServiceOrderPdf(order: ServiceOrderVersion): Promise
   const pages=doc.getPages();
   for(let i=0;i<pages.length;i++) {
     page=pages[i];
-    text(`Emitida em ${date(order.createdAt)} • OS ${s.saleNumber}`,left,209,8,normal,muted);
     const pagination=`${i+1} / ${pages.length}`;
     text(pagination,left+width-normal.widthOfTextAtSize(pagination,8),209,8,normal,muted);
   }
