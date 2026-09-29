@@ -1,3 +1,4 @@
+import { parseRegistryAddress, registryAddressText } from "@/lib/server/registry-validation";
 import { authorize } from "@/lib/server/auth";
 import { ApiError, getD1, jsonError, queryFirst } from "@/lib/server/d1";
 import { asObject, digits, lower, requiredUpper } from "@/lib/server/validation";
@@ -9,6 +10,7 @@ type ProviderRow = {
   name: string;
   referenceName: string | null;
   yardAddress: string | null;
+  addressDetails: import("@/lib/domain/registry").RegistryAddress | null;
   document: string | null;
   phone: string | null;
   email: string | null;
@@ -31,14 +33,16 @@ export async function PATCH(request: Request, context: RouteContext) {
     const { id } = await context.params;
     const previous = await queryFirst<ProviderRow>(
       `select id, name, reference_name as referenceName,
-        yard_address as yardAddress, document, phone, email, active
+        yard_address as yardAddress, address_details as addressDetails, document, phone, email, active
        from providers where id = ?`,
       [id],
     );
     if (!previous) throw new ApiError(404, "Prestador não encontrado.");
 
     const payload = asObject(await request.json());
+    const addressDetails = parseRegistryAddress(payload.addressDetails === undefined ? previous.addressDetails : payload.addressDetails);
     const data = {
+      addressDetails,
       name: requiredUpper(
         payload.companyName ?? payload.name,
         "Empresa do prestador",
@@ -47,7 +51,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         payload.referenceName,
         "Nome de referência",
       ),
-      yardAddress: requiredUpper(payload.yardAddress, "Endereço do pátio"),
+      yardAddress: registryAddressText(addressDetails,payload.yardAddress ?? previous.yardAddress),
       document: digits(payload.document),
       phone: digits(payload.phone),
       email: lower(payload.email),
@@ -58,7 +62,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       db
         .prepare(
           `update providers set name = ?, reference_name = ?, yard_address = ?,
-            document = ?, phone = ?, email = ?, active = ?,
+            document = ?, phone = ?, email = ?, active = ?, address_details = ?::text::jsonb,
             updated_at = to_char(timezone('UTC', now()), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
            where id = ?`,
         )
@@ -69,7 +73,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           data.document,
           data.phone,
           data.email,
-          data.active ? 1 : 0,
+          data.active ? 1 : 0, data.addressDetails ? JSON.stringify(data.addressDetails) : null,
           id,
         ),
       db
@@ -107,7 +111,7 @@ export async function DELETE(request: Request, context: RouteContext) {
     const { id } = await context.params;
     const previous = await queryFirst<ProviderRow>(
       `select id, name, reference_name as referenceName,
-        yard_address as yardAddress, document, phone, email, active
+        yard_address as yardAddress, address_details as addressDetails, document, phone, email, active
        from providers where id = ?`,
       [id],
     );

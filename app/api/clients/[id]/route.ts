@@ -1,8 +1,10 @@
+import { CLIENT_CHANNELS, type ClientChannel } from "@/lib/domain/registry";
+import { booleanValue } from "@/lib/server/fleet-validation";
 import type { ClientAddressRecord, ClientRecord } from "@/lib/contracts";
 import { authorize } from "@/lib/server/auth";
 import { ApiError, getD1, jsonError, queryAll, queryFirst } from "@/lib/server/d1";
 import { listSales } from "@/lib/server/repository";
-import { asObject, upper } from "@/lib/server/validation";
+import { asObject, upper, enumValue } from "@/lib/server/validation";
 
 type RouteContext = { params: Promise<{ id: string }> };
 type ContactRow = Omit<ClientRecord["contacts"][number], "isPrimary"> & {
@@ -33,7 +35,7 @@ export async function GET(request: Request, context: RouteContext) {
     const client = await queryFirst<Omit<ClientRecord, "contacts" | "addresses" | "active"> & { active: number }>(
       `select id, type, legal_name as legalName, trade_name as tradeName,
         cpf_cnpj as cpfCnpj, state_registration as stateRegistration,
-        notes, active from clients where id = ?`,
+        notes, active, sale_channel as saleChannel from clients where id = ?`,
       [id],
     );
     if (!client) throw new ApiError(404, "Cliente não encontrado.");
@@ -160,22 +162,23 @@ export async function PATCH(request: Request, context: RouteContext) {
   try {
     const user = await authorize(request, ["ADMIN"]);
     const { id } = await context.params;
-    const current = await queryFirst<{ legalName: string; notes: string | null; active: number }>(
-      `select legal_name as legalName, notes, active from clients where id = ?`,
+    const current = await queryFirst<{ legalName: string; notes: string | null; active: number; saleChannel:ClientChannel }>(
+      `select legal_name as legalName, notes, active, sale_channel as saleChannel from clients where id = ?`,
       [id],
     );
     if (!current) throw new ApiError(404, "Cliente não encontrado.");
     const payload = asObject(await request.json());
-    const notes = upper(payload.notes);
-    const active = payload.active === false ? 0 : 1;
+    const notes = payload.notes === undefined ? current.notes : upper(payload.notes);
+    const active = payload.active === undefined ? current.active : booleanValue(payload.active,"Situação") ? 1 : 0;
+    const saleChannel = enumValue(payload.saleChannel ?? current.saleChannel,"Canal",CLIENT_CHANNELS);
     const db = await getD1();
     await db.batch([
       db
         .prepare(
-          `update clients set notes = ?, active = ?,
+          `update clients set notes = ?, active = ?, sale_channel = ?,
             updated_at = to_char(timezone('UTC', now()), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') where id = ?`,
         )
-        .bind(notes, active, id),
+        .bind(notes, active, saleChannel, id),
       db
         .prepare(
           `insert into audit_logs (
@@ -189,7 +192,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           user.id,
           user.email,
           JSON.stringify(current),
-          JSON.stringify({ notes, active }),
+          JSON.stringify({ notes, active, saleChannel }),
           request.headers.get("x-request-id") ?? crypto.randomUUID(),
         ),
     ]);

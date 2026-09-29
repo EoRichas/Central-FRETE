@@ -37,6 +37,8 @@ type VehicleRow = {
 };
 
 type DriverRow = {
+  addressDetails: import("@/lib/domain/registry").RegistryAddress | null;
+  email: string | null; whatsapp: string | null; notes: string | null;
   cpf: string | null;
   address: string | null;
   phone: string | null;
@@ -132,7 +134,7 @@ export async function loadFleetData(
          order by active desc, plate`,
       ),
       queryAll<DriverRow>(
-        `select id, name, active, cpf, address, phone from fleet_drivers
+        `select id, name, active, cpf, address, phone, address_details as addressDetails, email, whatsapp, notes from fleet_drivers
          order by active desc, name`,
       ),
       queryAll<VehicleCostRow>(
@@ -167,11 +169,11 @@ export async function loadFleetData(
       // Commercial Frota sales without an operation are real revenue too.
       // Linked sales are represented by their freight, once, on its billing date.
       freightOnly ? Promise.resolve([]) : queryAll<FleetBillingData['sales'][number]>(
-        `select s.id,s.sale_number as saleNumber,s.sale_date as saleDate,
+        `select s.id,s.sale_number as saleNumber,s.sale_date as saleDate,s.billing_date as billingDate,
           c.legal_name as clientName,s.freight_amount_cents as freightAmountCents
          from freight_sales s left join clients c on c.id=s.client_id
-         where s.sale_channel='FROTA' and s.fleet_freight_id is null
-         ${competency ? 'and s.competency=?' : ''}
+         where s.sale_channel='FROTA' and s.fleet_freight_id is null and s.billing_date is not null
+         ${competency ? 'and left(s.billing_date,7)=?' : ''}
          order by s.sale_date desc,s.id`, competency ? [competency] : [],
       ),
     ]);
@@ -238,7 +240,7 @@ export async function loadFleetData(
   });
 
   const freights = allFreights.filter(row => !competency || row.pickupDate.slice(0, 7) === competency);
-  const billingFreights = allFreights.filter(row => !competency || (row.billingDate || row.pickupDate).slice(0,7) === competency);
+  const billingFreights = allFreights.filter(row => (Boolean(row.billingDate) || row.operationalStatus === 'FATURADO') && (!competency || (row.billingDate || row.pickupDate).slice(0,7) === competency));
   const driverGroups = new Map<string, FleetBillingData['drivers'][number]>();
   for (const freight of billingFreights) {
     // Preserve historical commissions even after the driver's registration is removed.

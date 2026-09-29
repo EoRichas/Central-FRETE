@@ -101,6 +101,7 @@ export type SaleRecord = {
   id: string;
   saleNumber: string;
   saleDate: string;
+  billingDate?: string | null;
   competency: string;
   sellerId: string | null;
   sellerName: string;
@@ -180,6 +181,7 @@ export type ClientAddressRecord = {
 };
 
 export type ProviderRecord = {
+  addressDetails?: import("@/lib/domain/registry").RegistryAddress | null;
   id: string;
   name: string;
   referenceName: string | null;
@@ -191,6 +193,7 @@ export type ProviderRecord = {
 };
 
 export type ClientRecord = {
+  saleChannel: import("@/lib/domain/registry").ClientChannel;
   id: string;
   type: "PF" | "PJ";
   legalName: string;

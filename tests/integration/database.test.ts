@@ -33,7 +33,7 @@ mock.module('../../lib/server/d1.ts', { namedExports: {
 
 before(async () => {
  await pg.exec('CREATE ROLE anon; CREATE ROLE authenticated;');
- for (let pass = 0; pass < 2; pass++) for (const file of ['001_central_frete_postgres.sql', '002_fleet.sql', '003_fleet_billing.sql', '004_operational_role.sql', '005_detach_driver_vehicle.sql', '006_fleet_vehicle_cost_average_flag.sql', '008_fleet_results.sql', '009_direct_paid_operation_costs.sql', '010_fleet_cargo_sales_orders.sql', '011_sale_origin_location_type.sql', '../supabase/migrations/20260923220518_fleet_operation_integrity.sql', '012_sales_channels_global_numbering_costs.sql', '013_fleet_document_costs.sql', '015_fleet_numbers_and_orders.sql', '../supabase/migrations/20260928224007_user_phone_vehicle_deletion.sql', '016_fleet_monthly_scope.sql']) await pg.exec(await readFile(new URL(`../../database/${file}`, import.meta.url), 'utf8'));
+ for (let pass = 0; pass < 2; pass++) for (const file of ['001_central_frete_postgres.sql', '002_fleet.sql', '003_fleet_billing.sql', '004_operational_role.sql', '005_detach_driver_vehicle.sql', '006_fleet_vehicle_cost_average_flag.sql', '008_fleet_results.sql', '009_direct_paid_operation_costs.sql', '010_fleet_cargo_sales_orders.sql', '011_sale_origin_location_type.sql', '../supabase/migrations/20260923220518_fleet_operation_integrity.sql', '012_sales_channels_global_numbering_costs.sql', '013_fleet_document_costs.sql', '015_fleet_numbers_and_orders.sql', '../supabase/migrations/20260928224007_user_phone_vehicle_deletion.sql', '016_fleet_monthly_scope.sql', '../supabase/migrations/20260929161711_registry_channels_addresses.sql']) await pg.exec(await readFile(new URL(`../../database/${file}`, import.meta.url), 'utf8'));
  await pg.exec("INSERT INTO users(id,email,name,role) VALUES ('admin','admin@example.test','Admin','ADMIN'),('finance','finance@example.test','Finance','FINANCEIRO'),('seller','seller@example.test','Seller','VENDEDOR');");
  process.env.CENTRAL_FRETE_SESSION_SECRET = 'test-secret-never-use-in-production-1234';
 });
@@ -748,7 +748,7 @@ test('consulta de todos os meses preserva canal e permissões e identifica venda
  const fleet=await (await fleetApi.GET(await request('/api/fleet?period=all','finance'))).json();
  assert.equal(fleet.fleet.freights.find((f:{id:string})=>f.id===linkedFreight.id).linkedFleetSaleId,sale.id);
  assert.ok(fleet.fleet.freights.some((f:{linkedFleetSaleId:string|null})=>f.linkedFleetSaleId===null));
- assert.ok(fleet.fleet.billing.freights.some((f:{billingDate:string|null})=>!f.billingDate));
+ assert.ok(fleet.fleet.billing.freights.every((f:{billingDate:string|null;operationalStatus:string})=>f.billingDate||f.operationalStatus==='FATURADO'));
  assert.equal((await fleetApi.GET(await request('/api/fleet?period=all','seller'))).status,403);
  const csv=await exporter.GET(await request('/api/exports/sales.csv?period=all&saleChannel=FROTA','seller'));
  assert.equal(csv.status,200);assert.match(await csv.text(),/2020-02-01/);
@@ -948,7 +948,7 @@ test('apuração soma mais de 500 vendas e frota uma vez, mostra datas pendentes
  select 'monthly-sale-'||i,'2040-03-01','2040-03','TESTE','A','B','2040-03-30','SEM_PREVISAO',1000,1000,0,'admin' from generate_series(1,501) i;
  insert into freight_sales(id,sale_date,competency,seller_name,origin,destination,financial_due_date,operational_status,freight_amount_cents,commission_basis_points,costs_pending,sale_channel,fleet_freight_id,created_by)
  values('monthly-linked','2040-03-01','2040-03','TESTE','A','B','2040-03-30','SEM_PREVISAO',10000,0,0,'FROTA','month-fallback','admin');`);
- await pg.exec("update freight_sales set sale_channel='FROTA' where id like 'monthly-sale-%'");
+ await pg.exec("update freight_sales set sale_channel='FROTA',billing_date='2040-03-01' where id like 'monthly-sale-%'");
  const {loadMonthlyReport}=await import('../../lib/server/monthly-results.ts');
  const {calculateMonthlyResult}=await import('../../lib/domain/fleet-results.ts');
  const {loadFleetData}=await import('../../lib/server/fleet.ts');
@@ -957,7 +957,7 @@ test('apuração soma mais de 500 vendas e frota uma vez, mostra datas pendentes
  const totals=calculateMonthlyResult(report.current);
  assert.equal(report.current.sales!.length,501);assert.equal(report.current.unbilledCount,1);
  assert.equal(totals.revenueCents,511000);assert.equal(totals.variableCostCents,52100);assert.equal(totals.resultCents,458900);
- assert.equal((await loadFleetData(true,true,true,false,'2040-03')).billing.revenueCents,511000);
+ assert.equal((await loadFleetData(true,true,true,false,'2040-03')).billing.revenueCents,501000);
  const close=()=>request('/api/fleet/monthly','finance','POST',{competency:'2040-03',action:'CLOSE',reviewed:true});
  assert.equal((await api.POST(await close())).status,409);
  await pg.exec("update fleet_freights set billing_date='2040-03-02' where id='month-fallback'; update freight_sales set costs_pending=1 where id='monthly-sale-1';");
@@ -985,21 +985,22 @@ test('faturamento e fechamento incluem vendas Frota, fretes antigos e comissão 
  insert into freight_sales(id,sale_date,competency,seller_name,origin,destination,financial_due_date,operational_status,freight_amount_cents,commission_basis_points,costs_pending,sale_channel,fleet_freight_id,created_by)
  values('consolidated-linked','2041-01-01','2041-01','TESTE','A','B','2041-01-30','SEM_PREVISAO',10000,0,0,'FROTA','consolidated-freight','admin'),
  ('consolidated-cegonha','2041-02-01','2041-02','TESTE','A','B','2041-02-28','SEM_PREVISAO',5000,0,0,'CEGONHA',null,'admin');`);
+ await pg.exec("update freight_sales set billing_date='2041-02-01' where id like 'consolidated-sale-%'");
  const fleetApi=await import('../../app/api/fleet/route.ts');
  const monthlyApi=await import('../../app/api/fleet/monthly/route.ts');
  const {calculateMonthlyResult}=await import('../../lib/domain/fleet-results.ts');
  const response=await fleetApi.GET(await request('/api/fleet?competency=2041-02','finance'));
  assert.equal(response.status,200,await response.clone().text());
  const {fleet}=await response.json() as {fleet:import('../../lib/domain/fleet.ts').FleetData};
- assert.equal(fleet.billing.sales.length,501);assert.equal(fleet.billing.freightCount,503);
- assert.equal(fleet.billing.revenueCents,514000);assert.equal(fleet.billing.commissionCents,2700);
- assert.equal(fleet.billing.drivers.reduce((sum,d)=>sum+d.commissionCents,0),2700);
- assert.equal(fleet.billing.drivers.length,2);
+ assert.equal(fleet.billing.sales.length,501);assert.equal(fleet.billing.freightCount,502);
+ assert.equal(fleet.billing.revenueCents,511000);assert.equal(fleet.billing.commissionCents,2000);
+ assert.equal(fleet.billing.drivers.reduce((sum,d)=>sum+d.commissionCents,0),2000);
+ assert.equal(fleet.billing.drivers.length,1);
  assert.equal(fleet.billing.freights.find(f=>f.id==='consolidated-freight')!.driverCommissionCents,2000);
  const monthly=await (await monthlyApi.GET(await request('/api/fleet/monthly?competency=2041-02','finance'))).json() as import('../../lib/domain/fleet-results.ts').MonthlyReport;
  const totals=calculateMonthlyResult(monthly.current);
  assert.equal(totals.fleetSalesRevenueCents,501000);assert.equal(totals.fleetRevenueCents,13000);
- assert.equal(totals.fleetRevenueCents+totals.fleetSalesRevenueCents,fleet.billing.revenueCents);
+ assert.equal(totals.fleetRevenueCents+totals.fleetSalesRevenueCents-fleet.billing.revenueCents,3000); // apuração inclui o frete ainda não faturado
  assert.equal(totals.revenueCents,514000);assert.equal(totals.driverCommissionCents,2700);
  assert.equal(totals.variableCostCents,2700);assert.equal(monthly.current.unbilledCount,1);
  assert.ok(monthly.current.freights.every(f=>f.saleNumber && f.date));
@@ -1104,4 +1105,73 @@ test('fechamento e PDF exclusivos Frota classificam lançamentos, preservam hist
  assert.equal((await loadMonthlyReport('2043-01')).history.length,1);assert.equal((await loadMonthlyReport('2043-02')).legacyClosings.length,1);assert.equal((await loadMonthlyReport('2043-02')).history.length,0);
  assert.equal((await exporter.GET(await request('/api/fleet/monthly/pdf?competency=2043-02&closingId=archive-mixed','finance'))).status,404);
  assert.equal((await monthly.POST(await request('/api/fleet/monthly','finance','POST',{action:'CLOSE',competency:'2043-02',reviewed:true}))).status,200); // General archive does not block the fleet month.
+});
+
+test('faturamento aceita data ou status Faturado, não inclui recebimento isolado e segue o mês faturado',async()=>{
+ const {loadFleetData}=await import('../../lib/server/fleet.ts');
+ await pg.exec(`insert into fleet_freights(id,vehicle_plate,driver_name,client_name,origin,destination,pickup_date,billing_date,operational_status,freight_amount_cents,distance_meters,driver_commission_cents)
+ values('bill-explicit','TES1T23','MOTORISTA','CLIENTE','A','B','2043-01-01','2043-02-01','ENTREGUE',10000,1000,1000),
+ ('bill-status','TES1T23','MOTORISTA','CLIENTE','A','B','2043-01-01',null,'FATURADO',20000,1000,2000),
+ ('bill-pending','TES1T23','MOTORISTA','CLIENTE','A','B','2043-01-01',null,'ENTREGUE',30000,1000,3000);
+ update fleet_freights set payment_status='PAGO' where id='bill-pending';`);
+ const jan=await loadFleetData(true,true,true,false,'2043-01');
+ assert.deepEqual(jan.billing.freights.map(f=>f.id),['bill-status']);assert.equal(jan.billing.commissionCents,2000);
+ assert.equal(jan.freights.length,3); // operação preservada
+ const feb=await loadFleetData(true,true,true,false,'2043-02');assert.deepEqual(feb.billing.freights.map(f=>f.id),['bill-explicit']);
+ const sales=await import('../../app/api/sales/route.ts');const edit=await import('../../app/api/sales/[id]/route.ts');
+ const payload={...salePayload,saleChannel:'FROTA',saleDate:'2043-01-02',financialDueDate:'2043-03-01',paymentMethod:'FATURADO',billingDate:'2043-02-02'};
+ const created=await sales.POST(await request('/api/sales','seller','POST',payload));assert.equal(created.status,201,await created.clone().text());const {id}=await created.json();
+ assert.ok((await loadFleetData(true,true,true,false,'2043-02')).billing.sales.some(s=>s.id===id));
+ assert.ok(!(await loadFleetData(true,true,true,false,'2043-01')).billing.sales.some(s=>s.id===id));
+ const ctx={params:Promise.resolve({id})};
+ assert.equal((await edit.PATCH(await request('/api/sales/x','admin','PATCH',{...payload,billingDate:'2043-02-30'}),ctx)).status,400);
+ assert.equal((await edit.PATCH(await request('/api/sales/x','admin','PATCH',{...payload,billingDate:null}),ctx)).status,200);
+ assert.ok(!(await loadFleetData(true,true,true,false,'2043-02')).billing.sales.some(s=>s.id===id)); // método FATURADO não comprova faturamento
+});
+
+test('clientes Frota, Cegonha e Ambos filtram seletores e validam criação/edição sem perder vínculos históricos',async()=>{
+ const api=await import('../../app/api/clients/route.ts');const detail=await import('../../app/api/clients/[id]/route.ts');
+ const sales=await import('../../app/api/sales/route.ts');const edit=await import('../../app/api/sales/[id]/route.ts');
+ const ids:Record<string,string>={};
+ for(const channel of ['FROTA','CEGONHA','AMBOS']){
+  const response=await api.POST(await request('/api/clients','seller','POST',{type:'PJ',legalName:`CANAL ${channel}`,saleChannel:channel,contacts:[{name:'Contato'}],addresses:[]}));
+  assert.equal(response.status,201,await response.clone().text());ids[channel]=(await response.json()).id;
+ }
+ const listed=await (await api.GET(await request('/api/clients?saleChannel=FROTA','seller'))).json();
+ assert.ok(listed.clients.some((c:{id:string})=>c.id===ids.FROTA));assert.ok(listed.clients.some((c:{id:string})=>c.id===ids.AMBOS));assert.ok(!listed.clients.some((c:{id:string})=>c.id===ids.CEGONHA));
+ const exact=await (await api.GET(await request('/api/clients?channel=AMBOS&q=CANAL','admin'))).json();assert.deepEqual(exact.clients.map((c:{id:string})=>c.id),[ids.AMBOS]);
+ assert.equal((await api.GET(await request('/api/clients?saleChannel=INVÁLIDO'))).status,400);
+ for(const channel of ['FROTA','CEGONHA']){
+  const opposite=channel==='FROTA'?'CEGONHA':'FROTA';
+  assert.equal((await sales.POST(await request('/api/sales','seller','POST',{...salePayload,saleChannel:channel,clientId:ids[opposite]}))).status,400);
+  const response=await sales.POST(await request('/api/sales','seller','POST',{...salePayload,saleChannel:channel,clientId:ids.AMBOS}));assert.equal(response.status,201,await response.clone().text());
+ }
+ const created=await sales.POST(await request('/api/sales','seller','POST',{...salePayload,saleChannel:'FROTA',clientId:ids.FROTA}));const {id}=await created.json();assert.ok(id);
+ const context={params:Promise.resolve({id:ids.FROTA})};
+ const changed=await detail.PATCH(await request('/api/clients/x','admin','PATCH',{saleChannel:'CEGONHA',active:false}),context);assert.equal(changed.status,200,await changed.clone().text());
+ assert.equal((await detail.PATCH(await request('/api/clients/x','seller','PATCH',{saleChannel:'FROTA'}),context)).status,403);
+ const history=await edit.PATCH(await request('/api/sales/x','admin','PATCH',{...salePayload,saleChannel:'FROTA',clientId:ids.FROTA}),{params:Promise.resolve({id})});assert.equal(history.status,200,await history.clone().text());
+ assert.equal((await edit.PATCH(await request('/api/sales/x','admin','PATCH',{...salePayload,saleChannel:'FROTA',clientId:ids.CEGONHA}),{params:Promise.resolve({id})})).status,400);
+ const data=await (await detail.GET(await request('/api/clients/x'),context)).json();assert.equal(data.client.saleChannel,'CEGONHA');assert.equal(data.client.active,false);
+});
+
+test('motoristas e prestadores persistem endereço estruturado, situação e preservam endereços antigos',async()=>{
+ const providers=await import('../../app/api/providers/route.ts');const providerEdit=await import('../../app/api/providers/[id]/route.ts');
+ const drivers=await import('../../app/api/fleet/drivers/route.ts');const driverEdit=await import('../../app/api/fleet/drivers/[id]/route.ts');
+ const address={cep:'18110-000',street:'Rua Teste',number:'20',complement:'Sala 1',district:'Centro',city:'Votorantim',state:'SP'};
+ const payload={companyName:'Prestador estruturado',referenceName:'Contato',active:false,addressDetails:address};
+ const response=await providers.POST(await request('/api/providers','admin','POST',payload));assert.equal(response.status,201,await response.clone().text());const {id}=await response.json();
+ const read=await (await providers.GET(await request('/api/providers','seller'))).json();const row=read.providers.find((p:{id:string})=>p.id===id);assert.equal(row.active,false);assert.equal(row.addressDetails.cep,'18110000');assert.match(row.yardAddress,/RUA TESTE, 20/);
+ const changed=await providerEdit.PATCH(await request('/api/providers/x','admin','PATCH',{...payload,active:true,addressDetails:{...address,number:'30'}}),{params:Promise.resolve({id})});assert.equal(changed.status,200,await changed.clone().text());
+ assert.equal((await providers.POST(await request('/api/providers','admin','POST',{...payload,addressDetails:{...address,cep:'123'}}))).status,400);
+ assert.equal((await providers.POST(await request('/api/providers','seller','POST',payload))).status,403);
+ const legacy=await providers.POST(await request('/api/providers','admin','POST',{companyName:'Prestador antigo',referenceName:'Contato',yardAddress:'ESTRADA ANTIGA 12'}));assert.equal(legacy.status,201);const old=await legacy.json();
+ assert.equal((await providerEdit.PATCH(await request('/api/providers/x','admin','PATCH',{companyName:'Prestador antigo',referenceName:'Contato',active:false}),{params:Promise.resolve({id:old.id})})).status,200);
+ assert.equal((await queryFirst('select yard_address as yardAddress from providers where id=?',[old.id]) as {yardAddress:string})?.yardAddress,'ESTRADA ANTIGA 12');
+ await pg.exec("delete from fleet_drivers where cpf='12345678909'");
+ const driver=await drivers.POST(await request('/api/fleet/drivers','admin','POST',{name:'Motorista Estruturado',cpf:'12345678909',phone:'11999998888',email:'motorista@example.test',whatsapp:'11988887777',notes:'Teste',active:false,addressDetails:address}));assert.equal(driver.status,201,await driver.clone().text());const d=await driver.json();
+ const drow=await queryFirst('select active,address,email from fleet_drivers where id=?',[d.id]) as {active:number;address:string;email:string};assert.equal(drow?.active,0);assert.match(drow!.address,/VOTORANTIM/);assert.equal(drow?.email,'motorista@example.test');
+ const update=await driverEdit.PATCH(await request('/api/fleet/drivers/x','admin','PATCH',{active:true}),{params:Promise.resolve({id:d.id})});assert.equal(update.status,200,await update.clone().text());
+ const snapshot=await queryFirst('select address_details as addressDetails from fleet_drivers where id=?',[d.id]) as {addressDetails:unknown};assert.ok(snapshot?.addressDetails);
+ assert.equal((await driverEdit.PATCH(await request('/api/fleet/drivers/x','admin','PATCH',{addressDetails:{...address,state:'ZZ'}}),{params:Promise.resolve({id:d.id})})).status,400);
 });

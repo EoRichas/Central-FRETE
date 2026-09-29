@@ -1,0 +1,12 @@
+BEGIN;
+SET LOCAL lock_timeout='10s';
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS sale_channel text NOT NULL DEFAULT 'AMBOS' CHECK (sale_channel IN ('FROTA','CEGONHA','AMBOS'));
+ALTER TABLE public.providers ADD COLUMN IF NOT EXISTS address_details jsonb CHECK (address_details IS NULL OR jsonb_typeof(address_details)='object');
+ALTER TABLE public.fleet_drivers ADD COLUMN IF NOT EXISTS address_details jsonb CHECK (address_details IS NULL OR jsonb_typeof(address_details)='object');
+ALTER TABLE public.fleet_drivers ADD COLUMN IF NOT EXISTS email text;
+ALTER TABLE public.fleet_drivers ADD COLUMN IF NOT EXISTS whatsapp text;
+ALTER TABLE public.fleet_drivers ADD COLUMN IF NOT EXISTS notes text;
+ALTER TABLE public.freight_sales ADD COLUMN IF NOT EXISTS billing_date text CHECK (billing_date IS NULL OR billing_date ~ '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$');
+CREATE INDEX IF NOT EXISTS clients_channel_active_name ON public.clients(sale_channel,active,legal_name);
+CREATE INDEX IF NOT EXISTS freight_sales_billing_date ON public.freight_sales(billing_date) WHERE sale_channel='FROTA' AND fleet_freight_id IS NULL;
+COMMIT;

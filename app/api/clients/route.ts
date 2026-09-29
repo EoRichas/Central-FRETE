@@ -1,3 +1,5 @@
+import { CLIENT_CHANNELS } from "@/lib/domain/registry";
+import { booleanValue } from "@/lib/server/fleet-validation";
 import type { ClientAddressRecord, ClientRecord } from "@/lib/contracts";
 import { authorize } from "@/lib/server/auth";
 import { ApiError, getD1, jsonError, queryAll } from "@/lib/server/d1";
@@ -31,14 +33,16 @@ export async function GET(request: Request) {
     await authorize(request);
     const url = new URL(request.url);
     const query = url.searchParams.get("q")?.trim().toUpperCase();
-    const where = query
-      ? `where upper(legal_name) like ? or upper(coalesce(trade_name, '')) like ? or coalesce(cpf_cnpj, '') like ?`
-      : "";
-    const params = query ? [`%${query}%`, `%${query}%`, `%${query}%`] : [];
+    const conditions:string[]=[];
+    const params:unknown[]=[];
+    if(query){conditions.push("(upper(legal_name) like ? or upper(coalesce(trade_name,'')) like ? or coalesce(cpf_cnpj,'') like ?)");params.push(...Array(3).fill(`%${query}%`));}
+    if(url.searchParams.has('channel')){conditions.push('sale_channel=?');params.push(enumValue(url.searchParams.get('channel'),'Canal',CLIENT_CHANNELS));}
+    if(url.searchParams.has('saleChannel')){conditions.push("sale_channel in (?, 'AMBOS') and active=1");params.push(enumValue(url.searchParams.get('saleChannel'),'Canal da venda',['FROTA','CEGONHA'] as const));}
+    const where=conditions.length?`where ${conditions.join(' and ')}`:'';
     const clients = await queryAll<ClientRow>(
       `select id, type, legal_name as legalName, trade_name as tradeName,
         cpf_cnpj as cpfCnpj, state_registration as stateRegistration,
-        notes, active
+        notes, active, sale_channel as saleChannel
       from clients ${where} order by legal_name limit 300`,
       params,
     );
@@ -106,6 +110,8 @@ export async function POST(request: Request) {
     const user = await authorize(request, ["ADMIN", "VENDEDOR"]);
     const payload = asObject(await request.json());
     const type = enumValue(payload.type, "Tipo de pessoa", ["PF", "PJ"] as const);
+    const saleChannel = enumValue(payload.saleChannel ?? "AMBOS", "Canal", CLIENT_CHANNELS);
+    const active = payload.active === undefined ? true : booleanValue(payload.active,"Situação");
     const legalName = requiredUpper(payload.legalName, "Nome/Razão social");
     const cpfCnpj = digits(payload.cpfCnpj);
     if (cpfCnpj && ![11, 14].includes(cpfCnpj.length)) {
@@ -159,8 +165,8 @@ export async function POST(request: Request) {
         .prepare(
           `insert into clients (
             id, type, legal_name, trade_name, cpf_cnpj, state_registration,
-            notes, active
-          ) values (?, ?, ?, ?, ?, ?, ?, ?)`,
+            notes, active, sale_channel
+          ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           id,
@@ -170,7 +176,8 @@ export async function POST(request: Request) {
           cpfCnpj,
           upper(payload.stateRegistration),
           upper(payload.notes),
-          payload.active === false ? 0 : 1,
+          active ? 1 : 0,
+          saleChannel,
         ),
     ];
     for (const contact of contacts) {
@@ -232,7 +239,7 @@ export async function POST(request: Request) {
           id,
           user.id,
           user.email,
-          JSON.stringify({ type, legalName, cpfCnpj, contactCount: contacts.length }),
+          JSON.stringify({ type, legalName, cpfCnpj, saleChannel, active, contactCount: contacts.length }),
           request.headers.get("x-request-id") ?? crypto.randomUUID(),
         ),
     );

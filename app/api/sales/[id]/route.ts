@@ -1,3 +1,4 @@
+import { validateSaleClient } from "@/lib/server/registry-validation";
 import { drainStorageCleanup } from "@/lib/server/storage-cleanup";
 import { parseSaleCargo } from "@/lib/server/sale-cargo";
 import { authorize } from "@/lib/server/auth";
@@ -154,14 +155,10 @@ export async function PATCH(request: Request, context: RouteContext) {
       "Forma de pagamento",
       PAYMENT_METHODS,
     );
+    const billingDate = payload.billingDate === undefined ? sale.billingDate ?? null : payload.billingDate ? dateOnly(payload.billingDate, 'Data do faturamento') : null;
+    if(billingDate && new Date(`${billingDate}T12:00:00Z`).toISOString().slice(0,10)!==billingDate)throw new ApiError(400,'Data do faturamento inválida.');
     const clientId = String(payload.clientId ?? "").trim() || null;
-    if (clientId) {
-      const client = await queryFirst<{ id: string }>(
-        "select id from clients where id = ? and active = 1",
-        [clientId],
-      );
-      if (!client) throw new ApiError(400, "Cliente não encontrado ou inativo.");
-    }
+    await validateSaleClient(clientId,sale.saleChannel,sale.clientId);
 
     const confirmedPool = new Map<string, number>();
     const existingIcmsCosts = sale.costs.filter((cost) =>
@@ -296,7 +293,7 @@ export async function PATCH(request: Request, context: RouteContext) {
             operational_deadline_days = ?, origin_yard_entry_date = ?,
             delivery_deadline = ?, financial_due_date = ?,
             operational_status = ?, notes = ?, freight_amount_cents = ?,
-            commission_basis_points = ?, costs_pending = ?, cargo_vehicles = ?::text::jsonb, fleet_freight_id = ?, destination_location_type = ?,
+            commission_basis_points = ?, costs_pending = ?, cargo_vehicles = ?::text::jsonb, fleet_freight_id = ?, destination_location_type = ?, billing_date = ?,
             updated_at = to_char(timezone('UTC', now()), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
           where id = ?`,
         )
@@ -326,7 +323,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           freightAmountCents,
           commissionBasisPoints,
           costsPending ? 1 : 0,
-          JSON.stringify(cargo.cargoVehicles), cargo.fleetFreightId, destinationLocationType,
+          JSON.stringify(cargo.cargoVehicles), cargo.fleetFreightId, destinationLocationType, billingDate,
           id,
         ),
       db.prepare("delete from freight_costs where sale_id = ?").bind(id),
@@ -414,7 +411,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           JSON.stringify({
             saleNumber: sale.saleNumber,
             saleChannel: sale.saleChannel, fleetFreightId: sale.fleetFreightId,
-            saleDate: sale.saleDate,
+            saleDate: sale.saleDate, billingDate: sale.billingDate ?? null,
             clientId: sale.clientId,
             operationalStatus: sale.operationalStatus,
             freightAmountCents: sale.freightAmountCents,
@@ -423,7 +420,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           }),
           JSON.stringify({
             saleNumber, saleChannel: sale.saleChannel, fleetFreightId: cargo.fleetFreightId,
-            saleDate,
+            saleDate, billingDate,
             clientId,
             operationalStatus,
             freightAmountCents,
