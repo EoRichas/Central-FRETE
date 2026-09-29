@@ -127,6 +127,21 @@ export async function loadFleetData(
   competency?: string,
   canEditFreightFinancials = false,
 ): Promise<FleetData> {
+  const startDate = competency ? `${competency}-01` : null;
+  const endDate = competency ? (() => {
+    const date = new Date(`${competency}-01T00:00:00Z`);
+    date.setUTCMonth(date.getUTCMonth() + 1);
+    return date.toISOString().slice(0, 10);
+  })() : null;
+  // Keep every member of a relevant trip so allocation is identical across months.
+  const scope = competency ? `with selected_freights as (
+    select id, trip_id from fleet_freights
+    where (pickup_date >= ? and pickup_date < ?) or (billing_date >= ? and billing_date < ?)
+  ), selected_trips as (
+    select trip_id as id from selected_freights where trip_id is not null
+    union select id from fleet_trips where operation_date >= ? and operation_date < ?
+  )` : "";
+  const scopeParams = competency ? [startDate, endDate, startDate, endDate, startDate, endDate] : [];
   const [parameters, vehicleRows, driverRows, costRows, freightRows, trips, billingSales] =
     await Promise.all([
       loadParameters(),
@@ -147,7 +162,7 @@ export async function loadFleetData(
          order by competency desc, id`,
       ),
       queryAll<FreightRow>(
-        `select trip_id as tripId, yard_cost_cents as yardCostCents, pickup_cost_cents as pickupCostCents,
+        `${scope} select trip_id as tripId, yard_cost_cents as yardCostCents, pickup_cost_cents as pickupCostCents,
           delivery_cost_cents as deliveryCostCents, other_cost_cents as otherCostCents, insurance_cost_cents as insuranceCostCents, invoice_cost_cents as invoiceCostCents, icms_cost_cents as icmsCostCents, cte_mdfe_cost_cents as cteMdfeCostCents, actual_fuel_cost_cents as actualFuelCostCents, cargo_vehicles as cargoVehicles,
           fuel_liters_milli as fuelLitersMilli, fuel_pump_amount_cents as fuelPumpAmountCents,
           id, sale_number as saleNumber, vehicle_id as vehicleId, vehicle_plate as vehiclePlate,
@@ -163,8 +178,9 @@ export async function loadFleetData(
           created_at as createdAt, updated_at as updatedAt
          , (select s.id from freight_sales s where s.fleet_freight_id=fleet_freights.id and s.sale_channel='FROTA' limit 1) as linkedFleetSaleId
          from fleet_freights
+         ${competency ? 'where id in (select id from selected_freights) or trip_id in (select id from selected_trips)' : ''}
          order by pickup_date desc, created_at desc
-         `,
+         `, scopeParams,
       ),
       loadFleetTrips(),
       // Commercial Frota sales without an operation are real revenue too.

@@ -1247,3 +1247,15 @@ test('vendedor cria frete e consulta somente os próprios sem receber administra
  assert.equal((await edit.DELETE(await request(`/api/fleet/freights/${id}`,'seller','DELETE'),context)).status,403);
  assert.equal((await options.GET(await request('/api/fleet/freights/options','finance'))).status,403);
 });
+
+test('consulta mensal da Frota preserva rateio de viagens com membros em meses diferentes', async()=>{
+ const {loadFleetData}=await import('../../lib/server/fleet.ts');
+ await pg.exec("INSERT INTO fleet_trips(id,name,vehicle_id,driver_id,operation_date,fuel_cost_cents,toll_cents,other_cost_cents,created_by) VALUES ('scope-trip','VIAGEM ENTRE MESES','calc-vehicle','calc-driver','2027-07-10',12000,3000,900,'admin'); INSERT INTO fleet_freights(id,vehicle_id,vehicle_plate,driver_id,driver_name,client_name,origin,destination,pickup_date,billing_date,operational_status,freight_amount_cents,distance_meters,trip_id) VALUES ('scope-a','calc-vehicle','CAL1C23','calc-driver','TESTE','CLIENTE','A','B','2027-05-15','2027-06-05','FATURADO',100000,100000,'scope-trip'),('scope-b','calc-vehicle','CAL1C23','calc-driver','TESTE','CLIENTE','A','B','2027-08-15',null,'SEM_PREVISAO',100000,100000,'scope-trip');");
+ const all=await loadFleetData(true,true,true,false);
+ for(const month of ['2027-05','2027-06','2027-07','2027-08','2027-12']) {
+  const scoped=await loadFleetData(true,true,true,false,month);
+  assert.deepEqual(scoped.freights,all.freights.filter(f=>f.pickupDate.startsWith(month)));
+  assert.deepEqual(scoped.billing.freights,all.billing.freights.filter(f=>(f.billingDate||f.pickupDate).startsWith(month)));
+  assert.deepEqual(scoped.tripResults,all.tripResults.filter(t=>t.operationDate.startsWith(month)));
+ }
+});
