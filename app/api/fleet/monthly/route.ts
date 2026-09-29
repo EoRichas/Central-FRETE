@@ -17,11 +17,11 @@ export async function POST(request: Request) {
     const user = await authorize(request, ['ADMIN','GERENCIA','FINANCEIRO']);
     const payload = asObject(await request.json());
     const competency = resultCompetency(payload.competency);
-    const action = enumValue(payload.action, 'Ação', ['ENTRY','DELETE_ENTRY','CLOSE','REOPEN'] as const);
+    const action = enumValue(payload.action, 'Ação', ['ENTRY','DELETE_ENTRY','CLASSIFY_ENTRY','CLOSE','REOPEN'] as const);
     const db = await getD1();
     const id = crypto.randomUUID();
     const lock = db.prepare('select pg_advisory_xact_lock(hashtext(?))').bind(`company-month:${competency}`);
-    const notClosed = 'not exists(select 1 from company_monthly_closings where competency=? and reopened_at is null)';
+    const notClosed = "not exists(select 1 from company_monthly_closings where competency=? and scope='FROTA' and reopened_at is null)";
     let sql: string;
     let params: unknown[];
     if (action === 'ENTRY') {
@@ -29,16 +29,20 @@ export async function POST(request: Request) {
       const description = resultText(payload.description, 'Descrição', 200);
       const amount = resultMoney(payload.amountCents, 'Valor');
       if (amount <= 0) throw new ApiError(400, 'Informe um valor maior que zero.');
-      sql = `insert into company_monthly_entries(id,competency,kind,description,amount_cents,created_by)
-        select ?,?,?,?,?,? where ${notClosed} returning *`;
+      sql = `insert into company_monthly_entries(id,competency,kind,description,amount_cents,created_by,scope)
+        select ?,?,?,?,?,?,'FROTA' where ${notClosed} returning *`;
       params = [id,competency,kind,description,amount,user.id,competency];
     } else if (action === 'DELETE_ENTRY') {
-      sql = `delete from company_monthly_entries where id=? and competency=? and ${notClosed} returning *`;
+      sql = `delete from company_monthly_entries where id=? and competency=? and scope='FROTA' and ${notClosed} returning *`;
+      params = [resultText(payload.id,'Lançamento',80),competency,competency];
+    } else if (action === 'CLASSIFY_ENTRY') {
+      if (payload.confirmed !== true) throw new ApiError(400,'Confirme que o lançamento pertence integralmente à Frota.');
+      sql = `update company_monthly_entries set scope='FROTA' where id=? and competency=? and scope='GENERAL' and ${notClosed} returning *`;
       params = [resultText(payload.id,'Lançamento',80),competency,competency];
     } else if (action === 'CLOSE') {
       if (payload.reviewed !== true) throw new ApiError(400, 'Confirme a conferência das receitas e de todos os custos do mês.');
-      sql = `insert into company_monthly_closings(id,competency,snapshot,closed_by)
-        select ?,?,source.snapshot,? from (${MONTHLY_SOURCE_SQL}) source
+      sql = `insert into company_monthly_closings(id,competency,snapshot,closed_by,scope)
+        select ?,?,source.snapshot,?,'FROTA' from (${MONTHLY_SOURCE_SQL}) source
         where ${notClosed}
         and not exists(select 1 from jsonb_array_elements(source.snapshot->'freights') f where (f->>'fuelPending')::boolean)
         and (source.snapshot->>'unbilledCount')::int=0
@@ -49,7 +53,7 @@ export async function POST(request: Request) {
       const reason = resultText(payload.reason,'Motivo da reabertura',1000);
       if (reason.length < 5) throw new ApiError(400, 'Descreva o motivo da reabertura com pelo menos 5 caracteres.');
       sql = `update company_monthly_closings set reopened_at=to_char(timezone('UTC',now()),'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
-        reopened_by=?,reopen_reason=? where id=? and competency=? and reopened_at is null returning *`;
+        reopened_by=?,reopen_reason=? where id=? and competency=? and scope='FROTA' and reopened_at is null returning *`;
       params = [user.id,reason,resultText(payload.id,'Fechamento',80),competency];
     }
     const mutation = db.prepare(`with changed as (${sql})

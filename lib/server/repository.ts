@@ -42,6 +42,7 @@ function placeholders(count: number) {
 }
 
 export type SaleFilters = {
+  all?: boolean;
   saleChannel?: SaleChannel;
   sort?: SaleSort;
   id?: string;
@@ -92,7 +93,7 @@ export async function listSales(
 
   const limit = Math.min(Math.max(filters.limit ?? 200, 1), 500);
   const offset = Math.max(filters.offset ?? 0, 0);
-  params.push(limit, offset);
+  if (!filters.all) params.push(limit, offset);
   const sales = await queryAll<SaleRow>(
     `select
       s.id, s.sale_channel as saleChannel, s.fleet_freight_id as fleetFreightId, s.destination_location_type as destinationLocationType,
@@ -118,7 +119,7 @@ export async function listSales(
     left join fleet_freights f on f.id = s.fleet_freight_id
     ${where.length ? `where ${where.join(" and ")}` : ""}
     order by ${SALE_ORDER_SQL[filters.sort ?? "number-asc"]}
-    limit ? offset ?`,
+    ${filters.all ? '' : 'limit ? offset ?'}`,
     params,
   );
   if (!sales.length) return [];

@@ -1,9 +1,10 @@
 "use client";
 import { currentCompetency } from "@/lib/domain/dates";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { SaleRecord } from "@/lib/contracts";
-import { weightedMarginBasisPoints } from "@/lib/domain/finance";
+import type { SalesReport } from "@/lib/domain/reports";
+import { PdfDownloadButton } from "@/components/pdf-download-button";
 import {
   competencyLabel,
   formatDate,
@@ -19,109 +20,17 @@ import {
 } from "@/components/ui";
 import { useApi } from "@/components/use-api";
 
-type GroupRow = {
-  name: string;
-  sales: number;
-  freight: number;
-  cost: number;
-  margin: number;
-  marginBps: number;
-};
-
-
-
-function groupSales(
-  sales: SaleRecord[],
-  key: (sale: SaleRecord) => string,
-): GroupRow[] {
-  const map = new Map<string, SaleRecord[]>();
-  for (const sale of sales) {
-    const name = key(sale);
-    map.set(name, [...(map.get(name) ?? []), sale]);
-  }
-  return [...map.entries()]
-    .map(([name, items]) => ({
-      name,
-      sales: items.length,
-      freight: items.reduce((sum, sale) => sum + sale.freightAmountCents, 0),
-      cost: items.reduce(
-        (sum, sale) => sum + sale.financial.transportCostCents,
-        0,
-      ),
-      margin: items.reduce(
-        (sum, sale) => sum + sale.financial.marginCents,
-        0,
-      ),
-      marginBps: weightedMarginBasisPoints(
-        items.map((sale) => ({
-          freightAmountCents: sale.freightAmountCents,
-          marginCents: sale.financial.marginCents,
-        })),
-      ),
-    }))
-    .sort((left, right) => right.freight - left.freight);
-}
-
-function saleNumberAscending(left: SaleRecord, right: SaleRecord) {
-  return left.saleNumber.localeCompare(right.saleNumber, "pt-BR", {
-    numeric: true,
-    sensitivity: "base",
-  });
-}
+type GroupRow = SalesReport['clients'][number];
 
 export function ReportsScreen() {
   const [competency, setCompetency] = useState(currentCompetency);
-  const api = useApi<{ sales: SaleRecord[] }>(
-    `/api/sales?competency=${competency}`,
-  );
-  const sales = useMemo(
-    () => [...(api.data?.sales ?? [])].sort(saleNumberAscending),
-    [api.data],
-  );
-  const totals = useMemo(() => {
-    const freight = sales.reduce(
-      (sum, sale) => sum + sale.freightAmountCents,
-      0,
-    );
-    const cost = sales.reduce(
-      (sum, sale) => sum + sale.financial.transportCostCents,
-      0,
-    );
-    const margin = sales.reduce(
-      (sum, sale) => sum + sale.financial.marginCents,
-      0,
-    );
-    return {
-      freight,
-      cost,
-      margin,
-      marginBps: weightedMarginBasisPoints(
-        sales.map((sale) => ({
-          freightAmountCents: sale.freightAmountCents,
-          marginCents: sale.financial.marginCents,
-        })),
-      ),
-    };
-  }, [sales]);
-  const clients = useMemo(
-    () =>
-      groupSales(
-        sales,
-        (sale) => sale.clientName ?? "CLIENTE NÃO INFORMADO",
-      ),
-    [sales],
-  );
-  const expenses = useMemo(() => {
-    const map = new Map<string, number>();
-    sales
-      .flatMap((sale) => sale.costs)
-      .forEach((cost) =>
-        map.set(cost.category, (map.get(cost.category) ?? 0) + cost.amountCents),
-      );
-    return [...map.entries()]
-      .map(([name, value]) => ({ name: name.replace(/_/g, " "), value }))
-      .sort((left, right) => right.value - left.value);
-  }, [sales]);
+  const [saleChannel,setSaleChannel] = useState('');
+  const query = `competency=${competency}${saleChannel ? `&saleChannel=${saleChannel}` : ''}`;
+  const api = useApi<{report: SalesReport}>(`/api/reports/sales?${query}`);
+  const sales = api.data?.report.sales ?? [];
+  const totals = api.data?.report.totals ?? {freight:0,cost:0,margin:0,marginBps:0};
+  const clients = api.data?.report.clients ?? [];
+  const expenses = api.data?.report.expenses ?? [];
   const maxExpense = Math.max(1, ...expenses.map((item) => item.value));
 
   return (
@@ -134,13 +43,11 @@ export function ReportsScreen() {
           <>
             <a
               className="button secondary"
-              href={`/api/exports/sales.csv?competency=${competency}`}
+              href={`/api/exports/sales.csv?${query}`}
             >
               <Icons.receipt /> Exportar Excel
             </a>
-            <button className="button primary" onClick={() => window.print()}>
-              Salvar em PDF
-            </button>
+            <PdfDownloadButton url={`/api/reports/sales?${query}&format=pdf`} filename={`Relatorio-Central-${saleChannel || 'Todos'}-${competency}.pdf`} />
           </>
         }
       />
@@ -153,6 +60,7 @@ export function ReportsScreen() {
             onChange={(event) => setCompetency(event.target.value || currentCompetency())}
           />
         </label>
+        <label><span>Canal</span><select value={saleChannel} onChange={e=>setSaleChannel(e.target.value)}><option value="">Todos</option><option value="FROTA">Frota</option><option value="CEGONHA">Cegonha</option></select></label>
       </section>
       {api.loading && <LoadingState label="Montando relatórios…" />}
       {api.error && <ErrorState message={api.error} retry={api.refresh} />}
@@ -168,6 +76,7 @@ export function ReportsScreen() {
             <span>Central Express</span>
             <h1>Relatório gerencial · {competencyLabel(competency)}</h1>
           </div>
+          {Boolean(api.data?.report.pendingCosts) && <p className="form-error" role="status">Resultado parcial: {api.data?.report.pendingCosts} venda(s) com custos pendentes.</p>}
           <section className="kpi-grid report-kpis">
             <article className="kpi-card">
               <span>Faturamento</span>
