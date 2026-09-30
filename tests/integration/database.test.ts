@@ -274,7 +274,7 @@ test('frota aceita PNG, baixa exige anexo do próprio frete e download preserva 
  const result=await upload.POST(await request('/api/fleet/freights/freight/attachments','operator','POST',form),context);
  assert.equal(result.status,201,await result.clone().text()); const proof=await result.json();
  const body={status:'PAGO',proofId:proof.id,paidAt:'2026-09-10'};
- assert.equal((await payment.PATCH(await request('/api/fleet/freights/freight/payment','operator','PATCH',body),context)).status,403);
+ assert.equal((await payment.PATCH(await request('/api/fleet/freights/freight/payment','operator','PATCH',body),context)).status,200);
  assert.equal((await payment.PATCH(await request('/api/fleet/freights/linked-freight/payment','finance','PATCH',body),{params:Promise.resolve({id:'linked-freight'})})).status,400);
  assert.equal((await payment.PATCH(await request('/api/fleet/freights/freight/payment','finance','PATCH',body),context)).status,200);
  const file=await download.GET(await request('/api/fleet/freights/freight/attachments/x','finance'),{params:Promise.resolve({id:'freight',attachmentId:proof.id})});
@@ -639,7 +639,7 @@ test('venda Frota usa sequência global, escopo do vendedor e OS comum; operacio
  const ctx={params:Promise.resolve({id:f.id})};
  const emitted=await orders.POST(await request('/api/sales/x/service-order','seller','POST'),ctx);
  assert.equal(emitted.status,200,await emitted.clone().text());assert.equal((await emitted.json()).latest.snapshot.saleChannel,'FROTA');
- assert.equal((await detail.GET(await request('/api/sales/x','operator'),ctx)).status,404);
+ assert.equal((await detail.GET(await request('/api/sales/x','operator'),ctx)).status,200);
 });
 
 test('custos separados, pagamentos diretos e alteração de custo preservam snapshots anteriores',async()=>{
@@ -1285,7 +1285,7 @@ test('comissão do cadastro valida percentual e só administrador altera; venda 
  const fResponse=await fleets.POST(await request('/api/fleet/freights',id,'POST',{...registeredFreight,clientId:'lookup-a',pickupDate:'2039-06-01',sellerId:'seller',sellerCommissionBasisPoints:9999}));assert.equal(fResponse.status,201,await fResponse.clone().text());const f=await fResponse.json();const fc={params:Promise.resolve({id:f.id})};
  const fd=await detail.GET(await request('/api/fleet/freights/x',id),fc);assert.equal(fd.status,200,await fd.clone().text());const freight=(await fd.json()).freight;
  assert.equal(freight.sellerId,id);assert.equal(freight.sellerCommissionBasisPoints,1235);assert.equal(freight.sellerCommissionCents,12350);
- for(const other of ['seller','operator'])assert.equal((await detail.GET(await request('/api/fleet/freights/x',other),fc)).status,404);
+ for(const other of ['seller'])assert.equal((await detail.GET(await request('/api/fleet/freights/x',other),fc)).status,404);
  assert.equal((await detail.PATCH(await request('/api/fleet/freights/x',id,'PATCH',{freightAmountCents:1}),fc)).status,403);
  assert.equal((await editUser.PATCH(await request('/api/users/x','admin','PATCH',{...base,password:undefined,active:true,commissionPercent:5}),ctx)).status,200);
  assert.equal((await queryFirst('select commission_basis_points from freight_sales where id=?',[sale.id]) as {commission_basis_points:number}).commission_basis_points,1235);
@@ -1297,7 +1297,7 @@ test('comissão do cadastro valida percentual e só administrador altera; venda 
  const finance=(await (await detail.GET(await request('/api/fleet/freights/x','finance'),fc)).json()).freight;assert.equal('sellerCommissionCents' in finance,false);assert.equal('sellerCommissionBasisPoints' in finance,false);
 });
 
-test('operacional só acessa vendas próprias e comissão é omitida de detalhes, dashboard, clientes e relatório',async()=>{
+test('operacional acessa todas as vendas e comissão é omitida de detalhes, dashboard, clientes e relatório',async()=>{
  const sales=await import('../../app/api/sales/route.ts');const detail=await import('../../app/api/sales/[id]/route.ts');
  const dashboard=await import('../../app/api/dashboard/route.ts');const reports=await import('../../app/api/reports/sales/route.ts');const clients=await import('../../app/api/clients/[id]/route.ts');const commissions=await import('../../app/api/sellers/commissions/route.ts');
  const response=await sales.POST(await request('/api/sales','operator','POST',{...salePayload,saleDate:'2040-01-01',financialDueDate:'2040-01-20',sellerId:'seller',clientId:'lookup-a'}));assert.equal(response.status,201,await response.clone().text());const {id}=await response.json();
@@ -1305,9 +1305,9 @@ test('operacional só acessa vendas próprias e comissão é omitida de detalhes
  const own=await detail.GET(await request('/api/sales/x','operator'),{params:Promise.resolve({id})});assert.equal(own.status,200);const ownSale=(await own.json()).sale;assert.equal('commissionBasisPoints' in ownSale,false);assert.equal('commissionCents' in ownSale.financial,false);
  assert.equal((await detail.GET(await request('/api/sales/x','seller'),{params:Promise.resolve({id})})).status,404);
  const foreign=await sales.POST(await request('/api/sales','seller','POST',{...salePayload,saleDate:'2040-01-01',financialDueDate:'2040-01-20',clientId:'lookup-a'}));const foreignId=(await foreign.json()).id;
- assert.equal((await detail.GET(await request('/api/sales/x','operator'),{params:Promise.resolve({id:foreignId})})).status,404);
- const list=await (await sales.GET(await request('/api/sales?competency=2040-01','operator'))).json();assert.deepEqual(list.sales.map((s:{id:string})=>s.id),[id]);
- const dash=(await (await dashboard.GET(await request('/api/dashboard?competency=2040-01','operator'))).json()).data;assert.equal(dash.salesCount,1);assert.equal(dash.showCommission,false);assert.ok(dash.bySeller.every((s:object)=>!('commissionCents' in s)));
+ assert.equal((await detail.GET(await request('/api/sales/x','operator'),{params:Promise.resolve({id:foreignId})})).status,200);
+ const list=await (await sales.GET(await request('/api/sales?competency=2040-01','operator'))).json();assert.deepEqual(new Set(list.sales.map((s:{id:string})=>s.id)),new Set([id,foreignId]));
+ const dash=(await (await dashboard.GET(await request('/api/dashboard?competency=2040-01','operator'))).json()).data;assert.equal(dash.salesCount,2);assert.equal(dash.showCommission,false);assert.ok(dash.bySeller.every((s:object)=>!('commissionCents' in s)));
  for(const role of ['operator','finance'])assert.equal((await commissions.GET(await request('/api/sellers/commissions?competency=2040-01',role))).status,403);
  const report=(await (await reports.GET(await request('/api/reports/sales?competency=2040-01','finance'))).json());assert.equal(report.showCommission,false);assert.equal('commissions' in report.report,false);assert.ok(report.report.sales.every((s:{financial:object})=>!('commissionCents' in s.financial)));assert.ok(!report.report.expenses.some((e:{name:string})=>/comiss/i.test(e.name)));
  const client=(await (await clients.GET(await request('/api/clients/lookup-a','finance'),{params:Promise.resolve({id:'lookup-a'})})).json());assert.ok(client.sales.every((s:{financial:object})=>!('commissionCents' in s.financial)));
@@ -1315,12 +1315,12 @@ test('operacional só acessa vendas próprias e comissão é omitida de detalhes
  assert.equal(sellerDash.bySeller[0].commissionCents,22230+9000);
 });
 
-test('homônimo não herda vendas e operador não acessa frete alheio por listagem, ID ou anexo',async()=>{
+test('homônimo não herda vendas e operador acessa frete de outro usuário sem comissão',async()=>{
  await pg.exec("insert into users(id,email,name,role) values('commission-homonym','commission-homonym@example.test','Seller','VENDEDOR')");
  const sales=await import('../../app/api/sales/route.ts');const fleets=await import('../../app/api/fleet/route.ts');const fleetDetail=await import('../../app/api/fleet/freights/[id]/route.ts');const attachments=await import('../../app/api/fleet/freights/[id]/attachments/route.ts');
  const list=await (await sales.GET(await request('/api/sales?period=all','commission-homonym'))).json();assert.equal(list.sales.length,0);
- const fleet=await (await fleets.GET(await request('/api/fleet?period=all','operator'))).json();assert.ok(fleet.fleet.freights.length>0);assert.ok(fleet.fleet.freights.every((f:{createdBy:string})=>f.createdBy==='operator'));assert.equal(fleet.fleet.tripResults.length,0);assert.equal(fleet.fleet.billing.sales.length,0);
- const ctx={params:Promise.resolve({id:'linked-freight'})};assert.equal((await fleetDetail.GET(await request('/api/fleet/freights/x','operator'),ctx)).status,404);assert.equal((await fleetDetail.PATCH(await request('/api/fleet/freights/x','operator','PATCH',{freightAmountCents:1}),ctx)).status,404);assert.equal((await attachments.GET(await request('/api/fleet/freights/x/attachments','operator'),ctx)).status,404);
+ const fleet=await (await fleets.GET(await request('/api/fleet?period=all','operator'))).json();assert.ok(fleet.fleet.freights.length>0);assert.ok(fleet.fleet.freights.some((f:{createdBy:string})=>f.createdBy!=='operator'));assert.equal(fleet.fleet.canManagePayments,true);assert.ok(fleet.fleet.freights.every((f:object)=>!('sellerCommissionCents' in f)));assert.equal(fleet.fleet.tripResults.length,0);assert.equal(fleet.fleet.billing.sales.length,0);
+ const ctx={params:Promise.resolve({id:'scope-a'})};assert.equal((await fleetDetail.GET(await request('/api/fleet/freights/x','operator'),ctx)).status,200);assert.equal((await attachments.GET(await request('/api/fleet/freights/x/attachments','operator'),ctx)).status,200);
 });
 
 test('migração de comissão preserva taxas históricas, associa IDs inequívocos e não dá acesso por nome ambíguo',async()=>{
@@ -1427,7 +1427,7 @@ test('comissão do motorista usa coleta na apuração, não duplica no mês fatu
  assert.equal((await loadFleetData(true,true,true,false,'2070-02')).billing.commissionCents,0);
 });
 
-test('operacional cria frete Frota sem comissão, cadastra cliente e consulta prestadores mantendo escopo próprio', async()=>{
+test('operacional cria frete Frota sem comissão, cadastra cliente e consulta prestadores sem comissão', async()=>{
  const freights=await import('../../app/api/fleet/freights/route.ts');
  const options=await import('../../app/api/fleet/freights/options/route.ts');
  const detail=await import('../../app/api/fleet/freights/[id]/route.ts');
@@ -1451,4 +1451,33 @@ test('operacional cria frete Frota sem comissão, cadastra cliente e consulta pr
  assert.equal((await providers.GET(await request('/api/providers','operator'))).status,200);
  assert.equal((await providers.POST(await request('/api/providers','operator','POST',{}))).status,403);
  assert.equal((await detail.DELETE(await request('/api/fleet/freights/x','operator','DELETE'),context)).status,403);
+});
+
+test('operacional fatura vendas de terceiros, anexa comprovante e confirma recebimentos sem assumir comissão', async()=>{
+ const sales=await import('../../app/api/sales/route.ts');
+ const billing=await import('../../app/api/sales/[id]/billing/route.ts');
+ const attachments=await import('../../app/api/sales/[id]/attachments/route.ts');
+ const payments=await import('../../app/api/sales/[id]/payments/route.ts');
+ const remove=await import('../../app/api/payments/[id]/route.ts');
+ const create=await sales.POST(await request('/api/sales','seller','POST',{...salePayload,saleDate:'2072-01-10',financialDueDate:'2072-01-30',clientId:'lookup-a'}));
+ assert.equal(create.status,201,await create.clone().text());const {id}=await create.json();const ctx={params:Promise.resolve({id})};
+ const before=await queryFirst('select seller_id,commission_basis_points from freight_sales where id=?',[id]);
+ const change={operationalStatus:'FINALIZADO',billingDate:'2072-01-20',sellerId:'operator',commissionBasisPoints:0};
+ assert.equal((await billing.PATCH(await request('/api/sales/x/billing','seller','PATCH',change),ctx)).status,403);
+ assert.equal((await billing.PATCH(await request('/api/sales/x/billing','operator','PATCH',{...change,billingDate:'2072-02-30'}),ctx)).status,400);
+ const billed=await billing.PATCH(await request('/api/sales/x/billing','operator','PATCH',change),ctx);assert.equal(billed.status,200,await billed.clone().text());
+ assert.deepEqual(await queryFirst('select seller_id,commission_basis_points from freight_sales where id=?',[id]),before);
+ assert.deepEqual(await queryFirst('select billing_date,operational_status from freight_sales where id=?',[id]),{billing_date:'2072-01-20',operational_status:'FINALIZADO'});
+ const form=new FormData();form.set('file',new File([new Uint8Array([137,80,78,71,13,10,26,10])],'recibo.png',{type:'image/png'}));
+ const uploaded=await attachments.POST(await request('/api/sales/x/attachments','operator','POST',form),ctx);assert.equal(uploaded.status,201,await uploaded.clone().text());const proof=await uploaded.json();
+ const pay=async(proofId?:string)=>{const req=await request('/api/sales/x/payments','operator','POST',{type:'RECEBIMENTO',status:'CONFIRMADO',amountCents:1000,occurredAt:'2072-01-20',paymentMethod:'PIX',proofId});req.headers.set('idempotency-key',crypto.randomUUID());return payments.POST(req,ctx);};
+ assert.equal((await pay()).status,400);assert.equal((await pay('other-sale-proof')).status,400);
+ const paid=await pay(proof.id);assert.equal(paid.status,201,await paid.clone().text());const payment=await paid.json();
+ assert.equal((await queryFirst('select created_by from payment_transactions where id=?',[payment.id]) as {created_by:string}).created_by,'operator');
+ assert.equal((await remove.DELETE(await request('/api/payments/x','operator','DELETE'),{params:Promise.resolve({id:payment.id})})).status,403);
+ const freights=await import('../../app/api/fleet/freights/route.ts');const fleetEdit=await import('../../app/api/fleet/freights/[id]/route.ts');
+ const newFreight=await freights.POST(await request('/api/fleet/freights','seller','POST',{...registeredFreight,clientId:'lookup-a',pickupDate:'2072-01-10'}));assert.equal(newFreight.status,201);const f=await newFreight.json();
+ const owner=await queryFirst('select seller_id,seller_commission_basis_points from fleet_freights where id=?',[f.id]);
+ const updated=await fleetEdit.PATCH(await request('/api/fleet/freights/x','operator','PATCH',{billingDate:'2072-01-20',operationalStatus:'FATURADO',sellerId:'operator',sellerCommissionBasisPoints:0}),{params:Promise.resolve({id:f.id})});assert.equal(updated.status,200,await updated.clone().text());
+ assert.deepEqual(await queryFirst('select seller_id,seller_commission_basis_points from fleet_freights where id=?',[f.id]),owner);
 });

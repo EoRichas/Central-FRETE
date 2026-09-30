@@ -186,6 +186,7 @@ function FleetOperationsScreen() {
                 }
               />
             </label>
+            {fleet?.freightOnly && <Link className="button secondary" href={`/vendas?canal=FROTA&competency=${competency}`}>Vendas Frota</Link>}
             {fleet?.canEditFreights && (
               <button className="button secondary create-sale-action" onClick={openNewFreight}>
                 <Icons.plus /> Novo frete

@@ -31,12 +31,11 @@ export async function resolveSaleSeller(user: CurrentUser, payload: Record<strin
 // Resource ownership uses immutable IDs. A reused name must never grant access.
 export function saleOwnership(user: CurrentUser, alias = 's'): {sql: string; params: unknown[]} {
   if (user.role === 'VENDEDOR') return {sql: `${alias}.seller_id = ?`, params: [user.id]};
-  if (user.role === 'OPERACIONAL') return {sql: `${alias}.created_by = ?`, params: [user.id]};
   return {sql: '1=1', params: []};
 }
 
 export async function assertFleetAccess(user: CurrentUser, id: string) {
-  const scope = user.role === 'VENDEDOR' ? 'and seller_id=?' : user.role === 'OPERACIONAL' ? 'and created_by=?' : '';
+  const scope = user.role === 'VENDEDOR' ? 'and seller_id=?' : '';
   const row = await queryFirst<{id:string}>(`select id from fleet_freights where id=? ${scope}`, scope ? [id,user.id] : [id]);
   if (!row) throw new ApiError(404, 'Frete da frota não encontrado.');
 }
