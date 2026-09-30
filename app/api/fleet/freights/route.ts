@@ -1,3 +1,4 @@
+import { resolveSaleSeller } from "@/lib/server/seller-commission";
 import { resolveFreightClient } from "@/lib/server/registry-validation";
 import { authorize } from "@/lib/server/auth";
 import { ApiError, getD1, jsonError, queryAll } from "@/lib/server/d1";
@@ -17,21 +18,25 @@ export async function POST(request: Request) {
       data.vehicleId,
       data.driverId,
     );
+    const seller = user.role === 'ADMIN' && !payload.sellerId && !payload.sellerName
+      ? {id: null, name: null, commissionBasisPoints: 0}
+      : await resolveSaleSeller(user, payload);
     const id = crypto.randomUUID();
     const db = await getD1();
     await db.batch([
       db
         .prepare(
           `insert into fleet_freights (
-            id, vehicle_id, vehicle_plate, driver_id, driver_name,
+            id, seller_id, seller_name, seller_commission_basis_points, vehicle_id, vehicle_plate, driver_id, driver_name,
             client_id, client_name, cargo_vehicle_model, cargo_plate, origin, destination,
             pickup_date, delivery_date, billing_date, operational_status,
             priority, freight_amount_cents, distance_meters, toll_cents,
             driver_commission_cents, created_by, updated_by, origin_cep, destination_cep, trip_id, yard_cost_cents, pickup_cost_cents, delivery_cost_cents, other_cost_cents, actual_fuel_cost_cents, cargo_vehicles, fuel_liters_milli, fuel_pump_amount_cents, route_distance_meters, odometer_start_meters, odometer_end_meters, insurance_cost_cents, invoice_cost_cents, icms_cost_cents, cte_mdfe_cost_cents
-          ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::text::jsonb, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::text::jsonb, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           id,
+          seller.id, seller.name, seller.commissionBasisPoints,
           vehicle.id,
           vehicle.plate,
           driver.id,
@@ -72,7 +77,7 @@ export async function POST(request: Request) {
           user.id,
           user.email,
           JSON.stringify({
-            ...data,
+            ...data, sellerId: seller.id, sellerName: seller.name, sellerCommissionBasisPoints: seller.commissionBasisPoints,
             vehiclePlate: vehicle.plate,
             driverName: driver.name,
           }),
@@ -87,11 +92,11 @@ export async function POST(request: Request) {
 
 export async function GET(request: Request) {
   try {
-    const user = await authorize(request, ["VENDEDOR"]);
+    const user = await authorize(request, ["VENDEDOR", "OPERACIONAL"]);
     const freights = await queryAll<import("@/lib/domain/fleet").SellerFreightSummary>(
       `select id, sale_number as saleNumber, client_name as clientName, origin, destination,
         pickup_date as pickupDate, freight_amount_cents as freightAmountCents
-       from fleet_freights where created_by=? order by created_at desc, id desc limit 100`, [user.id]);
+       from fleet_freights where ${user.role === 'VENDEDOR' ? 'seller_id' : 'created_by'}=? order by created_at desc, id desc limit 100`, [user.id]);
     return Response.json({freights});
   } catch (error) { return jsonError(error); }
 }

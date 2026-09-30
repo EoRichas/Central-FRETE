@@ -60,8 +60,7 @@ export function SellersScreen({
     [commissions],
   );
   const isAdmin = meApi.data?.user.role === "ADMIN";
-  const canManage =
-    isAdmin || meApi.data?.user.role === "FINANCEIRO";
+  const canManage = isAdmin;
 
   function openCommissionPayment(item: SellerCommissionRecord) {
     setMutationError(null);
@@ -108,7 +107,7 @@ export function SellersScreen({
       <PageHeader
         eyebrow="Gestão comercial"
         title="Comissões"
-        description="Acompanhe as vendas e a comissão calculada pelo percentual definido em cada venda."
+        description="Acompanhe as vendas e a comissão calculada pelo percentual do cadastro do vendedor."
         actions={
           <label className="compact-filter">
             <span>Competência</span>
@@ -142,7 +141,7 @@ export function SellersScreen({
             <article className="kpi-card accent">
               <span>Comissão total dos vendedores</span>
               <strong>{formatMoney(totals.commission)}</strong>
-              <small>Somatório dos percentuais cadastrados nas vendas</small>
+              <small>Vendas Cegonha e Frota</small>
             </article>
           </section>
           <section className="panel table-panel">

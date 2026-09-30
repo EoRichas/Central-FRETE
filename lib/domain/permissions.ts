@@ -31,3 +31,7 @@ const grants: Record<PermissionRole, ReadonlySet<Capability>> = {
 export function roleCan(role: PermissionRole, capability: Capability): boolean {
   return grants[role].has(capability);
 }
+
+export function canViewSellerCommission(role: PermissionRole): boolean {
+  return role === "ADMIN" || role === "VENDEDOR";
+}

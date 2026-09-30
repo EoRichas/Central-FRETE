@@ -1,6 +1,4 @@
-import type { Metadata } from "next";
-import { ReportsScreen } from "@/components/reports-screen";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = { title: "Relatórios" };
-export default function ReportsPage() { return <ReportsScreen />; }
-
+// Preserve old bookmarks without retaining a second report screen.
+export default function LegacyReportsPage() { redirect("/vendas-gerais"); }

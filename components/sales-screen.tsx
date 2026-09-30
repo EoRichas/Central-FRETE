@@ -1,4 +1,5 @@
 "use client";
+import { CegonhaTabs } from "@/components/cegonha-tabs";
 import { StorageCleanupNotice } from "@/components/storage-cleanup-notice";
 
 import Link from "next/link";
@@ -53,6 +54,7 @@ export function SalesScreen({
   return (
     <>
       <PageHeader eyebrow="Operação" title={saleChannel === "FROTA" ? "Vendas Frota" : "Vendas Cegonha"} description="Consulte o ciclo operacional e a cobrança de cada frete em uma única visão." actions={<><a className="button secondary" href={`/api/exports/sales.csv?${competency ? `competency=${competency}` : "period=all"}&saleChannel=${saleChannel}`}><Icons.receipt /> Exportar Excel</a>{data?.canCreate && <Link className="button primary" href={newSaleHref}><Icons.plus /> Nova venda</Link>}</>} />
+      {saleChannel === "CEGONHA" && <CegonhaTabs active="sales" competency={competency} />}
       {data?.canDelete && <StorageCleanupNotice />}
       <section className="filter-panel sales-filter-panel">
         <label><span>Pesquisar</span><div className="search-input"><Icons.search /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Venda, cliente, placa, origem…" /></div></label>

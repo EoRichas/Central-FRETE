@@ -1,3 +1,4 @@
+import { commissionProfileValue } from "@/lib/server/seller-commission";
 import type { Role } from "@/lib/contracts";
 import { authorize } from "@/lib/server/auth";
 import { ApiError, getD1, jsonError, queryAll } from "@/lib/server/d1";
@@ -29,11 +30,12 @@ export async function GET(request: Request) {
       phone: string | null;
       username: string | null;
       pixDetails: string | null;
+      commissionBasisPoints: number;
       role: Role;
       active: number;
       hasPassword: number;
     }>(
-      `select id, name, email, phone, username, pix_details as pixDetails, role, active,
+      `select id, name, email, phone, username, pix_details as pixDetails, commission_basis_points as commissionBasisPoints, role, active,
         case when password_hash is not null and password_salt is not null then 1 else 0 end as hasPassword
        from users order by active desc, name`,
     );
@@ -63,6 +65,7 @@ export async function POST(request: Request) {
       throw new ApiError(400, error instanceof Error ? error.message : "Senha inválida.");
     }
     const phone = userPhone(payload.phone);
+    const commissionBasisPoints = commissionProfileValue(payload.commissionPercent);
     const pixDetails = null;
     const id = crypto.randomUUID();
     const email = `${username}@centralfrete.local`;
@@ -71,8 +74,8 @@ export async function POST(request: Request) {
       db.prepare(
         `insert into users (
           id, email, username, password_salt, password_hash, pix_details,
-          name, role, phone, active
-        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+          name, role, phone, commission_basis_points, active
+        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
       ).bind(
         id,
         email,
@@ -83,6 +86,7 @@ export async function POST(request: Request) {
         name,
         role,
         phone,
+        commissionBasisPoints,
       ),
       db.prepare(
         `insert into audit_logs (
@@ -94,7 +98,7 @@ export async function POST(request: Request) {
         id,
         actor.id,
         actor.email,
-        JSON.stringify({ username, name, role, phone }),
+        JSON.stringify({ username, name, role, phone, commissionBasisPoints }),
         request.headers.get("x-request-id") ?? crypto.randomUUID(),
       ),
     ]);

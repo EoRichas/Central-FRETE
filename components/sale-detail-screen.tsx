@@ -323,8 +323,8 @@ export function SaleDetailScreen({ id }: { id: string }) {
           <header><div><span className="eyebrow">Resultado</span><h2>Composição financeira</h2></div></header>
           <div className="money-breakdown">
             <div><span>Valor do frete</span><strong>{formatMoney(sale.freightAmountCents)}</strong></div>
-            <div><span>Comissão ({formatPercent(sale.commissionBasisPoints)})</span><strong>− {formatMoney(sale.financial.commissionCents)}</strong></div>
-            <div><span>Demais despesas</span><strong>− {formatMoney(sale.financial.transportCostCents - sale.financial.commissionCents)}</strong></div>
+            {(user?.role === "ADMIN" || user?.role === "VENDEDOR") && <div><span>Comissão ({formatPercent(sale.commissionBasisPoints)})</span><strong>− {formatMoney(sale.financial.commissionCents)}</strong></div>}
+            <div><span>{user?.role === "ADMIN" || user?.role === "VENDEDOR" ? "Demais despesas" : "Custos totais"}</span><strong>− {formatMoney(sale.financial.transportCostCents - (sale.financial.commissionCents ?? 0))}</strong></div>
             <div className="total"><span>Margem da Central</span><strong>{formatMoney(sale.financial.marginCents)}</strong></div>
           </div>
         </article>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import type { SaleRecord } from "@/lib/contracts";
+import type { CurrentUser, SaleRecord } from "@/lib/contracts";
 import { currentCompetency } from "@/lib/domain/dates";
 import { costCategoryLabel } from "@/lib/domain/operations";
 import { formatDate, formatMoney, formatPercent } from "@/lib/format";
@@ -16,6 +16,8 @@ import {
 import { useApi } from "@/components/use-api";
 
 export function FinanceScreen() {
+  const me = useApi<{user:CurrentUser}>("/api/me");
+  const showCommission = me.data?.user.role === "ADMIN" || me.data?.user.role === "VENDEDOR";
   const [competency, setCompetency] = useState(currentCompetency);
   const url = `/api/sales?limit=500${
     competency ? `&competency=${competency}` : ""
@@ -28,7 +30,7 @@ export function FinanceScreen() {
         (acc, sale) => {
           acc.freight += sale.freightAmountCents;
           acc.costs += sale.financial.transportCostCents;
-          acc.commissions += sale.financial.commissionCents;
+          acc.commissions += sale.financial.commissionCents ?? 0;
           return acc;
         },
         { freight: 0, costs: 0, commissions: 0 },
@@ -73,10 +75,10 @@ export function FinanceScreen() {
               <span>Valor total dos fretes</span>
               <strong>{formatMoney(totals.freight)}</strong>
             </div>
-            <div>
+            {showCommission && <div>
               <span>Comissões dos vendedores</span>
               <strong>{formatMoney(totals.commissions)}</strong>
-            </div>
+            </div>}
             <div>
               <span>Custo total das vendas</span>
               <strong>{formatMoney(totals.costs)}</strong>
@@ -92,7 +94,7 @@ export function FinanceScreen() {
                     <th>Vendedor(a)</th>
                     <th>Rota</th>
                     <th>Valor do frete</th>
-                    <th>Comissão</th>
+                    {showCommission && <th>Comissão</th>}
                     <th>Custos da venda</th>
                     <th></th>
                   </tr>
@@ -115,10 +117,10 @@ export function FinanceScreen() {
                         <td data-label="Vendedor(a)"><strong>{sale.sellerName}</strong></td>
                         <td data-label="Rota">{sale.origin} → {sale.destination}</td>
                         <td data-label="Valor do frete"><strong>{formatMoney(sale.freightAmountCents)}</strong></td>
-                        <td data-label="Comissão">
+                        {showCommission && <td data-label="Comissão">
                           <strong>{formatMoney(sale.financial.commissionCents)}</strong>
                           <small>{formatPercent(sale.commissionBasisPoints)} DA VENDA</small>
-                        </td>
+                        </td>}
                         <td data-label="Custos da venda">
                           <strong>{formatMoney(sale.financial.transportCostCents)}</strong>
                           <small title={details}>{details}</small>

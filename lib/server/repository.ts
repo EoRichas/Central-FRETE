@@ -1,3 +1,4 @@
+import { saleOwnership } from "@/lib/server/seller-commission";
 import { SALE_ORDER_SQL, type SaleChannel, type SaleSort } from "@/lib/domain/sales";
 import { cargoVehiclesOrLegacy } from "@/lib/domain/cargo-vehicles";
 import type {
@@ -86,10 +87,9 @@ export async function listSales(
     )`);
     params.push(term, term, term, term, term, term, term, term);
   }
-  if (user.role === "VENDEDOR") {
-    where.push("(s.seller_id = ? or upper(s.seller_name) = upper(?))");
-    params.push(user.id, user.name);
-  }
+  const ownership = saleOwnership(user);
+  where.push(ownership.sql);
+  params.push(...ownership.params);
 
   const limit = Math.min(Math.max(filters.limit ?? 200, 1), 500);
   const offset = Math.max(filters.offset ?? 0, 0);
@@ -232,15 +232,11 @@ export async function dashboard(
   const nextMonth = `${month === 12 ? year + 1 : year}-${String(
     month === 12 ? 1 : month + 1,
   ).padStart(2, "0")}-01`;
-  const periodSellerScope =
-    user.role === "VENDEDOR"
-      ? "and (s.seller_id = ? or upper(s.seller_name) = upper(?))"
-      : "";
+  const ownership = saleOwnership(user);
+  const periodSellerScope = `and ${ownership.sql}`;
   const periodParams: unknown[] = [
-    `${receivedStart}T00:00:00.000Z`,
-    `${nextMonth}T00:00:00.000Z`,
+    `${receivedStart}T00:00:00.000Z`, `${nextMonth}T00:00:00.000Z`, ...ownership.params,
   ];
-  if (user.role === "VENDEDOR") periodParams.push(user.id, user.name);
   const periodTransactions = await queryFirst<{ total: number }>(
     `select coalesce(sum(case when p.type = 'ESTORNO' then -p.amount_cents else p.amount_cents end), 0) as total
       from payment_transactions p
@@ -255,7 +251,7 @@ export async function dashboard(
     PAGO: { count: 0, amountCents: 0 },
     VENCIDO: { count: 0, amountCents: 0 },
   };
-  const sellerMap = new Map<string, { freightAmountCents: number; marginCents: number }>();
+  const sellerMap = new Map<string, { freightAmountCents: number; marginCents: number;commissionCents:number }>();
   const dayMap = new Map<string, number>();
   for (const sale of sales) {
     const status = sale.financial.status;
@@ -265,9 +261,11 @@ export async function dashboard(
     const seller = sellerMap.get(sale.sellerName) ?? {
       freightAmountCents: 0,
       marginCents: 0,
+      commissionCents:0,
     };
     seller.freightAmountCents += sale.freightAmountCents;
     seller.marginCents += sale.financial.marginCents;
+    seller.commissionCents += sale.financial.commissionCents;
     sellerMap.set(sale.sellerName, seller);
     dayMap.set(
       sale.saleDate,

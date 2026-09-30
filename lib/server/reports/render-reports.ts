@@ -2,7 +2,7 @@ import type { SalesReport } from '@/lib/domain/reports';
 import { calculateMonthlyResult, type MonthlySource, type MonthlyClosing } from '@/lib/domain/fleet-results';
 import { competencyLabel, formatDate, formatMoney, formatPercent } from '@/lib/format';
 import { ReportPdf, reportColors as colors, type ReportColumn } from './pdf-layout';
-const num=(value:number)=>formatMoney(value).replace(/^(-?)R\$\s*/, '$1');
+const num=(value:number)=>formatMoney(value || 0).replace(/^(-?)R\$\s*/, '$1');
 const pct=(result:number,revenue:number)=>formatPercent(revenue?Math.round(result*10000/revenue):0);
 const cols=(labels:string[],widths:number[],rightFrom=1):ReportColumn[]=>labels.map((label,i)=>({label,width:widths[i],align:i>=rightFrom?'right':'left'}));
 const sum=(values:number[])=>values.reduce((a,b)=>a+b,0);
@@ -14,37 +14,49 @@ function summaryName(p:ReportPdf,value:string,width:number){
  return `${lines[0]}\n${last}…`;
 }
 
-export async function renderSalesReportPdf(report:SalesReport,competency:string,channel:string) {
- const p=await ReportPdf.create('Relatório gerencial',[['Competência',competencyLabel(competency)],['Canal',channel],['Base','Vendas do período'],['Moeda','Real (R$)']]);
- const {totals:t}=report;
- p.kpis([{label:'FATURAMENTO',value:formatMoney(t.freight),detail:'Valor total das vendas'},
- {label:'CUSTO TOTAL',value:formatMoney(t.cost),detail:'Despesas + comissão dos vendedores'},
- {label:'MARGEM',value:formatMoney(t.margin),detail:`${formatPercent(t.marginBps)} sobre o faturamento`},
- {label:'VENDAS',value:String(report.sales.length),detail:`${report.clients.length} clientes`}]);
- const top=p.y,clientColumns=cols(['Cliente','Vendas','Receita (R$)','Custo (R$)','Margem (R$)','Margem %'],[109,45,77,74,76,63]);
- const clientRow=(r:SalesReport['clients'][number])=>[r.name,String(r.sales),num(r.freight),num(r.cost),num(r.margin),formatPercent(r.marginBps)];
- const topClients=report.clients.slice(0,5),more=report.clients.length>5||topClients.some(r=>summaryName(p,r.name,95)!==r.name);
- p.text(more?'01  Principais clientes':'01  Resultado por cliente',p.left,top,11,true,colors.navy);
- const leftBottom=p.table(clientColumns,[...topClients.map(r=>[summaryName(p,r.name,95),...clientRow(r).slice(1)]),[report.clients.length>5?'SUBTOTAL':'TOTAL',String(sum(topClients.map(r=>r.sales))),num(sum(topClients.map(r=>r.freight))),num(sum(topClients.map(r=>r.cost))),num(sum(topClients.map(r=>r.margin))),pct(sum(topClients.map(r=>r.margin)),sum(topClients.map(r=>r.freight)))]],{top:top-19,total:true,rowHeight:26});
- const x=p.left+467,w=p.width-467;
- p.text(report.expenses.length>8?'02  Maiores custos':'02  Composição do custo',x,top,11,true,colors.navy);
- report.expenses.slice(0,8).forEach((r,i)=>{const y=top-26-i*24;const label=p.wrap(r.name,w-100,7.2).slice(0,2);label.forEach((s,j)=>p.text(s,x,y-j*8,7.2));p.text(formatMoney(r.value),x+w,y,7.5,true,colors.navy,'right');p.rect(x,y-13,w,3);p.rect(x,y-13,w*r.value/Math.max(1,report.expenses[0].value),3,colors.blue);});
- p.y=Math.min(leftBottom,top-26-Math.min(8,report.expenses.length)*24)-4;
- p.note('Margem = faturamento - custos lançados - comissão do vendedor. Não equivale ao lucro líquido da empresa.');
- if(report.pendingCosts)p.note(`Resultado parcial: ${report.pendingCosts} venda(s) com custos pendentes.`);
- if(more||report.expenses.length>8)p.note('A composição completa está nas páginas seguintes.');
- p.newPage('Detalhamento das vendas incluídas no relatório');p.section('03  Vendas do período');
- p.table(cols(['Venda','Data','Cliente','Vendedor(a)','Comissão %','Comissão (R$)','Receita (R$)','Custo (R$)','Margem (R$)'],[42,66,130,99,65,90,94,94,p.width-680],4),[
- ...report.sales.map(s=>[s.saleNumber,formatDate(s.saleDate),s.clientName||'Não informado',s.sellerName,formatPercent(s.commissionBasisPoints),num(s.financial.commissionCents),num(s.freightAmountCents),num(s.financial.transportCostCents),num(s.financial.marginCents)]),
- ['TOTAL','','','','',num(report.commissions),num(t.freight),num(t.cost),num(t.margin)]],{total:true});
- p.note('Custo total inclui despesas cadastradas e comissão do vendedor. Os totais correspondem ao resumo.');
- if(more){p.section('Resultado completo por cliente');p.table(cols(clientColumns.map(c=>c.label),[240,55,130,120,130,p.width-675]),report.clients.map(clientRow));}
- if(report.expenses.length>8){p.section('Composição completa do custo');p.table(cols(['Categoria','Valor (R$)'],[p.width-160,160]),report.expenses.map(r=>[r.name,num(r.value)]));}
+export async function renderSalesReportPdf(report:SalesReport,period:string,channel:string,showCommission=true,seller='Todos') {
+ const periodLabel=/^\d{4}-\d{2}$/.test(period)?competencyLabel(period):period.replace(/\d{4}-\d{2}-\d{2}/g,date=>formatDate(date));
+ const p=await ReportPdf.create('Vendas Geral',[['Período',periodLabel],['Canal',channel],['Vendedor',seller],['Moeda','Real (R$)']]);
+ const t=report.totals;
+ p.kpis([{label:'RECEITA DAS VENDAS',value:formatMoney(t.freight),detail:`${report.sales.length} vendas incluídas`},
+ {label:'CUSTO TOTAL',value:formatMoney(t.cost),detail:'Custos e comissões incluídos'},
+ {label:'MARGEM',value:formatMoney(t.margin),detail:`${formatPercent(t.marginBps)} sobre a receita`},
+ ...(showCommission?[{label:'COMISSÕES',value:formatMoney(report.commissions),detail:'Percentuais registrados nas vendas'}]:[{label:'VENDAS',value:String(report.sales.length),detail:'Registros selecionados'}])]);
+ p.note('Base: data da venda na Cegonha e nas vendas Frota sem vínculo; data de coleta nos fretes da Frota. Vendas Frota vinculadas não são somadas novamente.');
+ if(report.pendingCosts)p.note(`Resultado parcial: ${report.pendingCosts} registro(s) com custos pendentes ou combustível estimado.`);
+ p.section('01  Comparativo por vendedor');
+ const sellerColumns=showCommission?cols(['Vendedor','Vendas','Receita (R$)','Custo (R$)','Margem (R$)','Comissão (R$)'],[224,50,125,125,125,p.width-649]):cols(['Vendedor','Vendas','Receita (R$)','Custo (R$)','Margem (R$)'],[249,65,155,155,p.width-624]);
+ p.table(sellerColumns,[...report.sellers.map(r=>[r.name,String(r.sales),num(r.freight),num(r.cost),num(r.margin),...(showCommission?[num(r.commission??0)]:[])]),['TOTAL',String(report.sales.length),num(t.freight),num(t.cost),num(t.margin),...(showCommission?[num(report.commissions)]:[])]],{total:true});
+ p.newPage('Detalhamento de todas as vendas selecionadas');p.section('02  Vendas incluídas');
+ const columns=showCommission?cols(['Venda','Canal / data','Cliente','Vendedor','Comissão %','Comissão (R$)','Receita (R$)','Custo (R$)','Margem (R$)'],[48,80,126,104,58,85,90,90,p.width-681],4):cols(['Venda','Canal / data','Cliente','Vendedor','Receita (R$)','Custo (R$)','Margem (R$)'],[48,85,170,140,110,110,p.width-663],4);
+ p.table(columns,[...report.sales.map(r=>[r.saleNumber,`${r.saleChannel==='FROTA'?'Frota':'Cegonha'}\n${formatDate(r.saleDate)}`,r.clientName||'Não informado',r.sellerName,...(showCommission?[formatPercent(r.commissionBasisPoints),num(r.financial.commissionCents)]:[]),num(r.freightAmountCents),num(r.financial.transportCostCents),num(r.financial.marginCents)]),['TOTAL','','','',...(showCommission?['',num(report.commissions)]:[]),num(t.freight),num(t.cost),num(t.margin)]],{total:true});
+ p.note('Margem = receita - custos - comissão do vendedor. Custos da Frota seguem o cálculo dos fretes, incluindo combustível estimado quando não há realizado. Não equivale ao lucro líquido.');
+ return p.save();
+}
+
+export async function renderCegonhaMonthlyReportPdf(source:MonthlySource,closing?:MonthlyClosing) {
+ if(source.scope!=='CEGONHA' || source.freights.length || source.trips.length || source.sales?.some(s=>s.saleChannel!=='CEGONHA'))throw new Error('Este fechamento contém registros fora da Cegonha.');
+ const t=calculateMonthlyResult(source);
+ const p=await ReportPdf.create('Fechamento da Cegonha',[['Competência',competencyLabel(source.competency)],['Escopo','Somente Cegonha'],['Situação',closing?(closing.reopenedAt?'Fechamento reaberto':'Fechamento salvo'):'Apuração atual'],['Moeda','Real (R$)']]);
+ p.kpis([{label:'RECEITA DA CEGONHA',value:formatMoney(t.revenueCents),detail:`${source.sales?.length??0} vendas na competência`},
+ {label:'DESPESAS TOTAIS',value:formatMoney(t.variableCostCents+t.fixedCostCents),detail:'Custos, comissões e lançamentos'},
+ {label:'RESULTADO DO MÊS',value:formatMoney(t.resultCents),detail:'Receita menos despesas da Cegonha'},
+ {label:'MARGEM DO MÊS',value:pct(t.resultCents,t.revenueCents),detail:'Resultado / receita da Cegonha'}]);
+ p.note('Somente vendas Cegonha pela competência da venda. As despesas incluem a comissão registrada em cada venda.');
+ if(closing)p.note(`Fechado por ${closing.closedByName} em ${formatDate(closing.closedAt)}.${closing.reopenedAt?` Reaberto: ${closing.reopenReason}`:''}`);
+ if(t.pendingSalesCount)p.note(`APURAÇÃO PARCIAL: ${t.pendingSalesCount} venda(s) com custos pendentes.`);
+ p.section('01  Composição do resultado');
+ p.table(cols(['Composição','Valor (R$)'],[p.width-170,170]),[
+ ['Receita das vendas',num(t.salesRevenueCents)],['Outras receitas',num(t.otherRevenueCents)],['Custos e comissões das vendas',num(-t.salesCostCents)],['Outros custos variáveis',num(-t.otherVariableCents)],['Custos fixos',num(-t.fixedCostCents)],['RESULTADO DO MÊS',num(t.resultCents)]],{total:true});
+ p.newPage('Vendas que compõem o fechamento da Cegonha');p.section('02  Vendas da competência');
+ p.table(cols(['Venda','Data','Cliente','Receita (R$)','Custos (R$)','Resultado (R$)'],[55,77,237,130,145,p.width-644],3),[...(source.sales??[]).map(r=>[r.saleNumber||'Não disponível',formatDate(r.date),r.client||'Não informado',num(r.revenueCents),num(r.costCents),num(r.revenueCents-r.costCents)]),['TOTAL','','',num(t.salesRevenueCents),num(t.salesCostCents),num(t.salesRevenueCents-t.salesCostCents)]],{total:true});
+ if(source.entries.length){p.section('03  Lançamentos mensais');p.table(cols(['Descrição','Tipo','Valor (R$)'],[p.width-300,150,150],2),source.entries.map(e=>[e.description,{REVENUE:'Outra receita',VARIABLE:'Custo variável',FIXED:'Custo fixo'}[e.kind],num(e.amountCents)]));}
+ p.note(`Conferência: ${formatMoney(t.revenueCents)} de receitas - ${formatMoney(t.variableCostCents+t.fixedCostCents)} de despesas = ${formatMoney(t.resultCents)} de resultado.`);
  return p.save();
 }
 
 export async function renderMonthlyReportPdf(source:MonthlySource,closing?:MonthlyClosing) {
- if(source.sales?.some(s=>s.saleChannel!=='FROTA'))throw new Error('Este fechamento contém vendas fora da Frota.');
+ if(source.scope==='CEGONHA' || source.sales?.some(s=>s.saleChannel!=='FROTA'))throw new Error('Este fechamento contém vendas fora da Frota.');
  const t=calculateMonthlyResult(source),allCosts=t.variableCostCents+t.fixedCostCents;
  const p=await ReportPdf.create('Fechamento mensal da Frota',[['Competência',competencyLabel(source.competency)],['Escopo','Somente Frota'],['Situação',closing?(closing.reopenedAt?'Fechamento reaberto':'Fechamento salvo'):'Apuração atual'],['Moeda','Real (R$)']]);
  p.kpis([{label:'RECEITA DA FROTA',value:formatMoney(t.revenueCents),detail:`${source.freights.length} fretes + ${source.sales?.length??0} vendas sem vínculo`},

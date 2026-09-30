@@ -20,6 +20,7 @@ type UserRow = {
   email: string;
   phone: string | null;
   username: string | null;
+  commissionBasisPoints: number;
   role: Role;
   active: boolean;
   hasPassword: boolean;
@@ -35,6 +36,8 @@ function profileLabel(role: Role) {
 
 export function SettingsScreen() {
   const usersApi = useApi<{ users: UserRow[] }>("/api/users");
+  const [newRole, setNewRole] = useState<Role>("VENDEDOR");
+  const [editRole, setEditRole] = useState<Role>("VENDEDOR");
   const [savingUser, setSavingUser] = useState(false);
   const [deletingUser, setDeletingUser] = useState<string | null>(null);
   const [editingUser, setEditingUser] = useState<UserRow | null>(null);
@@ -55,6 +58,7 @@ export function SettingsScreen() {
         body: JSON.stringify(Object.fromEntries(form)),
       });
       formElement.reset();
+      setNewRole("VENDEDOR");
       usersApi.refresh();
       setMessage("Usuário autorizado com login e senha.");
     } catch (userError) {
@@ -124,7 +128,7 @@ export function SettingsScreen() {
       <PageHeader
         eyebrow="Administração"
         title="Configurações"
-        description="Gerencie somente logins, senhas, perfis e acesso dos usuários."
+        description="Gerencie os acessos e a comissão dos vendedores."
       />
       {message && <p className="success-banner" role="status">{message}</p>}
       {error && <p className="form-error" role="alert">{error}</p>}
@@ -142,13 +146,14 @@ export function SettingsScreen() {
           <Field label="Senha"><input name="password" type="password" minLength={6} autoComplete="new-password" required /></Field>
           <Field label="Telefone"><input name="phone" type="tel" autoComplete="tel" placeholder="(11) 99999-9999" maxLength={20} /></Field>
           <Field label="Perfil">
-            <select name="role" defaultValue="VENDEDOR">
+            <select name="role" value={newRole} onChange={e=>setNewRole(e.target.value as Role)}>
               <option value="ADMIN">Admin</option>
               <option value="VENDEDOR">Vendedor</option>
               <option value="FINANCEIRO">Financeiro</option>
               <option value="OPERACIONAL">Operacional</option>
             </select>
           </Field>
+          {newRole === "VENDEDOR" && <Field label="Comissão (%)"><input name="commissionPercent" inputMode="decimal" defaultValue="7" required /></Field>}
           <button className="button secondary" disabled={savingUser}>
             {savingUser ? "Adicionando…" : "Criar acesso"}
           </button>
@@ -191,6 +196,7 @@ export function SettingsScreen() {
                         onClick={() => {
                           setError(null);
                           setEditingUser(user);
+                          setEditRole(user.role);
                         }}
                       >
                         <Icons.chevron />
@@ -228,7 +234,8 @@ export function SettingsScreen() {
             <Field label="Perfil">
               <select
                 name="role"
-                defaultValue={editingUser.role === "GERENCIA" ? "" : editingUser.role}
+                value={editRole === "GERENCIA" ? "" : editRole}
+                onChange={e=>setEditRole(e.target.value as Role)}
                 required
               >
                 {editingUser.role === "GERENCIA" && (
@@ -240,6 +247,7 @@ export function SettingsScreen() {
                 <option value="OPERACIONAL">Operacional</option>
               </select>
             </Field>
+            {editRole === "VENDEDOR" && <Field label="Comissão (%)" hint="Vendas anteriores mantêm a taxa registrada."><input name="commissionPercent" inputMode="decimal" defaultValue={((editingUser.commissionBasisPoints ?? 700)/100).toFixed(2).replace(".",",")} required /></Field>}
             <Field label="Situação">
               <select name="active" defaultValue={editingUser.active ? "true" : "false"}>
                 <option value="true">Ativo</option>

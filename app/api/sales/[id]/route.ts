@@ -1,3 +1,4 @@
+import { resolveSaleSeller, saleForViewer } from "@/lib/server/seller-commission";
 import { validateSaleClient } from "@/lib/server/registry-validation";
 import { drainStorageCleanup } from "@/lib/server/storage-cleanup";
 import { parseSaleCargo } from "@/lib/server/sale-cargo";
@@ -15,7 +16,6 @@ import {
   ApiError,
   getD1,
   jsonError,
-  queryFirst,
 } from "@/lib/server/d1";
 import { getSale } from "@/lib/server/repository";
 import {
@@ -44,7 +44,7 @@ export async function GET(request: Request, context: RouteContext) {
     const { id } = await context.params;
     const sale = await getSale(user, id);
     if (!sale) throw new ApiError(404, "Venda não encontrada.");
-    return Response.json({ sale });
+    return Response.json({ sale: saleForViewer(sale,user) });
   } catch (error) {
     return jsonError(error);
   }
@@ -127,12 +127,6 @@ export async function PATCH(request: Request, context: RouteContext) {
       "Valor do frete em centavos",
       1,
       9_000_000_000_000,
-    );
-    const commissionBasisPoints = integerInRange(
-      payload.commissionBasisPoints,
-      "Percentual de comissão",
-      0,
-      10_000,
     );
     const operationalStatus = enumValue(
       payload.operationalStatus,
@@ -271,15 +265,8 @@ export async function PATCH(request: Request, context: RouteContext) {
       throw new ApiError(400, "Cada prestador deve ocupar uma linha diferente.");
     }
 
-    const sellerName = requiredUpper(payload.sellerName, "Vendedor");
-    const matchedSeller = await queryFirst<{ id: string }>(
-      `select id from users
-       where role = 'VENDEDOR' and active = 1 and upper(name) = ?
-       limit 1`,
-      [sellerName],
-    );
-    const sellerId =
-      matchedSeller?.id ?? (sellerName === sale.sellerName ? sale.sellerId : null);
+    const seller = await resolveSaleSeller(user, payload, sale);
+    const sellerName = seller.name, sellerId = seller.id, commissionBasisPoints = seller.commissionBasisPoints;
     const costsPending = costs.some((cost) => !cost.confirmed);
     const db = await getD1();
     const statements: D1PreparedStatement[] = [
@@ -328,6 +315,10 @@ export async function PATCH(request: Request, context: RouteContext) {
         ),
       db.prepare("delete from freight_costs where sale_id = ?").bind(id),
     ];
+
+    if (cargo.fleetFreightId && sale.saleChannel === 'FROTA') {
+      statements.push(db.prepare(`update fleet_freights set seller_id=?,seller_name=?,seller_commission_basis_points=? where id=?`).bind(sellerId,sellerName,commissionBasisPoints,cargo.fleetFreightId));
+    }
 
     const firstInstallment = sale.installments.find(
       (installment) => installment.installmentNumber === 1,
