@@ -33,7 +33,7 @@ mock.module('../../lib/server/d1.ts', { namedExports: {
 
 before(async () => {
  await pg.exec('CREATE ROLE anon; CREATE ROLE authenticated;');
- for (let pass = 0; pass < 2; pass++) for (const file of ['001_central_frete_postgres.sql', '002_fleet.sql', '003_fleet_billing.sql', '004_operational_role.sql', '005_detach_driver_vehicle.sql', '006_fleet_vehicle_cost_average_flag.sql', '008_fleet_results.sql', '009_direct_paid_operation_costs.sql', '010_fleet_cargo_sales_orders.sql', '011_sale_origin_location_type.sql', '../supabase/migrations/20260923220518_fleet_operation_integrity.sql', '012_sales_channels_global_numbering_costs.sql', '013_fleet_document_costs.sql', '015_fleet_numbers_and_orders.sql', '../supabase/migrations/20260928224007_user_phone_vehicle_deletion.sql', '016_fleet_monthly_scope.sql', '../supabase/migrations/20260929161711_registry_channels_addresses.sql', '../supabase/migrations/20260929175656_fleet_client_reference.sql', '../supabase/migrations/20260930164106_seller_commission_access.sql']) await pg.exec(await readFile(new URL(`../../database/${file}`, import.meta.url), 'utf8'));
+ for (let pass = 0; pass < 2; pass++) for (const file of ['001_central_frete_postgres.sql', '002_fleet.sql', '003_fleet_billing.sql', '004_operational_role.sql', '005_detach_driver_vehicle.sql', '006_fleet_vehicle_cost_average_flag.sql', '008_fleet_results.sql', '009_direct_paid_operation_costs.sql', '010_fleet_cargo_sales_orders.sql', '011_sale_origin_location_type.sql', '../supabase/migrations/20260923220518_fleet_operation_integrity.sql', '012_sales_channels_global_numbering_costs.sql', '013_fleet_document_costs.sql', '015_fleet_numbers_and_orders.sql', '../supabase/migrations/20260928224007_user_phone_vehicle_deletion.sql', '016_fleet_monthly_scope.sql', '../supabase/migrations/20260929161711_registry_channels_addresses.sql', '../supabase/migrations/20260929175656_fleet_client_reference.sql', '../supabase/migrations/20260930164106_seller_commission_access.sql', '../supabase/migrations/20260930172047_cegonha_monthly_scope.sql']) await pg.exec(await readFile(new URL(`../../database/${file}`, import.meta.url), 'utf8'));
  await pg.exec("INSERT INTO users(id,email,name,role) VALUES ('admin','admin@example.test','Admin','ADMIN'),('finance','finance@example.test','Finance','FINANCEIRO'),('seller','seller@example.test','Seller','VENDEDOR');");
  await pg.exec("INSERT INTO clients(id,type,legal_name,sale_channel) VALUES ('freight-client-0','PJ','CLIENTE DE TESTE','FROTA'),('freight-client-1','PJ','CLIENTE TESTE','FROTA'),('freight-client-2','PJ','CLIENTE CARGA','FROTA'),('freight-client-3','PJ','ODOMETRO','FROTA'),('freight-client-4','PJ','CLIENTE CUSTOS','FROTA'),('freight-client-5','PJ','CLIENTE OS FROTA','FROTA'),('freight-client-6','PJ','CLIENTE ATUALIZADO','FROTA');");
  process.env.CENTRAL_FRETE_SESSION_SECRET = 'test-secret-never-use-in-production-1234';
@@ -1045,11 +1045,12 @@ test('OS usa vendedora da venda e não troca contato entre visualizadores ou emi
  assert.equal((await orderReport('seller-phone-sale')).stale,true);
 });
 
-test('relatório completo respeita canal, vendedor e permissões; PDF não trunca 501 vendas',async()=>{
+test('relatório completo respeita canal, vendedor e permissões; PDF não trunca 501 vendas e o frete consolidado',async()=>{
  const api=await import('../../app/api/reports/sales/route.ts');
  const {PDFDocument}=await import('pdf-lib');
  const report=await (await api.GET(await request('/api/reports/sales?competency=2041-02&saleChannel=FROTA','finance'))).json();
- assert.equal(report.report.sales.length,501);assert.equal(report.report.totals.freight,501000);
+ assert.equal(report.report.sales.length,502);assert.equal(report.report.totals.freight,504000);
+ assert.ok(report.report.sales.some((s:{id:string})=>s.id==='freight:consolidated-fallback'));
  assert.equal(report.report.expenses.reduce((s:number,r:{value:number})=>s+r.value,0),report.report.totals.cost);
  const cegonha=await (await api.GET(await request('/api/reports/sales?competency=2041-02&saleChannel=CEGONHA','finance'))).json();assert.equal(cegonha.report.sales.length,1);
  const seller=await (await api.GET(await request('/api/reports/sales?competency=2041-02','seller'))).json();assert.equal(seller.report.sales.length,0);
@@ -1329,4 +1330,63 @@ test('migração de comissão preserva taxas históricas, associa IDs inequívoc
   assert.deepEqual(await queryFirst("select seller_id,seller_commission_basis_points from fleet_freights where id='commission-legacy-own'"),{seller_id:'seller',seller_commission_basis_points:0});
   assert.deepEqual(await queryFirst("select seller_id,commission_basis_points from freight_sales where id='commission-ambiguous'"),{seller_id:null,commission_basis_points:900});
  }
+});
+
+test('relatório geral une fretes e vendas sem duplicação, filtra período e vendedor por ID e protege comissões',async()=>{
+ const api=await import('../../app/api/reports/sales/route.ts');
+ await pg.exec(`INSERT INTO users(id,email,name,role) VALUES ('report-homonym','report-homonym@example.test','SELLER','VENDEDOR');
+ INSERT INTO fleet_freights(id,vehicle_plate,driver_name,client_name,origin,destination,pickup_date,billing_date,operational_status,freight_amount_cents,distance_meters,actual_fuel_cost_cents,seller_id,seller_name,seller_commission_basis_points)
+ VALUES ('report-freight','REL1A23','MOTORISTA RELATÓRIO','CLIENTE RELATÓRIO','A','B','2060-01-10','2060-02-01','FATURADO',200000,100000,20000,'seller','SELLER',500);
+ INSERT INTO freight_sales(id,sale_date,competency,seller_id,seller_name,origin,destination,financial_due_date,operational_status,freight_amount_cents,commission_basis_points,costs_pending,sale_channel,created_by,fleet_freight_id)
+ VALUES ('report-own','2060-01-10','2060-01','seller','SELLER','A','B','2060-01-31','CONFIRMAR',100000,700,0,'CEGONHA','admin',null),
+ ('report-other','2060-01-20','2060-01','report-homonym','SELLER','A','B','2060-01-31','CONFIRMAR',300000,700,0,'CEGONHA','admin',null),
+ ('report-mirror','2060-01-12','2060-01','seller','SELLER','A','B','2060-01-31','CONFIRMAR',200000,500,0,'FROTA','admin','report-freight');`);
+ const get=async(q='',role='admin')=>{const r=await api.GET(await request(`/api/reports/sales?from=2060-01-01&to=2060-01-31${q}`,role));assert.equal(r.status,200,await r.clone().text());return r.json();};
+ const all=await get();assert.equal(all.report.sales.length,3);assert.equal(all.report.totals.freight,600000);assert.equal(all.report.commissions,38000);assert.equal(all.report.totals.cost,58000);assert.equal(all.report.totals.margin,542000);
+ assert.equal(all.report.sellers.length,2);assert.equal(all.sellers.length,2);assert.ok(!all.report.sales.some((s:{id:string})=>s.id==='report-mirror'));
+ const own=await get('&seller=seller');assert.equal(own.report.sales.length,2);assert.equal(own.report.commissions,17000);assert.equal(own.report.sellers[0].commission,17000);
+ const fleet=await get('&saleChannel=FROTA');assert.equal(fleet.report.sales.length,1);assert.equal(fleet.report.sales[0].id,'freight:report-freight');
+ const cegonha=await get('&saleChannel=CEGONHA');assert.equal(cegonha.report.sales.length,2);assert.equal(cegonha.report.totals.freight,400000);
+ const seller=await get('','seller');assert.equal(seller.report.sales.length,2);assert.deepEqual(seller.sellers.map((s:{id:string})=>s.id),['seller']);assert.equal((await get('&seller=report-homonym','seller')).report.sales.length,0);
+ const finance=await get('','finance');assert.equal(finance.showCommission,false);assert.equal('commissions' in finance.report,false);assert.ok(finance.report.sellers.every((s:object)=>!('commission' in s)));assert.ok(finance.report.sales.every((s:{financial:object})=>!('commissionBasisPoints' in s)&&!('commissionCents' in s.financial)));
+ const unbounded=await (await api.GET(await request('/api/reports/sales','admin'))).json();assert.ok(unbounded.report.sales.some((s:{id:string})=>s.id==='report-own'));
+ for(const q of ['from=2060-02-30','from=2060-02-01&to=2060-01-01'])assert.equal((await api.GET(await request(`/api/reports/sales?${q}`))).status,400);
+ const csv=await api.GET(await request('/api/reports/sales?from=2060-01-10&to=2060-01-10&seller=seller&format=csv'));
+ const text=await csv.text();assert.equal(text.trim().split('\r\n').length,3);assert.match(text,/CEGONHA/);assert.match(text,/FROTA/);assert.match(text,/Comissão/);
+ const financeCsv=await (await api.GET(await request('/api/reports/sales?from=2060-01-01&format=csv','finance'))).text();assert.doesNotMatch(financeCsv,/Comissão/);
+ const pdf=await api.GET(await request('/api/reports/sales?from=2060-01-01&to=2060-01-31&format=pdf'));
+ assert.equal(pdf.status,200,await pdf.clone().text());const bytes=new Uint8Array(await pdf.arrayBuffer());
+ if(process.env.CENTRAL_QA_OUTPUT){const {writeFile}=await import('node:fs/promises');await writeFile(`${process.env.CENTRAL_QA_OUTPUT}/relatorio-geral.pdf`,bytes);await writeFile(`${process.env.CENTRAL_QA_OUTPUT}/relatorio-geral.json`,JSON.stringify(all));}
+});
+
+test('fechamento Cegonha mantém escopo, bloqueia pendências, preserva versões e rejeita IDs da Frota',async()=>{
+ const api=await import('../../app/api/cegonha/monthly/route.ts');const pdf=await import('../../app/api/cegonha/monthly/pdf/route.ts');const fleet=await import('../../app/api/fleet/monthly/route.ts');const fleetPdf=await import('../../app/api/fleet/monthly/pdf/route.ts');
+ const {calculateMonthlyResult}=await import('../../lib/domain/fleet-results.ts');
+ const post=async(body:object,role='finance')=>api.POST(await request('/api/cegonha/monthly',role,'POST',{competency:'2060-01',...body}));
+ const get=async()=>{const r=await api.GET(await request('/api/cegonha/monthly?competency=2060-01','finance'));assert.equal(r.status,200,await r.clone().text());return r.json();};
+ assert.equal((await api.GET(await request('/api/cegonha/monthly?competency=2060-01','seller'))).status,403);
+ assert.equal((await post({action:'CLOSE',reviewed:true},'seller')).status,403);
+ await pg.exec("INSERT INTO company_monthly_entries(id,competency,kind,description,amount_cents,scope) VALUES ('report-fleet-entry','2060-01','FIXED','FROTA',900000,'FROTA'),('report-general-entry','2060-01','FIXED','GENERAL',900000,'GENERAL')");
+ assert.equal((await post({action:'DELETE_ENTRY',id:'report-fleet-entry'})).status,409);
+ assert.equal((await post({action:'CLASSIFY_ENTRY',id:'report-general-entry',confirmed:true})).status,400);
+ assert.equal((await post({action:'ENTRY',kind:'FIXED',description:'CUSTO CEGONHA',amountCents:12000})).status,200);
+ const data=await get();assert.equal(data.current.scope,'CEGONHA');assert.equal(data.current.sales.length,2);assert.equal(data.current.freights.length,0);assert.equal(data.current.entries.length,1);assert.equal(calculateMonthlyResult(data.current).resultCents,360000);
+ await pg.exec("UPDATE freight_sales SET costs_pending=1 WHERE id='report-own'");
+ assert.equal((await post({action:'CLOSE',reviewed:true})).status,409);
+ await pg.exec("UPDATE freight_sales SET costs_pending=0 WHERE id='report-own'");
+ assert.equal((await post({action:'CLOSE',reviewed:false})).status,400);
+ assert.equal((await post({action:'CLOSE',reviewed:true})).status,200);
+ const saved=(await get()).history[0];assert.equal(saved.snapshot.scope,'CEGONHA');
+ assert.equal((await post({action:'ENTRY',kind:'FIXED',description:'BLOQUEADO',amountCents:100})).status,409);
+ assert.equal((await fleet.POST(await request('/api/fleet/monthly','finance','POST',{competency:'2060-01',action:'REOPEN',id:saved.id,reason:'Outro canal'}))).status,409);
+ assert.equal((await fleetPdf.GET(await request(`/api/fleet/monthly/pdf?competency=2060-01&closingId=${saved.id}`,'finance'))).status,404);
+ assert.equal((await pdf.GET(await request(`/api/cegonha/monthly/pdf?competency=2060-02&closingId=${saved.id}`,'finance'))).status,404);
+ await pg.exec("UPDATE freight_sales SET freight_amount_cents=200000 WHERE id='report-own'");
+ const changed=await get();assert.equal(calculateMonthlyResult(changed.history[0].snapshot).resultCents,360000);assert.equal(calculateMonthlyResult(changed.current).resultCents,453000);
+ const exported=await pdf.GET(await request(`/api/cegonha/monthly/pdf?competency=2060-01&closingId=${saved.id}`,'finance'));assert.equal(exported.status,200,await exported.clone().text());
+ const bytes=new Uint8Array(await exported.arrayBuffer());
+ if(process.env.CENTRAL_QA_OUTPUT){const {writeFile}=await import('node:fs/promises');await writeFile(`${process.env.CENTRAL_QA_OUTPUT}/fechamento-cegonha.pdf`,bytes);await writeFile(`${process.env.CENTRAL_QA_OUTPUT}/fechamento-cegonha.json`,JSON.stringify(changed));}
+ assert.equal((await post({action:'REOPEN',id:saved.id,reason:'Conferência do valor'})).status,200);
+ assert.equal((await post({action:'CLOSE',reviewed:true})).status,200);assert.equal((await get()).history.length,2);
+ const feb=await (await api.GET(await request('/api/cegonha/monthly?competency=2060-02','finance'))).json();assert.equal(feb.current.sales.length,0);assert.ok(feb.periods.some((p:{competency:string})=>p.competency==='2060-01'));
 });

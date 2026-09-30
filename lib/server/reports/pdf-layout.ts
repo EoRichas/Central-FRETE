@@ -43,10 +43,14 @@ export class ReportPdf {
     this.text(subtitle,M+101,H-73,8,false,reportColors.muted);
     this.text('RELATÓRIO GERENCIAL',W-M,H-30,7.5,true,reportColors.blue,'right');
     this.text(new Date().toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'}),W-M,H-45,7.5,false,reportColors.muted,'right');
-    this.line(M,H-89,this.width,reportColors.navy);this.rect(M,H-134,this.width,33);
-    let x=M+12;const col=this.width/this.filters.length;
-    for(const [label,value] of this.filters){this.text(label.toUpperCase(),x,H-114,6.5,true,reportColors.muted);this.text(value,x,H-127,8,true,reportColors.navy);x+=col;}
-    this.y=H-155;
+    this.line(M,H-89,this.width,reportColors.navy);
+    const col=this.width/this.filters.length;
+    const values=this.filters.map(([,value])=>this.wrap(value,col-24,8,true));
+    const filterHeight=25+Math.max(...values.map(v=>v.length))*10;
+    this.rect(M,H-101-filterHeight,this.width,filterHeight);
+    let x=M+12;
+    this.filters.forEach(([label],i)=>{this.text(label.toUpperCase(),x,H-114,6.5,true,reportColors.muted);values[i].forEach((line,j)=>this.text(line,x,H-127-j*10,8,true,reportColors.navy));x+=col;});
+    this.y=H-122-filterHeight;
   }
   ensure(height:number){if(this.y-height<48)this.newPage('Continuação');}
   section(title:string){this.ensure(64);this.text(title,M,this.y,11,true,reportColors.navy);this.y-=19;}
