@@ -8,10 +8,10 @@ import { asObject } from "@/lib/server/validation";
 
 export async function POST(request: Request) {
   try {
-    const user = await authorize(request, ["ADMIN", "GERENCIA", "VENDEDOR"]);
+    const user = await authorize(request, ["ADMIN", "GERENCIA", "VENDEDOR", "OPERACIONAL"]);
     const payload = asObject(await request.json());
     if (payload.saleNumber != null) throw new ApiError(400, "O número da venda é gerado automaticamente.");
-    if (user.role === "VENDEDOR" && payload.tripId) throw new ApiError(403, "Vendedor não pode vincular viagens administrativas.");
+    if ((user.role === "VENDEDOR" || user.role === "OPERACIONAL") && payload.tripId) throw new ApiError(403, "Seu perfil não pode vincular viagens administrativas.");
     const parsed = parseFleetFreightPayload(payload);
     const data = { ...parsed, ...await resolveFreightClient(parsed) };
     const { vehicle, driver } = await resolveFleetReferences(

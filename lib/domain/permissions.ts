@@ -25,7 +25,7 @@ const grants: Record<PermissionRole, ReadonlySet<Capability>> = {
   GERENCIA: new Set(["VIEW_ALL", "VIEW_SERVICE_ORDERS"]),
   VENDEDOR: new Set(["MANAGE_SALES", "MANAGE_CLIENTS", "CREATE_CEGONHA_SALE", "CREATE_FLEET_SALE", "FLEET_SALES_ONLY", "VIEW_SERVICE_ORDERS"]),
   FINANCEIRO: new Set(["VIEW_ALL", "MANAGE_PAYMENTS", "VIEW_SERVICE_ORDERS"]),
-  OPERACIONAL: new Set(["CREATE_CEGONHA_SALE"]),
+  OPERACIONAL: new Set(["CREATE_CEGONHA_SALE", "CREATE_FLEET_SALE", "MANAGE_CLIENTS"]),
 };
 
 export function roleCan(role: PermissionRole, capability: Capability): boolean {
