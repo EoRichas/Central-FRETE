@@ -1,11 +1,13 @@
+import { assertFleetAccess } from "@/lib/server/seller-commission";
 import { authorize } from "@/lib/server/auth";
 import { ApiError, getBucket, getD1, jsonError, queryAll, queryFirst } from "@/lib/server/d1";
 import { readPaymentProof } from "@/lib/server/payment-proof";
 type Context = { params: Promise<{ id: string }> };
 export async function GET(request: Request, context: Context) {
  try {
-  await authorize(request, ["ADMIN", "GERENCIA", "FINANCEIRO", "OPERACIONAL"]);
+  const user = await authorize(request, ["ADMIN", "GERENCIA", "FINANCEIRO", "OPERACIONAL"]);
   const { id } = await context.params;
+  await assertFleetAccess(user,id);
   const attachments = await queryAll("select id, file_name as fileName, created_at as createdAt from fleet_attachments where freight_id = ? order by created_at desc", [id]);
   return Response.json({ attachments });
  } catch(error) { return jsonError(error); }
@@ -15,6 +17,7 @@ export async function POST(request: Request, context: Context) {
  try {
   const user = await authorize(request, ["ADMIN", "GERENCIA", "FINANCEIRO", "OPERACIONAL"]);
   const { id } = await context.params;
+  await assertFleetAccess(user,id);
   if (!await queryFirst("select id from fleet_freights where id = ?", [id])) throw new ApiError(404, "Frete não encontrado.");
   const file = await readPaymentProof((await request.formData()).get("file"));
   const attachmentId = crypto.randomUUID();

@@ -26,7 +26,7 @@ export function ReportsScreen() {
   const [competency, setCompetency] = useState(currentCompetency);
   const [saleChannel,setSaleChannel] = useState('');
   const query = `competency=${competency}${saleChannel ? `&saleChannel=${saleChannel}` : ''}`;
-  const api = useApi<{report: SalesReport}>(`/api/reports/sales?${query}`);
+  const api = useApi<{report: SalesReport;showCommission:boolean}>(`/api/reports/sales?${query}`);
   const sales = api.data?.report.sales ?? [];
   const totals = api.data?.report.totals ?? {freight:0,cost:0,margin:0,marginBps:0};
   const clients = api.data?.report.clients ?? [];
@@ -102,7 +102,7 @@ export function ReportsScreen() {
                 <p>O percentual e o valor da comissão correspondem ao cadastro de cada venda.</p>
               </div>
             </header>
-            <PortfolioSalesTable sales={sales} />
+            <PortfolioSalesTable sales={sales} showCommission={api.data?.showCommission ?? false} />
           </section>
           <section className="panel">
             <header>
@@ -142,7 +142,7 @@ export function ReportsScreen() {
   );
 }
 
-function PortfolioSalesTable({ sales }: { sales: SaleRecord[] }) {
+function PortfolioSalesTable({ sales,showCommission }: { sales: SaleRecord[];showCommission:boolean }) {
   return (
     <div className="responsive-table">
       <table>
@@ -152,8 +152,7 @@ function PortfolioSalesTable({ sales }: { sales: SaleRecord[] }) {
             <th>Data</th>
             <th>Cliente</th>
             <th>Vendedor(a)</th>
-            <th>Percentual</th>
-            <th>Comissão</th>
+            {showCommission && <><th>Percentual</th><th>Comissão</th></>}
             <th>Faturamento</th>
             <th>Margem</th>
           </tr>
@@ -165,8 +164,8 @@ function PortfolioSalesTable({ sales }: { sales: SaleRecord[] }) {
               <td data-label="Data">{formatDate(sale.saleDate)}</td>
               <td data-label="Cliente">{sale.clientName ?? "—"}</td>
               <td data-label="Vendedor(a)"><strong>{sale.sellerName}</strong></td>
-              <td data-label="Percentual"><strong>{formatPercent(sale.commissionBasisPoints)}</strong></td>
-              <td data-label="Comissão">{formatMoney(sale.financial.commissionCents)}</td>
+              {showCommission && <><td data-label="Percentual"><strong>{formatPercent(sale.commissionBasisPoints)}</strong></td>
+              <td data-label="Comissão">{formatMoney(sale.financial.commissionCents)}</td></>}
               <td data-label="Faturamento">{formatMoney(sale.freightAmountCents)}</td>
               <td data-label="Margem">{formatMoney(sale.financial.marginCents)}</td>
             </tr>

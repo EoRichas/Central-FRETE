@@ -1,3 +1,4 @@
+import type { CurrentUser } from "@/lib/contracts";
 import { allocateTripCost } from "@/lib/domain/trip-allocation";
 import { cargoVehiclesOrLegacy } from "@/lib/domain/cargo-vehicles";
 import { loadFleetTrips } from "@/lib/server/fleet-trips";
@@ -57,6 +58,10 @@ type VehicleCostRow = {
 };
 
 type FreightRow = {
+  sellerId: string | null;
+  sellerName: string | null;
+  sellerCommissionBasisPoints: number;
+  createdBy: string | null;
   linkedFleetSaleId: string | null;
   saleNumber: string;
   tripId: string | null;
@@ -126,6 +131,7 @@ export async function loadFleetData(
   freightOnly = false,
   competency?: string,
   canEditFreightFinancials = false,
+  selection?: {id?: string; user?: CurrentUser},
 ): Promise<FleetData> {
   const startDate = competency ? `${competency}-01` : null;
   const endDate = competency ? (() => {
@@ -134,14 +140,14 @@ export async function loadFleetData(
     return date.toISOString().slice(0, 10);
   })() : null;
   // Keep every member of a relevant trip so allocation is identical across months.
-  const scope = competency ? `with selected_freights as (
+  const scope = selection?.id ? `with selected_freights as (select id,trip_id from fleet_freights where id=?), selected_trips as (select trip_id as id from selected_freights where trip_id is not null)` : competency ? `with selected_freights as (
     select id, trip_id from fleet_freights
     where (pickup_date >= ? and pickup_date < ?) or (billing_date >= ? and billing_date < ?)
   ), selected_trips as (
     select trip_id as id from selected_freights where trip_id is not null
     union select id from fleet_trips where operation_date >= ? and operation_date < ?
   )` : "";
-  const scopeParams = competency ? [startDate, endDate, startDate, endDate, startDate, endDate] : [];
+  const scopeParams = selection?.id ? [selection.id] : competency ? [startDate, endDate, startDate, endDate, startDate, endDate] : [];
   const [parameters, vehicleRows, driverRows, costRows, freightRows, trips, billingSales] =
     await Promise.all([
       loadParameters(),
@@ -162,7 +168,7 @@ export async function loadFleetData(
          order by competency desc, id`,
       ),
       queryAll<FreightRow>(
-        `${scope} select trip_id as tripId, yard_cost_cents as yardCostCents, pickup_cost_cents as pickupCostCents,
+        `${scope} select seller_id as sellerId,seller_name as sellerName,seller_commission_basis_points as sellerCommissionBasisPoints,created_by as createdBy,trip_id as tripId, yard_cost_cents as yardCostCents, pickup_cost_cents as pickupCostCents,
           delivery_cost_cents as deliveryCostCents, other_cost_cents as otherCostCents, insurance_cost_cents as insuranceCostCents, invoice_cost_cents as invoiceCostCents, icms_cost_cents as icmsCostCents, cte_mdfe_cost_cents as cteMdfeCostCents, actual_fuel_cost_cents as actualFuelCostCents, cargo_vehicles as cargoVehicles,
           fuel_liters_milli as fuelLitersMilli, fuel_pump_amount_cents as fuelPumpAmountCents,
           id, sale_number as saleNumber, vehicle_id as vehicleId, vehicle_plate as vehiclePlate,
@@ -178,7 +184,7 @@ export async function loadFleetData(
           created_at as createdAt, updated_at as updatedAt
          , (select s.id from freight_sales s where s.fleet_freight_id=fleet_freights.id and s.sale_channel='FROTA' limit 1) as linkedFleetSaleId
          from fleet_freights
-         ${competency ? 'where id in (select id from selected_freights) or trip_id in (select id from selected_trips)' : ''}
+         ${scope ? 'where id in (select id from selected_freights) or trip_id in (select id from selected_trips)' : ''}
          order by pickup_date desc, created_at desc
          `, scopeParams,
       ),
@@ -256,8 +262,11 @@ export async function loadFleetData(
     };
   });
 
-  const freights = allFreights.filter(row => !competency || row.pickupDate.slice(0, 7) === competency);
-  const billingFreights = allFreights.filter(row => (Boolean(row.billingDate) || row.operationalStatus === 'FATURADO') && (!competency || (row.billingDate || row.pickupDate).slice(0,7) === competency));
+  const visibleFreights = allFreights.filter(row => (!selection?.id || row.id === selection.id)
+    && (selection?.user?.role !== 'VENDEDOR' || row.sellerId === selection.user.id)
+    && (selection?.user?.role !== 'OPERACIONAL' || row.createdBy === selection.user.id));
+  const freights = visibleFreights.filter(row => !competency || row.pickupDate.slice(0, 7) === competency);
+  const billingFreights = visibleFreights.filter(row => (Boolean(row.billingDate) || row.operationalStatus === 'FATURADO') && (!competency || (row.billingDate || row.pickupDate).slice(0,7) === competency));
   const driverGroups = new Map<string, FleetBillingData['drivers'][number]>();
   for (const freight of billingFreights) {
     // Preserve historical commissions even after the driver's registration is removed.
@@ -273,8 +282,8 @@ export async function loadFleetData(
     canDeleteFreights: false,
     billing: {revenueCents: billingFreights.reduce((sum,f) => sum+f.freightAmountCents,0) + billingSales.reduce((sum,s) => sum+s.freightAmountCents,0), freightCount: billingFreights.length + billingSales.length, sales: billingSales,
       commissionCents: billingFreights.reduce((sum,f) => sum+f.driverCommissionCents,0), freights: billingFreights, drivers: commissionDrivers},
-    trips,
-    tripResults: trips.filter(trip => !competency || trip.operationDate.slice(0, 7) === competency).map(trip => calculateTripResult(trip, allFreights)),
+    trips: freightOnly ? [] : trips,
+    tripResults: freightOnly ? [] : trips.filter(trip => !competency || trip.operationDate.slice(0, 7) === competency).map(trip => calculateTripResult(trip, allFreights)),
     parameters,
     vehicles,
     drivers,

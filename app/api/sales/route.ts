@@ -1,3 +1,4 @@
+import { resolveSaleSeller, saleForViewer } from "@/lib/server/seller-commission";
 import { validateSaleClient } from "@/lib/server/registry-validation";
 import { roleCan } from "@/lib/domain/permissions";
 import { SALE_CHANNELS, SALE_SORTS, type SaleSort } from "@/lib/domain/sales";
@@ -11,7 +12,7 @@ import {
   OPERATIONAL_STATUSES,
   ORIGIN_LOCATION_TYPES,
 } from "@/lib/domain/operations";
-import { ApiError, getD1, jsonError, queryFirst } from "@/lib/server/d1";
+import { ApiError, getD1, jsonError } from "@/lib/server/d1";
 import { listSales } from "@/lib/server/repository";
 import {
   asObject,
@@ -52,7 +53,7 @@ export async function GET(request: Request) {
       limit: Number(url.searchParams.get("limit") || 200),
       offset: Number(url.searchParams.get("offset") || 0),
     });
-    return Response.json({ sales, count: sales.length, canCreate: roleCan(user.role, saleChannel === "FROTA" ? "CREATE_FLEET_SALE" : "CREATE_CEGONHA_SALE"), canDelete: user.role === "ADMIN" });
+    return Response.json({ sales: sales.map(s => saleForViewer(s, user)), count: sales.length, canCreate: roleCan(user.role, saleChannel === "FROTA" ? "CREATE_FLEET_SALE" : "CREATE_CEGONHA_SALE"), canDelete: user.role === "ADMIN" });
   } catch (error) {
     return jsonError(error);
   }
@@ -86,14 +87,8 @@ export async function POST(request: Request) {
       1,
       9_000_000_000_000,
     );
-    const commissionBasisPoints = integerInRange(
-      payload.commissionBasisPoints,
-      "Percentual de comissão",
-      0,
-      10_000,
-    );
     const operationalStatus = enumValue(
-      payload.operationalStatus,
+      user.role === "ADMIN" ? payload.operationalStatus : "CONFIRMAR",
       "Status operacional",
       OPERATIONAL_STATUSES,
     );
@@ -165,25 +160,8 @@ export async function POST(request: Request) {
     );
     const saleId = crypto.randomUUID();
     const installmentId = crypto.randomUUID();
-    let sellerName =
-      user.role === "VENDEDOR"
-        ? user.name
-        : user.role === "OPERACIONAL" ? "" : requiredUpper(payload.sellerName, "Vendedor");
-    let sellerUser =
-      user.role === "VENDEDOR"
-        ? { id: user.id }
-        : await queryFirst<{ id: string }>(
-            `select id from users
-             where role = 'VENDEDOR' and active = 1 and upper(name) = ?
-             limit 1`,
-            [sellerName],
-          );
-    if (user.role === "OPERACIONAL") {
-      const selected = await queryFirst<{id: string; name: string}>("select id,name from users where id=? and role='VENDEDOR' and active=1", [String(payload.sellerId ?? "")]);
-      if (!selected) throw new ApiError(400, "Selecione um vendedor ativo.");
-      sellerUser = selected; sellerName = selected.name;
-    }
-    const sellerId = sellerUser?.id ?? null;
+    const seller = await resolveSaleSeller(user, payload);
+    const sellerName = seller.name, sellerId = seller.id, commissionBasisPoints = seller.commissionBasisPoints;
     const costsPending = costs.some((cost) => !cost.confirmed);
     const db = await getD1();
     const statements: D1PreparedStatement[] = [
@@ -266,6 +244,10 @@ export async function POST(request: Request) {
             cost.paymentStatus,
           ),
       );
+    }
+
+    if (cargo.fleetFreightId && saleChannel === 'FROTA') {
+      statements.push(db.prepare(`update fleet_freights set seller_id=?,seller_name=?,seller_commission_basis_points=? where id=?`).bind(sellerId,sellerName,commissionBasisPoints,cargo.fleetFreightId));
     }
 
     const advanceCents = payload.advanceAmountCents

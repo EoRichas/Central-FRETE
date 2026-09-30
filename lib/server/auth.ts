@@ -11,6 +11,7 @@ type UserRow = {
   name: string;
   role: string;
   active: number;
+  commissionBasisPoints: number;
 };
 
 export async function authorize(
@@ -23,7 +24,7 @@ export async function authorize(
   }
 
   const row = await queryFirst<UserRow>(
-    `select id, email, name, role, active from users where id = ? limit 1`,
+    `select id, email, name, role, active, commission_basis_points as commissionBasisPoints from users where id = ? limit 1`,
     [session.userId],
   );
 
@@ -41,6 +42,7 @@ export async function authorize(
     email: row.email,
     name: row.name,
     role: row.role as Role,
+    ...(row.role === "VENDEDOR" ? {commissionBasisPoints: row.commissionBasisPoints} : {}),
   };
 }
 

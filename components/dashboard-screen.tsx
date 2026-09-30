@@ -7,7 +7,6 @@ import type { DashboardData } from "@/lib/contracts";
 import { competencyLabel, formatMoney, formatPercent } from "@/lib/format";
 import { ErrorState, LoadingState, PageHeader, StatusBadge } from "@/components/ui";
 import { Icons } from "@/components/icons";
-import { sellerCommissionCents } from "@/lib/domain/commissions";
 import { useApi } from "@/components/use-api";
 
 
@@ -20,7 +19,7 @@ const statusMeta = {
 
 export function DashboardScreen() {
   const [competency, setCompetency] = useState(currentCompetency);
-  const { data, loading, error, refresh } = useApi<{ data: DashboardData }>(
+  const { data, loading, error, refresh } = useApi<{ data: DashboardData & {showCommission:boolean} }>(
     `/api/dashboard?competency=${competency}`,
   );
   const dashboard = data?.data;
@@ -60,9 +59,9 @@ export function DashboardScreen() {
           </section>
           <section className="dashboard-columns">
             <article className="panel chart-panel"><header><div><span className="eyebrow">Desempenho comercial</span><h2>Resultado por vendedor</h2></div><span className="panel-period">{competencyLabel(competency)}</span></header>{dashboard.bySeller.length ? <div className="seller-bars">{dashboard.bySeller.map((seller) => <div className="seller-row" key={seller.name}><div><strong>{seller.name}</strong></div><div className="bar-track"><span style={{ width: `${Math.max(6, (seller.freightAmountCents / maxSeller) * 100)}%` }} /></div><b>{formatMoney(seller.freightAmountCents)}</b></div>)}</div> : <p className="panel-empty">Nenhuma venda no período.</p>}</article>
-            <article className="panel operational-commission-panel"><header><div><span className="eyebrow">Comissão Setor Operacional</span><h2>3% do faturamento total</h2></div><Link href={`/vendedores?competency=${competency}`}>Ver vendedores</Link></header><div className="operational-commission-value"><span>Comissão no período</span><strong>{formatMoney(dashboard.operationalCommissionCents)}</strong><small>Base de cálculo: {formatMoney(dashboard.freightAmountCents)}</small></div></article>
+            {dashboard.showCommission && <article className="panel operational-commission-panel"><header><div><span className="eyebrow">Comissão Setor Operacional</span><h2>3% do faturamento total</h2></div><Link href={`/vendedores?competency=${competency}`}>Ver vendedores</Link></header><div className="operational-commission-value"><span>Comissão no período</span><strong>{formatMoney(dashboard.operationalCommissionCents)}</strong><small>Base de cálculo: {formatMoney(dashboard.freightAmountCents)}</small></div></article>}
           </section>
-          <section className="panel dashboard-seller-commission-panel">
+          {dashboard.showCommission && <section className="panel dashboard-seller-commission-panel">
             <header>
               <div><span className="eyebrow">Vendedores(a) / Comissão</span><h2>Comissão comercial por vendedor</h2></div>
               <Link href={`/vendedores?competency=${competency}`}>Abrir controle</Link>
@@ -70,13 +69,13 @@ export function DashboardScreen() {
             {dashboard.bySeller.length ? (
               <div className="responsive-table">
                 <table>
-                  <thead><tr><th>Vendedor(a)</th><th>Total vendido</th><th>Comissão 7%</th></tr></thead>
+                  <thead><tr><th>Vendedor(a)</th><th>Total vendido</th><th>Comissão</th></tr></thead>
                   <tbody>
                     {dashboard.bySeller.map((seller) => (
                       <tr key={seller.name}>
                         <td data-label="Vendedor(a)"><strong>{seller.name}</strong></td>
                         <td data-label="Total vendido">{formatMoney(seller.freightAmountCents)}</td>
-                        <td data-label="Comissão 7%"><strong>{formatMoney(sellerCommissionCents(seller.freightAmountCents))}</strong></td>
+                        <td data-label="Comissão"><strong>{formatMoney(seller.commissionCents ?? 0)}</strong></td>
                       </tr>
                     ))}
                   </tbody>
@@ -84,7 +83,7 @@ export function DashboardScreen() {
               </div>
             ) : <p className="panel-empty">Nenhuma venda no período.</p>}
           </section>
-          <section className="panel cash-summary"><header><div><span className="eyebrow">Reconciliação</span><h2>Recebimentos e saldo</h2></div><StatusBadge status={dashboard.totalBalanceCents > 0 ? "EM_ABERTO" : "PAGO"} /></header><div className="equation-row"><div><span>Valor dos fretes</span><strong>{formatMoney(dashboard.freightAmountCents)}</strong></div><b>−</b><div><span>Total recebido</span><strong className="positive">{formatMoney(dashboard.totalReceivedCents)}</strong></div><b>=</b><div><span>Saldo em haver</span><strong>{formatMoney(dashboard.totalBalanceCents)}</strong></div></div>{dashboard.customerCreditCents > 0 && <p className="credit-note">Crédito de clientes: {formatMoney(dashboard.customerCreditCents)}</p>}</section>
+          }<section className="panel cash-summary"><header><div><span className="eyebrow">Reconciliação</span><h2>Recebimentos e saldo</h2></div><StatusBadge status={dashboard.totalBalanceCents > 0 ? "EM_ABERTO" : "PAGO"} /></header><div className="equation-row"><div><span>Valor dos fretes</span><strong>{formatMoney(dashboard.freightAmountCents)}</strong></div><b>−</b><div><span>Total recebido</span><strong className="positive">{formatMoney(dashboard.totalReceivedCents)}</strong></div><b>=</b><div><span>Saldo em haver</span><strong>{formatMoney(dashboard.totalBalanceCents)}</strong></div></div>{dashboard.customerCreditCents > 0 && <p className="credit-note">Crédito de clientes: {formatMoney(dashboard.customerCreditCents)}</p>}</section>
         </div>
       )}
     </>

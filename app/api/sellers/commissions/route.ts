@@ -71,8 +71,7 @@ function toCommissionRecord(
 ): SellerCommissionRecord {
   const totalSalesCents = Number(row.totalSalesCents);
   const sellerUser =
-    (row.sellerId ? sellerUsersById.get(row.sellerId) : undefined) ??
-    sellerUsersByName.get(row.sellerName.toUpperCase());
+    row.sellerId ? sellerUsersById.get(row.sellerId) : sellerUsersByName.get(row.sellerName.toUpperCase());
   return {
     saleId: row.saleId,
     saleNumber: row.saleNumber,
@@ -100,26 +99,32 @@ function toCommissionRecord(
 
 export async function GET(request: Request) {
   try {
-    const user = await authorize(request);
+    const user = await authorize(request, ["ADMIN", "VENDEDOR"]);
     const url = new URL(request.url);
     const competency = validateCompetency(
       url.searchParams.get("competency") ?? currentCompetency(),
     );
     const sellerScope =
       user.role === "VENDEDOR"
-        ? "and (s.seller_id = ? or upper(s.seller_name) = upper(?))"
+        ? "and s.seller_id = ?"
         : "";
     const params: unknown[] = [competency, competency];
-    if (user.role === "VENDEDOR") params.push(user.id, user.name);
+    if (user.role === "VENDEDOR") params.push(user.id);
 
     const [rows, sellerUsers, sellerProfiles] = await Promise.all([
       queryAll<CommissionAggregateRow>(
         `select s.id as saleId, s.sale_number as saleNumber, s.sale_date as saleDate,
-          c.legal_name as clientName, s.seller_id as sellerId, upper(s.seller_name) as sellerName,
+          coalesce(c.legal_name,s.fleet_client_name) as clientName, s.seller_id as sellerId, upper(s.seller_name) as sellerName,
           1 as salesCount, s.freight_amount_cents as totalSalesCents,
           s.commission_basis_points as commissionBasisPoints,
           cs.status, cs.paid_at as paidAt, u.name as paidByName
-         from freight_sales s
+         from (
+           select id,sale_number,sale_date,client_id,null::text as fleet_client_name,seller_id,seller_name,freight_amount_cents,commission_basis_points,competency
+           from freight_sales where not (sale_channel='FROTA' and fleet_freight_id is not null)
+           union all
+           select id,sale_number,pickup_date,null,client_name,seller_id,seller_name,freight_amount_cents,seller_commission_basis_points,left(pickup_date,7)
+           from fleet_freights where seller_name is not null
+         ) s
          left join clients c on c.id = s.client_id
          left join seller_commission_statuses cs
            on cs.seller_name = upper(s.seller_name) and cs.competency = ?
@@ -169,7 +174,7 @@ export async function GET(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const user = await authorize(request, ["ADMIN", "FINANCEIRO"]);
+    const user = await authorize(request, ["ADMIN"]);
     const payload = asObject(await request.json());
     const competency = validateCompetency(String(payload.competency ?? ""));
     const sellerName = requiredUpper(payload.sellerName, "Vendedor");
@@ -179,8 +184,10 @@ export async function PATCH(request: Request) {
       COMMISSION_STATUSES,
     );
     const sales = await queryFirst<{ salesCount: number }>(
-      `select count(*) as salesCount from freight_sales
-       where competency = ? and upper(seller_name) = ?`,
+      `select count(*) as salesCount from (
+         select seller_name,competency from freight_sales
+         union all select seller_name,left(pickup_date,7) from fleet_freights
+       ) s where competency = ? and upper(seller_name) = ?`,
       [competency, sellerName],
     );
     if (!sales?.salesCount) {

@@ -1,3 +1,4 @@
+import { freightForViewer } from "@/lib/server/seller-commission";
 import { authorize } from "@/lib/server/auth";
 import { ApiError, jsonError } from "@/lib/server/d1";
 import { currentCompetency, isCompetency } from "@/lib/domain/dates";
@@ -20,9 +21,14 @@ export async function GET(request: Request) {
       isOperational,
       competency,
       user.role === "FINANCEIRO",
+      {user},
     );
     fleet.canDeleteFreights = user.role === "ADMIN";
-    return Response.json({ fleet });
+    return Response.json({ fleet: {...fleet,
+      freights: fleet.freights.map(f => freightForViewer(f,user)),
+      billing: {...fleet.billing,freights: fleet.billing.freights.map(f => freightForViewer(f,user)),drivers: fleet.billing.drivers.map(d => ({...d,freights:d.freights.map(f=>freightForViewer(f,user))}))},
+      tripResults: fleet.tripResults.map(t=>({...t,freights:t.freights.map(f=>freightForViewer(f,user))})),
+    } });
   } catch (error) {
     return jsonError(error);
   }

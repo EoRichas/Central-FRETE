@@ -110,11 +110,10 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
   const [cargoVehicles, setCargoVehicles] = useState(() => cargoVehiclesOrLegacy(initialSale?.cargoVehicles, initialSale?.vehicle ?? null, initialSale?.plate ?? null));
   const [fleetFreightId, setFleetFreightId] = useState(initialSale?.fleetFreightId ?? '');
   const meApi = useApi<{ user: CurrentUser }>("/api/me");
-  const sellersApi = useApi<{sellers: {id: string; name: string}[]}>(meApi.data?.user.role === "OPERACIONAL" ? "/api/sales/sellers" : null);
-  const [sellerId, setSellerId] = useState("");
+  const sellersApi = useApi<{sellers: {id: string; name: string; commissionBasisPoints: number}[]}>(meApi.data?.user.role === "ADMIN" ? "/api/sales/sellers" : null);
+  const [sellerId, setSellerId] = useState(initialSale ? initialSale.sellerId ?? "historical" : "");
   const canCreateClient = Boolean(meApi.data && roleCan(meApi.data.user.role, "MANAGE_CLIENTS"));
   const fleetOptions = useApi<{freights: {id:string;label:string}[]}>(saleChannel === "FROTA" && meApi.data?.user.role === "ADMIN" ? "/api/sales/fleet-options" : null);
-  const [sellerName, setSellerName] = useState(initialSale?.sellerName ?? "");
   const [client, setClient] = useState<SelectedClient | null>(initialSale?.clientId ? { id: initialSale.clientId, legalName: initialSale.clientName ?? "Cliente anterior" } : null);
   const [pickupAddress, setPickupAddress] = useState(
     initialSale?.pickupAddressSnapshot ?? "",
@@ -137,27 +136,21 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
   const [freightValue, setFreightValue] = useState(
     initialSale ? centsToInput(initialSale.freightAmountCents) : "",
   );
-  const [commissionPercent, setCommissionPercent] = useState(
-    initialSale
-      ? (initialSale.commissionBasisPoints / 100).toFixed(2).replace(".", ",")
-      : "7",
-  );
+  const isAdmin = meApi.data?.user.role === 'ADMIN';
+  const canSeeCommission = isAdmin || meApi.data?.user.role === 'VENDEDOR';
+  const commissionBasisPoints = editing && sellerId === (initialSale?.sellerId ?? 'historical')
+    ? initialSale?.commissionBasisPoints ?? 0
+    : isAdmin ? sellersApi.data?.sellers.find(s=>s.id===sellerId)?.commissionBasisPoints ?? 0
+    : meApi.data?.user.commissionBasisPoints ?? 0;
   const [clientModal, setClientModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const sellerNameValue =
-    !editing && meApi.data?.user.role === "VENDEDOR"
-      ? meApi.data.user.name
-      : sellerName;
-
   const preview = useMemo(() => {
     try {
       const freight = moneyInputToCents(freightValue || "0");
-      const basisPoints = Math.round(
-        Number(commissionPercent.replace(",", ".")) * 100,
-      );
+      const basisPoints = commissionBasisPoints;
       const commission = commissionCents(freight, basisPoints);
       const expenses = costs.reduce(
         (sum, cost) =>
@@ -186,7 +179,7 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
         marginPercent: 0,
       };
     }
-  }, [freightValue, commissionPercent, costs]);
+  }, [freightValue, commissionBasisPoints, costs]);
 
   function updateCost(key: string, amount: string) {
     setCosts((items) =>
@@ -219,10 +212,10 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
     try {
       const payload = {
         cargoVehicles, fleetFreightId: fleetFreightId || null,
-        saleChannel, sellerId,
+        saleChannel, sellerId: sellerId === "historical" ? null : sellerId,
         saleDate: form.get("saleDate"),
         billingDate: saleChannel === "FROTA" ? form.get("billingDate") || null : initialSale?.billingDate ?? null,
-        sellerName: meApi.data?.user.role === "OPERACIONAL" ? sellersApi.data?.sellers.find(s => s.id === sellerId)?.name : form.get("sellerName"),
+        sellerName: sellersApi.data?.sellers.find(s => s.id === sellerId)?.name ?? initialSale?.sellerName,
         clientId: client?.id ?? null,
         initialProviderName: form.get("initialProviderName"),
         origin: form.get("origin"),
@@ -235,12 +228,9 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
         originYardEntryDate: originYardEntryDate || null,
         deliveryDeadline: destinationArrivalDate || null,
         financialDueDate: form.get("financialDueDate"),
-        operationalStatus: form.get("operationalStatus"),
+        operationalStatus: isAdmin ? form.get("operationalStatus") : "CONFIRMAR",
         notes: form.get("notes"),
         freightAmountCents: moneyInputToCents(freightValue),
-        commissionBasisPoints: Math.round(
-          Number(commissionPercent.replace(",", ".")) * 100,
-        ),
         paymentMethod: form.get("paymentMethod"),
         costs: costPayload(),
       };
@@ -325,8 +315,8 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
               <Field label="Número da venda" hint="Sequência automática compartilhada entre Cegonha e Frota."><input value={initialSale?.saleNumber ?? "Automático ao salvar"} readOnly /></Field>
               {saleChannel === "FROTA" && <Field label="Data do faturamento" hint={fleetFreightId ? "No faturamento, prevalece a data da operação vinculada." : "Preencha quando a venda for faturada."}><input name="billingDate" type="date" defaultValue={initialSale?.billingDate ?? ""}/></Field>}
               <Field label="Data da venda"><input name="saleDate" type="date" defaultValue={initialSale?.saleDate ?? today} required /></Field>
-              <Field label="Vendedor">{meApi.data?.user.role === "OPERACIONAL" ? <><select value={sellerId} onChange={e => setSellerId(e.target.value)} required><option value="">Selecione um vendedor</option>{sellersApi.data?.sellers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select>{sellersApi.error && <span role="alert">{sellersApi.error}</span>}</> : <input name="sellerName" value={sellerNameValue} onChange={(event) => setSellerName(event.target.value)} readOnly={meApi.data?.user.role === "VENDEDOR"} required />}</Field>
-              <Field label="Status operacional"><select name="operationalStatus" defaultValue={initialSale?.operationalStatus ?? "CONFIRMAR"}>{OPERATIONAL_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></Field>
+              {isAdmin && <Field label="Vendedor"><select value={sellerId} onChange={e=>setSellerId(e.target.value)} required><option value="">Selecione um vendedor</option>{initialSale && !sellersApi.data?.sellers.some(s=>s.id===initialSale.sellerId) && <option value={initialSale.sellerId ?? 'historical'}>{initialSale.sellerName} (histórico)</option>}{sellersApi.data?.sellers.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select>{sellersApi.error && <span role="alert">{sellersApi.error}</span>}</Field>}
+              {isAdmin && <Field label="Status operacional"><select name="operationalStatus" defaultValue={initialSale?.operationalStatus ?? "CONFIRMAR"}>{OPERATIONAL_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></Field>}
               <Field label="Prestador inicial"><input name="initialProviderName" defaultValue={initialSale?.initialProviderName ?? ""} /></Field>
               <Field label="Prazo operacional (dias)"><input type="number" min={1} max={365} inputMode="numeric" value={operationalDeadlineDays} onChange={(event) => { const value = event.target.value; setOperationalDeadlineDays(value); const calculated = calculateDestinationArrivalDate(originYardEntryDate, value); if (calculated) setDestinationArrivalDate(calculated); }} /></Field>
             </div>
@@ -367,8 +357,7 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
           <header><span>03</span><div><h2>Valores e despesas</h2><p>Todos os custos ficam visíveis e cada linha aceita somente um valor em reais.</p></div></header>
           <div className="form-grid three">
             <Field label="Valor total do frete"><div className="money-field"><span>R$</span><input value={freightValue} onChange={(event) => setFreightValue(event.target.value)} placeholder="0,00" inputMode="decimal" required /></div></Field>
-            <Field label="Comissão do vendedor (%)"><input value={commissionPercent} onChange={(event) => setCommissionPercent(event.target.value)} inputMode="decimal" required /></Field>
-            <div className="calculation-summary"><span>Comissão calculada</span><strong>{formatMoney(preview.commission)}</strong></div>
+            {canSeeCommission && <div className="calculation-summary"><span>Comissão calculada</span><strong>{formatMoney(preview.commission)}</strong></div>}
           </div>
           <div className="cost-list">
             <div className="cost-list-head"><div><h3>Custos da operação</h3><p>Preencha apenas as linhas que possuem valor.</p></div><span className="cost-currency-tag">TODOS OS VALORES EM BRL</span></div>
@@ -382,9 +371,9 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
               ))}
             </div>
           </div>
-          <div className="financial-preview">
+          {canSeeCommission && <div className="financial-preview">
             <div><span>Valor do frete</span><strong>{formatMoney(preview.freight)}</strong></div><b>−</b><div><span>Comissão + despesas</span><strong>{formatMoney(preview.totalCost)}</strong></div><b>=</b><div className={preview.margin < 0 ? "negative" : "positive"}><span>Margem da Central</span><strong>{formatMoney(preview.margin)} · {(preview.marginPercent / 100).toFixed(2).replace(".", ",")}%</strong></div>
-          </div>
+          </div>}
         </section>
 
         <section className="form-section">

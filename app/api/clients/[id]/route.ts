@@ -1,3 +1,4 @@
+import { saleForViewer } from "@/lib/server/seller-commission";
 import { CLIENT_CHANNELS, type ClientChannel } from "@/lib/domain/registry";
 import { booleanValue } from "@/lib/server/fleet-validation";
 import type { ClientAddressRecord, ClientRecord } from "@/lib/contracts";
@@ -90,7 +91,7 @@ export async function GET(request: Request, context: RouteContext) {
         })),
         summary,
       },
-      sales,
+      sales: sales.map(sale => saleForViewer(sale, user)),
     });
   } catch (error) {
     return jsonError(error);

@@ -14,7 +14,7 @@ function summaryName(p:ReportPdf,value:string,width:number){
  return `${lines[0]}\n${last}…`;
 }
 
-export async function renderSalesReportPdf(report:SalesReport,competency:string,channel:string) {
+export async function renderSalesReportPdf(report:SalesReport,competency:string,channel:string,showCommission=true) {
  const p=await ReportPdf.create('Relatório gerencial',[['Competência',competencyLabel(competency)],['Canal',channel],['Base','Vendas do período'],['Moeda','Real (R$)']]);
  const {totals:t}=report;
  p.kpis([{label:'FATURAMENTO',value:formatMoney(t.freight),detail:'Valor total das vendas'},
@@ -34,9 +34,10 @@ export async function renderSalesReportPdf(report:SalesReport,competency:string,
  if(report.pendingCosts)p.note(`Resultado parcial: ${report.pendingCosts} venda(s) com custos pendentes.`);
  if(more||report.expenses.length>8)p.note('A composição completa está nas páginas seguintes.');
  p.newPage('Detalhamento das vendas incluídas no relatório');p.section('03  Vendas do período');
- p.table(cols(['Venda','Data','Cliente','Vendedor(a)','Comissão %','Comissão (R$)','Receita (R$)','Custo (R$)','Margem (R$)'],[42,66,130,99,65,90,94,94,p.width-680],4),[
+ if(showCommission)p.table(cols(['Venda','Data','Cliente','Vendedor(a)','Comissão %','Comissão (R$)','Receita (R$)','Custo (R$)','Margem (R$)'],[42,66,130,99,65,90,94,94,p.width-680],4),[
  ...report.sales.map(s=>[s.saleNumber,formatDate(s.saleDate),s.clientName||'Não informado',s.sellerName,formatPercent(s.commissionBasisPoints),num(s.financial.commissionCents),num(s.freightAmountCents),num(s.financial.transportCostCents),num(s.financial.marginCents)]),
  ['TOTAL','','','','',num(report.commissions),num(t.freight),num(t.cost),num(t.margin)]],{total:true});
+ else p.table(cols(['Venda','Data','Cliente','Vendedor(a)','Receita (R$)','Custo (R$)','Margem (R$)'],[42,66,170,135,110,110,p.width-633],4),[...report.sales.map(s=>[s.saleNumber,formatDate(s.saleDate),s.clientName||'Não informado',s.sellerName,num(s.freightAmountCents),num(s.financial.transportCostCents),num(s.financial.marginCents)]),['TOTAL','','','',num(t.freight),num(t.cost),num(t.margin)]],{total:true});
  p.note('Custo total inclui despesas cadastradas e comissão do vendedor. Os totais correspondem ao resumo.');
  if(more){p.section('Resultado completo por cliente');p.table(cols(clientColumns.map(c=>c.label),[240,55,130,120,130,p.width-675]),report.clients.map(clientRow));}
  if(report.expenses.length>8){p.section('Composição completa do custo');p.table(cols(['Categoria','Valor (R$)'],[p.width-160,160]),report.expenses.map(r=>[r.name,num(r.value)]));}

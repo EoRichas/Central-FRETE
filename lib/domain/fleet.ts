@@ -1,3 +1,4 @@
+import { commissionCents } from "./finance";
 import type { CargoVehicle } from "@/lib/domain/cargo-vehicles";
 import type { TripCostShare } from "./trip-allocation.ts";
 import type { FleetTrip, TripResult } from "./fleet-results.ts";
@@ -76,6 +77,10 @@ export type FleetDriver = {
 };
 
 export type FleetFreightBase = {
+  sellerId?: string | null;
+  sellerName?: string | null;
+  sellerCommissionBasisPoints?: number;
+  createdBy?: string | null;
   routeDistanceMeters?: number | null;
   odometerStartMeters?: number | null;
   odometerEndMeters?: number | null;
@@ -115,6 +120,7 @@ export type FleetFreightBase = {
 };
 
 export type FleetFreightMetrics = {
+  sellerCommissionCents?: number;
   directCostCents: number;
   contributionCents: number;
   contributionBasisPoints: number;
@@ -198,7 +204,7 @@ export function averageVehicleCostPerKmCents(
 }
 
 export function calculateFleetFreightMetrics(
-  freight: Pick<FleetFreightBase, "distanceMeters" | "freightAmountCents" | "tollCents" | "driverCommissionCents"> & Partial<Pick<FleetFreightBase, "tripId" | "yardCostCents" | "pickupCostCents" | "deliveryCostCents" | "otherCostCents" | "actualFuelCostCents" | "insuranceCostCents" | "invoiceCostCents" | "icmsCostCents" | "cteMdfeCostCents">>,
+  freight: Pick<FleetFreightBase, "distanceMeters" | "freightAmountCents" | "tollCents" | "driverCommissionCents"> & Partial<Pick<FleetFreightBase, "sellerCommissionBasisPoints" | "tripId" | "yardCostCents" | "pickupCostCents" | "deliveryCostCents" | "otherCostCents" | "actualFuelCostCents" | "insuranceCostCents" | "invoiceCostCents" | "icmsCostCents" | "cteMdfeCostCents">>,
   parameters: Pick<FleetParameters, "fuelPriceCents" | "averageConsumptionMilliKmPerLiter">,
   vehicleCostPerKmCents: number | null,
   tripShare?: TripCostShare,
@@ -211,7 +217,8 @@ export function calculateFleetFreightMetrics(
   const fuelCostCents = freight.actualFuelCostCents ?? (freight.tripId ? tripShare?.fuelCents ?? 0 : estimatedFuelCostCents);
   const fuelCostSource = freight.actualFuelCostCents != null ? "REALIZADO" : freight.tripId ? "VIAGEM_HISTORICA" : "ESTIMADO";
   const sharedTransportCostCents = freight.tripId ? (tripShare?.tollCents ?? 0) + (tripShare?.otherCents ?? 0) : 0;
-  const directCostCents = freight.driverCommissionCents + (freight.yardCostCents ?? 0) + (freight.pickupCostCents ?? 0) + (freight.deliveryCostCents ?? 0) + (freight.otherCostCents ?? 0) + (freight.insuranceCostCents ?? 0) + (freight.invoiceCostCents ?? 0) + (freight.icmsCostCents ?? 0) + (freight.cteMdfeCostCents ?? 0);
+  const sellerCommissionCents = commissionCents(freight.freightAmountCents, freight.sellerCommissionBasisPoints ?? 0);
+  const directCostCents = sellerCommissionCents + freight.driverCommissionCents + (freight.yardCostCents ?? 0) + (freight.pickupCostCents ?? 0) + (freight.deliveryCostCents ?? 0) + (freight.otherCostCents ?? 0) + (freight.insuranceCostCents ?? 0) + (freight.invoiceCostCents ?? 0) + (freight.icmsCostCents ?? 0) + (freight.cteMdfeCostCents ?? 0);
   const contributionCents = freight.freightAmountCents - directCostCents;
   const rateAvailable = vehicleCostPerKmCents !== null && Number.isFinite(vehicleCostPerKmCents) && vehicleCostPerKmCents >= 0;
   const allocatedCostCents = rateAvailable
@@ -230,6 +237,7 @@ export function calculateFleetFreightMetrics(
     : 0;
 
   return {
+    sellerCommissionCents,
     directCostCents,
     contributionCents,
     contributionBasisPoints: freight.freightAmountCents > 0 ? Math.round(contributionCents * 10_000 / freight.freightAmountCents) : 0,
@@ -247,7 +255,7 @@ export function calculateFleetFreightMetrics(
 }
 
 export function calculateFleetFreightPreview(
-  draft: Pick<FleetFreightBase, "vehicleId" | "distanceMeters" | "freightAmountCents" | "tollCents" | "driverCommissionCents"> & Partial<Pick<FleetFreightBase, "tripId" | "yardCostCents" | "pickupCostCents" | "deliveryCostCents" | "otherCostCents" | "actualFuelCostCents" | "insuranceCostCents" | "invoiceCostCents" | "icmsCostCents" | "cteMdfeCostCents">>,
+  draft: Pick<FleetFreightBase, "vehicleId" | "distanceMeters" | "freightAmountCents" | "tollCents" | "driverCommissionCents"> & Partial<Pick<FleetFreightBase, "sellerCommissionBasisPoints" | "tripId" | "yardCostCents" | "pickupCostCents" | "deliveryCostCents" | "otherCostCents" | "actualFuelCostCents" | "insuranceCostCents" | "invoiceCostCents" | "icmsCostCents" | "cteMdfeCostCents">>,
   parameters: FleetParameters,
   vehicles: Pick<FleetVehicle, "id" | "averageCostPerKmCents">[],
   tripShare?: TripCostShare,

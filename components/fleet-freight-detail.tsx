@@ -7,6 +7,7 @@ import { StatusBadge } from '@/components/ui';
 export function FleetFreightDetail({freight: f}: {freight: FleetFreight}) {
   const cargo=cargoVehiclesOrLegacy(f.cargoVehicles,f.cargoVehicleModel,f.cargoPlate);
   const costs: [string,number][]=[['Motorista / comissão',f.driverCommissionCents],['Combustível',f.fuelCostCents],['Pedágio',f.tripId ? 0 : f.tollCents],['Custos compartilhados da viagem',f.sharedTransportCostCents],['Pátio / recebimento',f.yardCostCents??0],['Coleta',f.pickupCostCents??0],['Entrega',f.deliveryCostCents??0],['Seguro',f.insuranceCostCents??0],['Nota Fiscal',f.invoiceCostCents??0],['ICMS',f.icmsCostCents??0],['CTE/MDF',f.cteMdfeCostCents??0],['Outras despesas',f.otherCostCents??0]];
+  if (f.sellerCommissionCents != null) costs.push(['Comissão do vendedor', f.sellerCommissionCents]);
   return <>
     <section className="detail-status-strip">
       <div><span>Status operacional</span><StatusBadge status={FLEET_OPERATIONAL_STATUS_LABELS[f.operationalStatus]} /></div>
@@ -19,6 +20,7 @@ export function FleetFreightDetail({freight: f}: {freight: FleetFreight}) {
         <dl className="details-list">
           <div className="full"><dt>Veículos transportados ({cargo.length})</dt><dd>{cargo.map((v,i)=><div key={i}>{i+1}. {[v.model,v.plate].filter(Boolean).join(' · ') || 'Não informado'}</div>)}</dd></div>
           <div><dt>Cliente</dt><dd>{f.clientName}</dd></div>
+          <div><dt>Vendedor</dt><dd>{f.sellerName ?? "Não informado"}</dd></div>
           <div><dt>Motorista</dt><dd>{f.driverName}</dd></div>
           <div><dt>Coleta</dt><dd>{f.origin}</dd></div>
           <div><dt>Entrega</dt><dd>{f.destination}</dd></div>
@@ -34,7 +36,8 @@ export function FleetFreightDetail({freight: f}: {freight: FleetFreight}) {
         <div className="money-breakdown">
           <div><span>Valor do frete</span><strong>{formatMoney(f.freightAmountCents)}</strong></div>
           <div><span>Motorista / comissão</span><strong>− {formatMoney(f.driverCommissionCents)}</strong></div>
-          <div><span>Demais despesas</span><strong>− {formatMoney(f.totalCostCents-f.driverCommissionCents)}</strong></div>
+          {f.sellerCommissionCents != null && <div><span>Comissão do vendedor ({formatPercent(f.sellerCommissionBasisPoints ?? 0)})</span><strong>− {formatMoney(f.sellerCommissionCents)}</strong></div>}
+          <div><span>Demais despesas</span><strong>− {formatMoney(f.totalCostCents-f.driverCommissionCents-(f.sellerCommissionCents??0))}</strong></div>
           <div className="total"><span>Margem da Central</span><strong className={f.netRevenueCents<0?'negative':'positive'}>{formatMoney(f.netRevenueCents)}</strong></div>
         </div>
       </article>

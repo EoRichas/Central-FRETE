@@ -1,9 +1,11 @@
+import { assertFleetAccess } from "@/lib/server/seller-commission";
 import { authorize } from "@/lib/server/auth";
 import { ApiError, getBucket, jsonError, queryFirst } from "@/lib/server/d1";
 export async function GET(request: Request, context: { params: Promise<{ id: string; attachmentId: string }> }) {
  try {
-  await authorize(request, ["ADMIN", "GERENCIA", "FINANCEIRO", "OPERACIONAL"]);
+  const user = await authorize(request, ["ADMIN", "GERENCIA", "FINANCEIRO", "OPERACIONAL"]);
   const { id, attachmentId } = await context.params;
+  await assertFleetAccess(user,id);
   const proof = await queryFirst<{ storageKey: string; fileName: string }>("select storage_key as storageKey, file_name as fileName from fleet_attachments where id = ? and freight_id = ?", [attachmentId, id]);
   if (!proof) throw new ApiError(404, "Comprovante não encontrado.");
   const file = await (await getBucket()).get(proof.storageKey);

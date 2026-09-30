@@ -2,7 +2,7 @@ import type { SaleRecord } from '@/lib/contracts';
 import { weightedMarginBasisPoints } from './finance';
 import { costCategoryLabel } from './operations';
 
-export function buildSalesReport(sales: SaleRecord[]) {
+export function buildSalesReport(sales: SaleRecord[], showCommission = true) {
   const ordered = [...sales].sort((a,b)=>a.saleNumber.localeCompare(b.saleNumber,'pt-BR',{numeric:true}));
   const groups = new Map<string,SaleRecord[]>();
   const expenses = new Map<string,number>();
@@ -13,7 +13,7 @@ export function buildSalesReport(sales: SaleRecord[]) {
     for(const cost of sale.costs) expenses.set(costCategoryLabel(cost.category),(expenses.get(costCategoryLabel(cost.category)) ?? 0)+cost.amountCents);
     commissions += sale.financial.commissionCents;
   }
-  if(commissions) expenses.set('Comissão dos vendedores',commissions);
+  if(commissions && showCommission) expenses.set('Comissão dos vendedores',commissions);
   const sum = (items:SaleRecord[]) => ({
     freight:items.reduce((s,r)=>s+r.freightAmountCents,0),
     cost:items.reduce((s,r)=>s+r.financial.transportCostCents,0),

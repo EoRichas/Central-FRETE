@@ -9,7 +9,8 @@ import { fuelInputToInteger } from "@/lib/domain/fuel-input";
 import { todaySaoPaulo } from "@/lib/domain/dates";
 import { FleetPaymentPanel } from "@/components/fleet-payment-panel";
 import { Field, Modal } from "@/components/ui";
-import { apiMutation } from "@/components/use-api";
+import type { CurrentUser } from "@/lib/contracts";
+import { apiMutation, useApi } from "@/components/use-api";
 import {
   FLEET_OPERATIONAL_STATUSES,
   FLEET_OPERATIONAL_STATUS_LABELS,
@@ -50,6 +51,10 @@ export function FreightModal({
   onDelete: (freight: FleetFreight) => Promise<void>;
 }) {
   const editing = Boolean(freight);
+  const me = useApi<{user:CurrentUser}>("/api/me");
+  const sellers = useApi<{sellers:{id:string;name:string;commissionBasisPoints:number}[]}>(me.data?.user.role === 'ADMIN' && !editing ? '/api/sales/sellers' : null);
+  const [sellerId,setSellerId] = useState(freight?.sellerId ?? '');
+  const sellerRate = editing ? freight?.sellerCommissionBasisPoints ?? 0 : me.data?.user.role === 'VENDEDOR' ? me.data.user.commissionBasisPoints ?? 0 : sellers.data?.sellers.find(s=>s.id===sellerId)?.commissionBasisPoints ?? 0;
   const [client, setClient] = useState<SelectedClient | null>(freight ? {id: freight.clientId ?? null, legalName: freight.clientName} : null);
   const financialOnly =
     fleet.canEditFreightFinancials && !fleet.canEditFreights;
@@ -283,6 +288,7 @@ export function FreightModal({
           freightAmountCents: moneyInputToCents(freightValue || "0"),
           tollCents: moneyInputToCents(toll || "0"),
           driverCommissionCents: moneyInputToCents(driverCommission || "0"),
+          sellerCommissionBasisPoints: sellerRate,
         },
         fleet.parameters,
         fleet.vehicles,
@@ -354,6 +360,7 @@ export function FreightModal({
         ...distanceValues(),
         tollCents: moneyInputToCents(toll || "0"),
         driverCommissionCents: moneyInputToCents(driverCommission || "0"),
+        ...(!editing ? {sellerId} : {}),
       };
       const saved = await apiMutation<{id: string}>(
         editing ? `/api/fleet/freights/${freight!.id}` : "/api/fleet/freights",
@@ -411,6 +418,7 @@ export function FreightModal({
               </p>
             )}
             <div className="form-grid three">
+              {!editing && me.data?.user.role === 'ADMIN' && <Field label="Vendedor"><select value={sellerId} onChange={e=>setSellerId(e.target.value)}><option value="">Sem vendedor</option>{sellers.data?.sellers.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select>{sellers.error && <span role="alert">{sellers.error}</span>}</Field>}
               <Field label="Veículo da frota">
                 <select
                   name="vehicleId"
@@ -749,7 +757,8 @@ export function FreightModal({
               />
             </Field>
           </div>
-          {preview && (
+          {(me.data?.user.role === "ADMIN" || me.data?.user.role === "VENDEDOR") && preview && <div className="calculation-summary"><span>Comissão calculada</span><strong>{formatMoney(preview.sellerCommissionCents ?? 0)}</strong></div>}
+          {preview && (!editing || freight?.sellerCommissionBasisPoints != null) && (
             <>
               <div className="fleet-form-preview fleet-result-preview">
                 <div>

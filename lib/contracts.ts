@@ -11,6 +11,7 @@ import type { OriginLocationType } from "@/lib/domain/operations";
 export type Role = "ADMIN" | "GERENCIA" | "VENDEDOR" | "FINANCEIRO" | "OPERACIONAL";
 
 export type CurrentUser = {
+  commissionBasisPoints?: number;
   id: string;
   email: string;
   name: string;
@@ -155,6 +156,7 @@ export type DashboardData = {
   >;
   customerCreditCents: number;
   bySeller: Array<{
+    commissionCents?: number;
     name: string;
     freightAmountCents: number;
     marginCents: number;

@@ -1,3 +1,4 @@
+import { commissionProfileValue } from "@/lib/server/seller-commission";
 import type { Role } from "@/lib/contracts";
 import { authorize } from "@/lib/server/auth";
 import { ApiError, getD1, jsonError, queryFirst } from "@/lib/server/d1";
@@ -36,11 +37,12 @@ export async function PATCH(request: Request, context: RouteContext) {
       phone: string | null;
       username: string | null;
       name: string;
+      commissionBasisPoints: number;
       role: Role;
       active: number;
       pixDetails: string | null;
     }>(
-      `select id, email, phone, username, name, role, active, pix_details as pixDetails
+      `select id, email, phone, username, name, role, active, commission_basis_points as commissionBasisPoints, pix_details as pixDetails
        from users where id = ?`,
       [id],
     );
@@ -54,6 +56,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const role = enumValue(payload.role, "Perfil", ASSIGNABLE_ROLES);
     const active = activeValue(payload.active);
     const pixDetails = previous.pixDetails;
+    const commissionBasisPoints = commissionProfileValue(payload.commissionPercent, previous.commissionBasisPoints);
 
     if (id === actor.id && (!active || role !== "ADMIN")) {
       throw new ApiError(
@@ -80,7 +83,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       ? db
           .prepare(
             `update users set email = ?, phone = ?, username = ?, name = ?, role = ?, active = ?,
-              pix_details = ?, password_salt = ?, password_hash = ?,
+              pix_details = ?, commission_basis_points = ?, password_salt = ?, password_hash = ?,
               updated_at = to_char(timezone('UTC', now()), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
              where id = ?`,
           )
@@ -92,6 +95,7 @@ export async function PATCH(request: Request, context: RouteContext) {
             role,
             active ? 1 : 0,
             pixDetails,
+            commissionBasisPoints,
             credential.passwordSalt,
             credential.passwordHash,
             id,
@@ -99,10 +103,10 @@ export async function PATCH(request: Request, context: RouteContext) {
       : db
           .prepare(
             `update users set email = ?, phone = ?, username = ?, name = ?, role = ?, active = ?,
-              pix_details = ?, updated_at = to_char(timezone('UTC', now()), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+              pix_details = ?, commission_basis_points = ?, updated_at = to_char(timezone('UTC', now()), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
              where id = ?`,
           )
-          .bind(email, phone, username, name, role, active ? 1 : 0, pixDetails, id);
+          .bind(email, phone, username, name, role, active ? 1 : 0, pixDetails, commissionBasisPoints, id);
 
     await db.batch([
       update,
@@ -127,6 +131,7 @@ export async function PATCH(request: Request, context: RouteContext) {
             role,
             active,
             pixDetails,
+            commissionBasisPoints,
             passwordChanged: Boolean(credential),
           }),
           request.headers.get("x-request-id") ?? crypto.randomUUID(),
@@ -157,11 +162,12 @@ export async function DELETE(request: Request, context: RouteContext) {
       phone: string | null;
       username: string | null;
       name: string;
+      commissionBasisPoints: number;
       role: Role;
       active: number;
       pixDetails: string | null;
     }>(
-      `select id, email, phone, username, name, role, active, pix_details as pixDetails
+      `select id, email, phone, username, name, role, active, commission_basis_points as commissionBasisPoints, pix_details as pixDetails
        from users where id = ?`,
       [id],
     );

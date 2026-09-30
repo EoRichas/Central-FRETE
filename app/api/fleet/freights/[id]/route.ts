@@ -1,3 +1,5 @@
+import { assertFleetAccess, freightForViewer } from "@/lib/server/seller-commission";
+import { loadFleetData } from "@/lib/server/fleet";
 import { resolveFreightClient } from "@/lib/server/registry-validation";
 import { drainStorageCleanup } from "@/lib/server/storage-cleanup";
 import { cargoVehiclesOrLegacy } from "@/lib/domain/cargo-vehicles";
@@ -75,6 +77,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   try {
     const user = await authorize(request, ["ADMIN", "GERENCIA", "OPERACIONAL", "FINANCEIRO"]);
     const { id } = await context.params;
+    await assertFleetAccess(user, id);
     const previous = await freightSnapshot(id);
     if (!previous) throw new ApiError(404, "Frete da frota não encontrado.");
     const payload = asObject(await request.json());
@@ -190,6 +193,7 @@ export async function DELETE(request: Request, context: RouteContext) {
   try {
     const user = await authorize(request, ["ADMIN"]);
     const { id } = await context.params;
+    await assertFleetAccess(user, id);
     const previous = await freightSnapshot(id);
     if (!previous) throw new ApiError(404, "Frete da frota não encontrado.");
     const db = await getD1();
@@ -217,4 +221,16 @@ export async function DELETE(request: Request, context: RouteContext) {
   } catch (error) {
     return jsonError(error);
   }
+}
+
+export async function GET(request: Request, context: RouteContext) {
+  try {
+    const user = await authorize(request);
+    const {id} = await context.params;
+    await assertFleetAccess(user,id);
+    const data = await loadFleetData(false,false,false,true,undefined,false,{id,user});
+    const freight = data.freights[0];
+    if (!freight) throw new ApiError(404, 'Frete da frota não encontrado.');
+    return Response.json({freight: freightForViewer(freight,user)}, {headers:{'Cache-Control':'private, no-store'}});
+  } catch(error) { return jsonError(error); }
 }
