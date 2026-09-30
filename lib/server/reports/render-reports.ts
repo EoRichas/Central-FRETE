@@ -16,25 +16,21 @@ function summaryName(p:ReportPdf,value:string,width:number){
 
 export async function renderSalesReportPdf(report:SalesReport,period:string,channel:string,showCommission=true,seller='Todos') {
  const periodLabel=/^\d{4}-\d{2}$/.test(period)?competencyLabel(period):period.replace(/\d{4}-\d{2}-\d{2}/g,date=>formatDate(date));
- const p=await ReportPdf.create('Relatório de vendas',[['Período',periodLabel],['Canal',channel],['Vendedor',seller],['Moeda','Real (R$)']]);
+ const p=await ReportPdf.create('Vendas Geral',[['Período',periodLabel],['Canal',channel],['Vendedor',seller],['Moeda','Real (R$)']]);
  const t=report.totals;
  p.kpis([{label:'RECEITA DAS VENDAS',value:formatMoney(t.freight),detail:`${report.sales.length} vendas incluídas`},
  {label:'CUSTO TOTAL',value:formatMoney(t.cost),detail:'Custos e comissões incluídos'},
  {label:'MARGEM',value:formatMoney(t.margin),detail:`${formatPercent(t.marginBps)} sobre a receita`},
- ...(showCommission?[{label:'COMISSÕES',value:formatMoney(report.commissions),detail:'Percentuais registrados nas vendas'}]:[{label:'CLIENTES',value:String(report.clients.length),detail:'Clientes no período'}])]);
+ ...(showCommission?[{label:'COMISSÕES',value:formatMoney(report.commissions),detail:'Percentuais registrados nas vendas'}]:[{label:'VENDAS',value:String(report.sales.length),detail:'Registros selecionados'}])]);
  p.note('Base: data da venda na Cegonha e nas vendas Frota sem vínculo; data de coleta nos fretes da Frota. Vendas Frota vinculadas não são somadas novamente.');
  if(report.pendingCosts)p.note(`Resultado parcial: ${report.pendingCosts} registro(s) com custos pendentes ou combustível estimado.`);
  p.section('01  Comparativo por vendedor');
  const sellerColumns=showCommission?cols(['Vendedor','Vendas','Receita (R$)','Custo (R$)','Margem (R$)','Comissão (R$)'],[224,50,125,125,125,p.width-649]):cols(['Vendedor','Vendas','Receita (R$)','Custo (R$)','Margem (R$)'],[249,65,155,155,p.width-624]);
  p.table(sellerColumns,[...report.sellers.map(r=>[r.name,String(r.sales),num(r.freight),num(r.cost),num(r.margin),...(showCommission?[num(r.commission??0)]:[])]),['TOTAL',String(report.sales.length),num(t.freight),num(t.cost),num(t.margin),...(showCommission?[num(report.commissions)]:[])]],{total:true});
- p.section('02  Composição dos custos');
- p.table(cols(['Categoria','Valor (R$)'],[p.width-170,170]),report.expenses.map(r=>[r.name,num(r.value)]));
- p.newPage('Detalhamento de todas as vendas selecionadas');p.section('03  Vendas incluídas');
+ p.newPage('Detalhamento de todas as vendas selecionadas');p.section('02  Vendas incluídas');
  const columns=showCommission?cols(['Venda','Canal / data','Cliente','Vendedor','Comissão %','Comissão (R$)','Receita (R$)','Custo (R$)','Margem (R$)'],[48,80,126,104,58,85,90,90,p.width-681],4):cols(['Venda','Canal / data','Cliente','Vendedor','Receita (R$)','Custo (R$)','Margem (R$)'],[48,85,170,140,110,110,p.width-663],4);
  p.table(columns,[...report.sales.map(r=>[r.saleNumber,`${r.saleChannel==='FROTA'?'Frota':'Cegonha'}\n${formatDate(r.saleDate)}`,r.clientName||'Não informado',r.sellerName,...(showCommission?[formatPercent(r.commissionBasisPoints),num(r.financial.commissionCents)]:[]),num(r.freightAmountCents),num(r.financial.transportCostCents),num(r.financial.marginCents)]),['TOTAL','','','',...(showCommission?['',num(report.commissions)]:[]),num(t.freight),num(t.cost),num(t.margin)]],{total:true});
  p.note('Margem = receita - custos - comissão do vendedor. Custos da Frota seguem o cálculo dos fretes, incluindo combustível estimado quando não há realizado. Não equivale ao lucro líquido.');
- p.section('04  Resultado por cliente');
- p.table(cols(['Cliente','Vendas','Receita (R$)','Custo (R$)','Margem (R$)'],[249,65,155,155,p.width-624]),report.clients.map(r=>[r.name,String(r.sales),num(r.freight),num(r.cost),num(r.margin)]));
  return p.save();
 }
 
