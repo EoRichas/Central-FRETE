@@ -1,4 +1,6 @@
 "use client";
+import { ORIGIN_LOCATION_TYPES, ORIGIN_LOCATION_TYPE_LABELS } from "@/lib/domain/operations";
+import { commissionCents } from "@/lib/domain/finance";
 import { ClientAutocomplete } from "@/components/client-autocomplete";
 import type { SelectedClient } from "@/lib/domain/client-search";
 import { useEffect, useRef, useState } from "react";
@@ -265,6 +267,10 @@ export function FreightModal({
     }
   }
 
+  const calculatedCommission = (() => {
+    try { return commissionCents(moneyInputToCents(freightValue || "0"), sellerRate); }
+    catch { return null; }
+  })();
   const preview = (() => {
     try {
       return calculateFleetFreightPreview(
@@ -341,6 +347,8 @@ export function FreightModal({
         destinationCep: financialOnly
           ? freight!.destinationCep
           : destinationCep,
+        originLocationType: financialOnly ? freight!.originLocationType : form.get("originLocationType"),
+        destinationLocationType: financialOnly ? freight!.destinationLocationType : form.get("destinationLocationType"),
         origin: financialOnly ? freight!.origin : form.get("origin"),
         destination: financialOnly
           ? freight!.destination
@@ -436,7 +444,7 @@ export function FreightModal({
                   <option value="">Selecione</option>
                   {selectableVehicles.map((vehicle) => (
                     <option key={vehicle.id} value={vehicle.id}>
-                      {vehicle.plate}
+                      {vehicle.plate}{vehicle.model ? ` · ${vehicle.model}` : ""}
                     </option>
                   ))}
                 </select>
@@ -465,6 +473,10 @@ export function FreightModal({
               disabled={financialOnly}
             />
             <div className="section-divider">Rota e datas</div>
+            <div className="form-grid two">
+              <Field label="Tipo de local de origem"><select name="originLocationType" defaultValue={freight?.originLocationType ?? ""} required={!editing} disabled={financialOnly}><option value="">Selecione o local</option>{ORIGIN_LOCATION_TYPES.map(type=><option key={type} value={type}>{ORIGIN_LOCATION_TYPE_LABELS[type]}</option>)}</select></Field>
+              <Field label="Tipo de local de destino"><select name="destinationLocationType" defaultValue={freight?.destinationLocationType ?? ""} required={!editing} disabled={financialOnly}><option value="">Selecione o local</option>{ORIGIN_LOCATION_TYPES.map(type=><option key={type} value={type}>{ORIGIN_LOCATION_TYPE_LABELS[type]}</option>)}</select></Field>
+            </div>
             <div className="form-grid two">
               <Field label="CEP de origem">
                 <input
@@ -757,7 +769,7 @@ export function FreightModal({
               />
             </Field>
           </div>
-          {(me.data?.user.role === "ADMIN" || me.data?.user.role === "VENDEDOR") && preview && <div className="calculation-summary"><span>Comissão calculada</span><strong>{formatMoney(preview.sellerCommissionCents ?? 0)}</strong></div>}
+          {(me.data?.user.role === "ADMIN" || me.data?.user.role === "VENDEDOR") && <div className="calculation-summary" aria-live="polite"><span>Comissão calculada</span><strong>{calculatedCommission === null ? "Informe um valor válido" : formatMoney(calculatedCommission)}</strong><small>{!editing && me.data?.user.role === "ADMIN" && !sellerId ? "Selecione o vendedor para calcular a comissão." : "Atualizada automaticamente pelo percentual do vendedor."}</small></div>}
           {preview && (!editing || freight?.sellerCommissionBasisPoints != null) && (
             <>
               <div className="fleet-form-preview fleet-result-preview">

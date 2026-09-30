@@ -6,7 +6,7 @@ import { CargoVehiclesEditor } from "@/components/cargo-vehicles-editor";
 import { cargoVehiclesOrLegacy } from "@/lib/domain/cargo-vehicles";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type {
   CostRecord,
   CurrentUser,
@@ -147,7 +147,11 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const preview = useMemo(() => {
+  const calculatedCommission = (() => {
+    try { return commissionCents(moneyInputToCents(freightValue || "0"), commissionBasisPoints); }
+    catch { return null; }
+  })();
+  const preview = (() => {
     try {
       const freight = moneyInputToCents(freightValue || "0");
       const basisPoints = commissionBasisPoints;
@@ -179,7 +183,7 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
         marginPercent: 0,
       };
     }
-  }, [freightValue, commissionBasisPoints, costs]);
+  })();
 
   function updateCost(key: string, amount: string) {
     setCosts((items) =>
@@ -357,7 +361,7 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
           <header><span>03</span><div><h2>Valores e despesas</h2><p>Todos os custos ficam visíveis e cada linha aceita somente um valor em reais.</p></div></header>
           <div className="form-grid three">
             <Field label="Valor total do frete"><div className="money-field"><span>R$</span><input value={freightValue} onChange={(event) => setFreightValue(event.target.value)} placeholder="0,00" inputMode="decimal" required /></div></Field>
-            {canSeeCommission && <div className="calculation-summary"><span>Comissão calculada</span><strong>{formatMoney(preview.commission)}</strong></div>}
+            {canSeeCommission && <div className="calculation-summary" aria-live="polite"><span>Comissão calculada</span><strong>{calculatedCommission === null ? "Informe um valor válido" : formatMoney(calculatedCommission)}</strong><small>{isAdmin && !sellerId ? "Selecione o vendedor para calcular a comissão." : "Atualizada automaticamente pelo percentual do vendedor."}</small></div>}
           </div>
           <div className="cost-list">
             <div className="cost-list-head"><div><h3>Custos da operação</h3><p>Preencha apenas as linhas que possuem valor.</p></div><span className="cost-currency-tag">TODOS OS VALORES EM BRL</span></div>
@@ -386,7 +390,7 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
         </section>
 
         {error && <p className="form-error" role="alert">{error}</p>}
-        <div className="sticky-form-actions">
+        <div className="sale-form-actions">
           {editing && meApi.data?.user.role === "ADMIN" && (
             <button
               type="button"

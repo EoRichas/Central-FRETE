@@ -55,6 +55,7 @@ export type FleetVehicleCost = {
 };
 
 export type FleetVehicle = {
+  model?: string | null;
   id: string;
   plate: string;
   active: boolean;
@@ -77,6 +78,9 @@ export type FleetDriver = {
 };
 
 export type FleetFreightBase = {
+  originLocationType?: import("@/lib/domain/operations").OriginLocationType | null;
+  destinationLocationType?: import("@/lib/domain/operations").OriginLocationType | null;
+
   sellerId?: string | null;
   sellerName?: string | null;
   sellerCommissionBasisPoints?: number;

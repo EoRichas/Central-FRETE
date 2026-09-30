@@ -26,7 +26,7 @@ export const ORDER_SOURCE_SQL = `select jsonb_build_object(
  'installments',coalesce((select jsonb_agg(jsonb_build_object('dueDate',i.due_date,'paymentMethod',i.payment_method,'amountCents',i.expected_amount_cents) order by i.installment_number,i.id)
    from receivable_installments i where i.sale_id=s.id),'[]'::jsonb),
  'financialDueDate',s.financial_due_date,'operationalDeadlineDays',s.operational_deadline_days,'deliveryDeadline',null,'notes',s.notes
-) || case when s.origin_location_type is null then '{}'::jsonb else jsonb_build_object('originLocationType',s.origin_location_type) end || case when s.destination_location_type is null then '{}'::jsonb else jsonb_build_object('destinationLocationType',s.destination_location_type) end as snapshot from freight_sales s left join clients c on c.id=s.client_id
+) || case when coalesce(f.origin_location_type,s.origin_location_type) is null then '{}'::jsonb else jsonb_build_object('originLocationType',coalesce(f.origin_location_type,s.origin_location_type)) end || case when coalesce(f.destination_location_type,s.destination_location_type) is null then '{}'::jsonb else jsonb_build_object('destinationLocationType',coalesce(f.destination_location_type,s.destination_location_type)) end as snapshot from freight_sales s left join clients c on c.id=s.client_id
 left join fleet_freights f on f.id=s.fleet_freight_id where s.id=?`;
 
 export async function authorizeOrder(user: CurrentUser, saleId: string) {
@@ -41,7 +41,7 @@ const FLEET_ORDER_SOURCE_SQL = `select jsonb_build_object(
  'cargoVehicles',coalesce(f.cargo_vehicles,jsonb_build_array(jsonb_build_object('model',f.cargo_vehicle_model,'plate',f.cargo_plate,'identification',null))),
  'freightAmountCents',f.freight_amount_cents,'installments','[]'::jsonb,'financialDueDate',null,
  'operationalDeadlineDays',null,'deliveryDeadline',null,'notes',null
-) as snapshot from fleet_freights f where f.id=? and not exists(select 1 from freight_sales s where s.fleet_freight_id=f.id)`;
+) || case when f.origin_location_type is null then '{}'::jsonb else jsonb_build_object('originLocationType',f.origin_location_type) end || case when f.destination_location_type is null then '{}'::jsonb else jsonb_build_object('destinationLocationType',f.destination_location_type) end as snapshot from fleet_freights f where f.id=? and not exists(select 1 from freight_sales s where s.fleet_freight_id=f.id)`;
 
 type OrderSource = 'sale' | 'fleet';
 const orderSources = {

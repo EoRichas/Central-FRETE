@@ -1,4 +1,5 @@
 "use client";
+import { ORIGIN_LOCATION_TYPE_LABELS } from "@/lib/domain/operations";
 import { cargoVehiclesOrLegacy } from '@/lib/domain/cargo-vehicles';
 import { FLEET_OPERATIONAL_STATUS_LABELS, type FleetFreight } from '@/lib/domain/fleet';
 import { formatDate, formatMoney, formatPercent } from '@/lib/format';
@@ -17,7 +18,7 @@ export function FleetFreightDetail({freight: f}: {freight: FleetFreight}) {
     <section className="detail-grid">
       <article className="panel detail-card">
         <header><div><span className="eyebrow">Cadastro</span><h2>Dados da operação</h2></div></header>
-        <dl className="details-list">
+        <dl className="details-list"><div><dt>Tipo de local de origem</dt><dd>{f.originLocationType ? ORIGIN_LOCATION_TYPE_LABELS[f.originLocationType] : "Não informado"}</dd></div><div><dt>Tipo de local de destino</dt><dd>{f.destinationLocationType ? ORIGIN_LOCATION_TYPE_LABELS[f.destinationLocationType] : "Não informado"}</dd></div>
           <div className="full"><dt>Veículos transportados ({cargo.length})</dt><dd>{cargo.map((v,i)=><div key={i}>{i+1}. {[v.model,v.plate].filter(Boolean).join(' · ') || 'Não informado'}</div>)}</dd></div>
           <div><dt>Cliente</dt><dd>{f.clientName}</dd></div>
           <div><dt>Vendedor</dt><dd>{f.sellerName ?? "Não informado"}</dd></div>

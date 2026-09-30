@@ -38,7 +38,7 @@ export function FleetMonthlyPanel({ competency, onCompetencyChange }: { competen
     </section>
     {mutationError && <p role="alert" className="form-error">{mutationError}</p>}
     <section className="panel table-panel">
-    <header className="fleet-panel-header"><div><h2>Composição do resultado</h2><p>{competencyLabel(competency)} · {selectedClosing ? "Fechamento preservado" : "Apuração atual"} somente Frota, por faturamento; custos históricos compartilhados pela data da viagem.</p>
+    <header className="fleet-panel-header"><div><h2>Composição do resultado</h2><p>{competencyLabel(competency)} · {selectedClosing ? "Fechamento preservado" : "Apuração atual"} somente Frota, por faturamento; comissão do motorista pela coleta; custos históricos compartilhados pela data da viagem.</p>
       {selectedClosing && <p>Fechado por {selectedClosing.closedByName} em {new Date(selectedClosing.closedAt).toLocaleString("pt-BR", {timeZone: "America/Sao_Paulo"})}.{selectedClosing.reopenedAt && ` Reaberto: ${selectedClosing.reopenReason || "Motivo não informado"}.`}</p>}
       {closed && !selectedClosing && <p>Existe um fechamento salvo. Esta consulta mostra os dados atuais; selecione o fechamento para conferir os valores preservados.</p>}
       {!api.data.history.length && <p>Não há fechamento salvo para este mês.</p>}
@@ -55,7 +55,7 @@ export function FleetMonthlyPanel({ competency, onCompetencyChange }: { competen
   <section className="panel table-panel">
     <header className="fleet-panel-header"><div><h2>Fretes e vendas incluídos</h2><p>{source.freights.length} fretes da Frota e {source.sales?.length ?? 0} vendas sem vínculo operacional. Cada registro entra uma vez.</p></div></header>
     <div className="responsive-table"><table><thead><tr><th>Venda</th><th>Origem do registro</th><th>Data</th><th>Cliente</th><th>Receita</th><th>Comissão do motorista</th></tr></thead><tbody>
-      {source.freights.map(f => <tr key={`freight:${f.id}`}><td>{f.saleNumber || 'Não disponível'}</td><td>Frete Frota</td><td>{formatDate(f.date ?? null)}</td><td>{f.client}</td><td>{formatMoney(f.revenueCents)}</td><td>{f.driverCommissionCents === undefined ? 'Não detalhada neste fechamento' : formatMoney(f.driverCommissionCents)}</td></tr>)}
+      {source.freights.map(f => <tr key={`freight:${f.id}`}><td>{f.saleNumber || 'Não disponível'}</td><td>{f.commissionOnly ? "Comissão pela coleta" : "Frete Frota"}</td><td>{formatDate(f.date ?? null)}</td><td>{f.client}</td><td>{formatMoney(f.revenueCents)}</td><td>{f.driverCommissionCents === undefined ? 'Não detalhada neste fechamento' : formatMoney(f.driverCommissionCents)}</td></tr>)}
       {source.sales?.map(s => <tr key={`sale:${s.id}`}><td>{s.saleNumber || 'Não disponível'}</td><td>{s.saleChannel === 'FROTA' ? 'Venda Frota' : s.saleChannel === 'CEGONHA' ? 'Venda Cegonha' : 'Venda'}</td><td>{formatDate(s.date ?? null)}</td><td>{s.client || 'Não informado'}</td><td>{formatMoney(s.revenueCents)}</td><td>Não se aplica</td></tr>)}
       {!source.freights.length && !source.sales?.length && <tr><td colSpan={6}>Nenhum frete ou venda nesta competência.</td></tr>}
     </tbody></table></div>

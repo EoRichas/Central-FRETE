@@ -12,6 +12,9 @@ import { asObject } from "@/lib/server/validation";
 type RouteContext = { params: Promise<{ id: string }> };
 
 type FreightSnapshot = {
+  originLocationType?: import("@/lib/domain/operations").OriginLocationType | null;
+  destinationLocationType?: import("@/lib/domain/operations").OriginLocationType | null;
+
   tripId: string | null;
   yardCostCents: number;
   pickupCostCents: number;
@@ -62,7 +65,7 @@ async function freightSnapshot(id: string) {
       driver_id as driverId, driver_name as driverName,
       client_id as clientId, client_name as clientName, cargo_vehicle_model as cargoVehicleModel,
       cargo_plate as cargoPlate, origin, destination,
-      origin_cep as originCep, destination_cep as destinationCep,
+      origin_location_type as originLocationType, destination_location_type as destinationLocationType, origin_cep as originCep, destination_cep as destinationCep,
       pickup_date as pickupDate, delivery_date as deliveryDate,
       billing_date as billingDate, operational_status as operationalStatus,
       priority, freight_amount_cents as freightAmountCents,
@@ -96,6 +99,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           cargoPlate: previous.cargoPlate,
           cargoVehicles: cargoVehiclesOrLegacy(previous.cargoVehicles, previous.cargoVehicleModel, previous.cargoPlate),
           origin: previous.origin,
+          originLocationType: previous.originLocationType, destinationLocationType: previous.destinationLocationType,
           destination: previous.destination,
           originCep: previous.originCep,
           destinationCep: previous.destinationCep,
@@ -129,7 +133,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           `update fleet_freights set
             vehicle_id = ?, vehicle_plate = ?, driver_id = ?, driver_name = ?,
             client_id = ?, client_name = ?, cargo_vehicle_model = ?, cargo_plate = ?,
-            origin = ?, destination = ?, pickup_date = ?, delivery_date = ?,
+            origin = ?, destination = ?, origin_location_type = ?, destination_location_type = ?, pickup_date = ?, delivery_date = ?,
             billing_date = ?, operational_status = ?, priority = ?,
             freight_amount_cents = ?, distance_meters = ?, toll_cents = ?,
             driver_commission_cents = ?, updated_by = ?, origin_cep = ?, destination_cep = ?,
@@ -148,7 +152,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           data.cargoVehicleModel,
           data.cargoPlate,
           data.origin,
-          data.destination,
+          data.destination, data.originLocationType, data.destinationLocationType,
           data.pickupDate,
           data.deliveryDate,
           data.billingDate,

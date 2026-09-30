@@ -31,7 +31,7 @@ export type MonthlySource = {
   dateBasis?: 'BILLING_OR_PICKUP' | 'SALE_DATE';
   sales?: {id:string; saleNumber?:string; saleChannel?:'FROTA'|'CEGONHA'; client?:string|null; date?:string; revenueCents:number; costCents:number; costsPending:boolean}[];
   competency: string;
-  freights: { id: string; saleNumber?:string; date?:string; driverCommissionCents?:number; driverId?:string|null; driverName?:string; vehiclePlate?:string; fuelCostCents?:number; tollCostCents?:number; client: string; revenueCents: number; directCostCents: number;
+  freights: { commissionOnly?:boolean; id: string; saleNumber?:string; date?:string; driverCommissionCents?:number; driverId?:string|null; driverName?:string; vehiclePlate?:string; fuelCostCents?:number; tollCostCents?:number; client: string; revenueCents: number; directCostCents: number;
     standaloneCostCents: number; fuelPending: boolean }[];
   trips: { id: string; name: string; date?:string; costCents: number }[];
   entries: MonthlyEntry[];

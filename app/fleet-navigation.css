@@ -30,3 +30,15 @@
 @media (max-width: 1100px) { .sales-filter-panel { grid-template-columns: repeat(auto-fit, minmax(min(100%, 215px), 1fr)); } }
 
 .fleet-module .compact-filter input[type="month"] { min-width: 215px; }
+
+/* Form actions stay at the end of the sale; header controls share a baseline. */
+.sale-form-actions { display: flex; justify-content: flex-end; gap: 9px; flex-wrap: wrap; padding: 16px 0; border-top: 1px solid var(--line); }
+.fleet-module > .page-header .page-actions { align-items: flex-end; }
+.fleet-module .page-header .page-actions .button { min-height: 42px; }
+
+.seller-commission-group { overflow: hidden; }
+.seller-commission-group > summary { font-family: inherit; cursor: pointer; padding: 18px 20px; color: var(--navy); font-weight: 600; }
+.seller-commission-group[open] > summary { border-bottom: 1px solid var(--line); }
+.calculation-summary small { display: block; font-size: 11px; margin-top: 4px; font-weight: 400; }
+
+.page-actions .button.create-sale-action:not(.compact-button) { background: #fff; color: #233d53; border-color: #c8d5df; }

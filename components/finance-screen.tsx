@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import type { CurrentUser, SaleRecord } from "@/lib/contracts";
+import type { SalesReport } from "@/lib/domain/reports";
+import type { FleetFreight } from "@/lib/domain/fleet";
+import { FleetFreightDetail } from "@/components/fleet-freight-detail";
+import { Modal } from "@/components/ui";
 import { currentCompetency } from "@/lib/domain/dates";
 import { costCategoryLabel } from "@/lib/domain/operations";
 import { formatDate, formatMoney, formatPercent } from "@/lib/format";
@@ -16,14 +19,13 @@ import {
 import { useApi } from "@/components/use-api";
 
 export function FinanceScreen() {
-  const me = useApi<{user:CurrentUser}>("/api/me");
-  const showCommission = me.data?.user.role === "ADMIN" || me.data?.user.role === "VENDEDOR";
   const [competency, setCompetency] = useState(currentCompetency);
-  const url = `/api/sales?limit=500${
-    competency ? `&competency=${competency}` : ""
-  }`;
-  const api = useApi<{ sales: SaleRecord[] }>(url);
-  const sales = useMemo(() => api.data?.sales ?? [], [api.data]);
+  const [channel, setChannel] = useState("");
+  const [selectedFreight, setSelectedFreight] = useState<string | null>(null);
+  const detail = useApi<{freight:FleetFreight}>(selectedFreight ? `/api/fleet/freights/${selectedFreight}` : null);
+  const api = useApi<{ report: SalesReport; showCommission: boolean }>(`/api/reports/sales?competency=${competency}&saleChannel=${channel}`);
+  const showCommission = Boolean(api.data?.showCommission);
+  const sales = useMemo(() => api.data?.report.sales ?? [], [api.data]);
   const totals = useMemo(
     () =>
       sales.reduce(
@@ -43,7 +45,7 @@ export function FinanceScreen() {
       <PageHeader
         eyebrow="Custos das vendas"
         title="Financeiro"
-        description="Visão direta do valor do frete e do custo total de cada venda."
+        description="Vendas Cegonha e fretes da Frota, pela data da venda ou da coleta, sem duplicar vínculos."
       />
       <section className="filter-panel compact">
         <label>
@@ -54,6 +56,7 @@ export function FinanceScreen() {
             onChange={(event) => setCompetency(event.target.value || currentCompetency())}
           />
         </label>
+        <label><span>Canal</span><select value={channel} onChange={e=>setChannel(e.target.value)}><option value="">Frota e Cegonha</option><option value="FROTA">Frota</option><option value="CEGONHA">Cegonha</option></select></label>
         <div className="filter-stat">
           <strong>{sales.length}</strong>
           <span>vendas exibidas</span>
@@ -70,6 +73,7 @@ export function FinanceScreen() {
       )}
       {sales.length > 0 && (
         <>
+          {api.data?.report.pendingCosts ? <p className="fleet-update-note">{api.data.report.pendingCosts} venda(s) com custos pendentes ou combustível estimado.</p> : null}
           <section className="receivable-summary large finance-three-metrics">
             <div>
               <span>Valor total dos fretes</span>
@@ -90,7 +94,7 @@ export function FinanceScreen() {
                 <thead>
                   <tr>
                     <th>Venda</th>
-                    <th>Data</th>
+                    <th>Canal</th><th>Data</th>
                     <th>Vendedor(a)</th>
                     <th>Rota</th>
                     <th>Valor do frete</th>
@@ -113,7 +117,7 @@ export function FinanceScreen() {
                           <strong>{sale.saleNumber}</strong>
                           <small>{sale.clientName ?? "CLIENTE NÃO INFORMADO"}</small>
                         </td>
-                        <td data-label="Data">{formatDate(sale.saleDate)}</td>
+                        <td data-label="Canal">{sale.saleChannel === "FROTA" ? "Frota" : "Cegonha"}</td><td data-label="Data">{formatDate(sale.saleDate)}</td>
                         <td data-label="Vendedor(a)"><strong>{sale.sellerName}</strong></td>
                         <td data-label="Rota">{sale.origin} → {sale.destination}</td>
                         <td data-label="Valor do frete"><strong>{formatMoney(sale.freightAmountCents)}</strong></td>
@@ -125,7 +129,7 @@ export function FinanceScreen() {
                           <strong>{formatMoney(sale.financial.transportCostCents)}</strong>
                           <small title={details}>{details}</small>
                         </td>
-                        <td><Link className="table-action" href={`/vendas/${sale.id}`} aria-label={`Abrir venda ${sale.saleNumber}`}><Icons.chevron /></Link></td>
+                        <td>{sale.id.startsWith("freight:") ? <button className="table-action" onClick={()=>setSelectedFreight(sale.id.slice(8))} aria-label={`Abrir frete ${sale.saleNumber}`}><Icons.chevron /></button> : <Link className="table-action" href={`/vendas/${sale.id}`} aria-label={`Abrir venda ${sale.saleNumber}`}><Icons.chevron /></Link>}</td>
                       </tr>
                     );
                   })}
@@ -135,6 +139,7 @@ export function FinanceScreen() {
           </section>
         </>
       )}
+      <Modal open={Boolean(selectedFreight)} onClose={()=>setSelectedFreight(null)} title="Detalhes do frete" wide><div className="modal-body">{detail.loading && <LoadingState label="Carregando frete…"/>}{detail.error && <ErrorState message={detail.error} retry={detail.refresh}/>} {!detail.loading && !detail.error && detail.data && <FleetFreightDetail freight={detail.data.freight}/>}</div></Modal>
     </>
   );
 }

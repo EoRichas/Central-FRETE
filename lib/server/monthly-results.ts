@@ -15,13 +15,13 @@ select jsonb_build_object(
    'costsPending',s.costs_pending=1) order by s.id)
    from freight_sales s left join clients c on c.id=s.client_id where s.competency=m.competency and s.sale_channel='FROTA' and s.fleet_freight_id is null),'[]'::jsonb),
  'freights', coalesce((select jsonb_agg(jsonb_build_object(
-   'id', f.id, 'saleNumber', f.sale_number, 'date', coalesce(f.billing_date,f.pickup_date), 'driverCommissionCents',f.driver_commission_cents,'driverId',f.driver_id,'driverName',f.driver_name,'vehiclePlate',f.vehicle_plate, 'client', f.client_name, 'revenueCents', f.freight_amount_cents,
-   'directCostCents', round(f.freight_amount_cents::numeric*f.seller_commission_basis_points/10000)::bigint + f.driver_commission_cents + f.yard_cost_cents + f.pickup_cost_cents + f.delivery_cost_cents + f.other_cost_cents + f.insurance_cost_cents + f.invoice_cost_cents + f.icms_cost_cents + f.cte_mdfe_cost_cents,
-   'fuelCostCents',case when f.trip_id is null then coalesce(f.actual_fuel_cost_cents,0) else 0 end,
-   'tollCostCents',case when f.trip_id is null then f.toll_cents else 0 end,
-   'standaloneCostCents', case when f.trip_id is null then coalesce(f.actual_fuel_cost_cents,0) + f.toll_cents else 0 end,
-   'fuelPending', f.trip_id is null and f.actual_fuel_cost_cents is null
- ) order by f.id) from fleet_freights f where left(coalesce(f.billing_date,f.pickup_date),7)=m.competency), '[]'::jsonb),
+   'id', f.id, 'saleNumber', f.sale_number, 'date', case when left(coalesce(f.billing_date,f.pickup_date),7)=m.competency then coalesce(f.billing_date,f.pickup_date) else f.pickup_date end, 'commissionOnly', left(coalesce(f.billing_date,f.pickup_date),7)<>m.competency, 'driverCommissionCents',case when left(f.pickup_date,7)=m.competency then f.driver_commission_cents else 0 end,'driverId',f.driver_id,'driverName',f.driver_name,'vehiclePlate',f.vehicle_plate, 'client', f.client_name, 'revenueCents', case when left(coalesce(f.billing_date,f.pickup_date),7)=m.competency then f.freight_amount_cents else 0 end,
+   'directCostCents', case when left(f.pickup_date,7)=m.competency then f.driver_commission_cents else 0 end + case when left(coalesce(f.billing_date,f.pickup_date),7)=m.competency then round(f.freight_amount_cents::numeric*f.seller_commission_basis_points/10000)::bigint + f.yard_cost_cents + f.pickup_cost_cents + f.delivery_cost_cents + f.other_cost_cents + f.insurance_cost_cents + f.invoice_cost_cents + f.icms_cost_cents + f.cte_mdfe_cost_cents else 0 end,
+   'fuelCostCents',case when left(coalesce(f.billing_date,f.pickup_date),7)=m.competency and f.trip_id is null then coalesce(f.actual_fuel_cost_cents,0) else 0 end,
+   'tollCostCents',case when left(coalesce(f.billing_date,f.pickup_date),7)=m.competency and f.trip_id is null then f.toll_cents else 0 end,
+   'standaloneCostCents', case when left(coalesce(f.billing_date,f.pickup_date),7)=m.competency and f.trip_id is null then coalesce(f.actual_fuel_cost_cents,0) + f.toll_cents else 0 end,
+   'fuelPending', left(coalesce(f.billing_date,f.pickup_date),7)=m.competency and f.trip_id is null and f.actual_fuel_cost_cents is null
+ ) order by f.id) from fleet_freights f where left(coalesce(f.billing_date,f.pickup_date),7)=m.competency or (left(f.pickup_date,7)=m.competency and f.driver_commission_cents>0)), '[]'::jsonb),
  'trips', coalesce((select jsonb_agg(jsonb_build_object('id',t.id,'name',t.name,'date',t.operation_date,
    'costCents',coalesce((select sum(coalesce(f.actual_fuel_cost_cents,
  t.fuel_cost_cents / f.members + case when f.position <= mod(t.fuel_cost_cents,f.members) then 1 else 0 end))

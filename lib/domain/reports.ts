@@ -4,6 +4,7 @@ import { weightedMarginBasisPoints } from './finance';
 import { costCategoryLabel } from './operations';
 
 export type ReportSale = Pick<SaleRecord, 'id'|'saleNumber'|'saleDate'|'saleChannel'|'sellerId'|'sellerName'|'clientName'|'freightAmountCents'|'commissionBasisPoints'|'costsPending'> & {
+  origin?: string; destination?: string;
   costs: {category:string;amountCents:number}[];
   financial: Pick<SaleRecord['financial'],'commissionCents'|'transportCostCents'|'marginCents'|'marginBasisPoints'>;
 };
@@ -11,8 +12,8 @@ export const reportSellerKey = (sale: Pick<ReportSale,'sellerId'|'sellerName'>) 
 
 // Operational Frota records are authoritative when a commercial mirror exists.
 export function consolidateReportSales(sales: SaleRecord[], freights: FleetFreight[]): ReportSale[] {
-  return [...sales.filter(s => s.saleChannel !== 'FROTA' || !s.fleetFreightId).map((s):ReportSale=>({id:s.id,saleNumber:s.saleNumber,saleDate:s.saleDate,saleChannel:s.saleChannel,sellerId:s.sellerId,sellerName:s.sellerName,clientName:s.clientName,freightAmountCents:s.freightAmountCents,commissionBasisPoints:s.commissionBasisPoints,costsPending:s.costsPending,costs:s.costs.map(c=>({category:c.category,amountCents:c.amountCents})),financial:{commissionCents:s.financial.commissionCents,transportCostCents:s.financial.transportCostCents,marginCents:s.financial.marginCents,marginBasisPoints:s.financial.marginBasisPoints}})), ...freights.map((f):ReportSale => ({
-    id: `freight:${f.id}`, saleNumber:f.saleNumber || 'Não disponível', saleDate:f.pickupDate, saleChannel:'FROTA',
+  return [...sales.filter(s => s.saleChannel !== 'FROTA' || !s.fleetFreightId).map((s):ReportSale=>({id:s.id,origin:s.origin,destination:s.destination,saleNumber:s.saleNumber,saleDate:s.saleDate,saleChannel:s.saleChannel,sellerId:s.sellerId,sellerName:s.sellerName,clientName:s.clientName,freightAmountCents:s.freightAmountCents,commissionBasisPoints:s.commissionBasisPoints,costsPending:s.costsPending,costs:s.costs.map(c=>({category:c.category,amountCents:c.amountCents})),financial:{commissionCents:s.financial.commissionCents,transportCostCents:s.financial.transportCostCents,marginCents:s.financial.marginCents,marginBasisPoints:s.financial.marginBasisPoints}})), ...freights.map((f):ReportSale => ({
+    id: `freight:${f.id}`, origin:f.origin, destination:f.destination, saleNumber:f.saleNumber || 'Não disponível', saleDate:f.pickupDate, saleChannel:'FROTA',
     sellerId:f.sellerId ?? null, sellerName:f.sellerName || 'Não informado', clientName:f.clientName,
     freightAmountCents:f.freightAmountCents, commissionBasisPoints:f.sellerCommissionBasisPoints ?? 0,
     costsPending:f.fuelCostSource === 'ESTIMADO',

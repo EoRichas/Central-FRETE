@@ -64,7 +64,7 @@ export async function renderMonthlyReportPdf(source:MonthlySource,closing?:Month
  {label:'RESULTADO DO MÊS',value:formatMoney(t.resultCents),detail:'Receita menos despesas da Frota'},
  {label:'MARGEM DO MÊS',value:pct(t.resultCents,t.revenueCents),detail:'Resultado / receita da Frota'}]);
  const groups=new Map<string,{name:string;count:number;value:number}>();
- for(const f of source.freights){const key=f.driverId??`historical:${f.driverName??'Não detalhado'}`;const g=groups.get(key)??{name:f.driverName||'Não detalhado no histórico',count:0,value:0};g.count++;g.value+=f.driverCommissionCents??0;groups.set(key,g);}
+ for(const f of source.freights.filter(f=>(f.driverCommissionCents??0)>0)){const key=f.driverId??`historical:${f.driverName??'Não detalhado'}`;const g=groups.get(key)??{name:f.driverName||'Não detalhado no histórico',count:0,value:0};g.count++;g.value+=f.driverCommissionCents??0;groups.set(key,g);}
  const drivers=[...groups.values()].sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));
  const detailed=source.freights.every(f=>f.driverCommissionCents!==undefined);
  const fuel=sum(source.freights.map(f=>f.fuelCostCents??0)),toll=sum(source.freights.map(f=>f.tollCostCents??0));
@@ -85,8 +85,8 @@ export async function renderMonthlyReportPdf(source:MonthlySource,closing?:Month
  const listed=drivers.slice(0,4);
  const fullDrivers=drivers.length>4||listed.some(d=>summaryName(p,d.name,w-159)!==d.name);
  p.table(cols(['Motorista','Fretes','Comissão (R$)'],[w-145,43,102]),[...listed.map(d=>[summaryName(p,d.name,w-159),String(d.count),detailed?num(d.value):'Não detalhada']),[drivers.length>4?'SUBTOTAL':'TOTAL',String(sum(listed.map(d=>d.count))),detailed?num(sum(listed.map(d=>d.value))):'Não detalhada']],{x,top:top-19,total:true,rowHeight:23});
- p.note('Comissões geradas pelos fretes. Não indica pagamento ao motorista.',w,x,7.2);
- p.note('Fretes por faturamento; coleta provisória se a data estiver ausente. Vendas pela competência. Custos compartilhados pela data da viagem.',w,x,7.2);
+ p.note('Comissões pela coleta do frete. Não indica pagamento ao motorista.',w,x,7.2);
+ p.note('Fretes por faturamento; coleta provisória se ausente. Comissão do motorista pela coleta. Vendas pela competência. Custos compartilhados pela data da viagem.',w,x,7.2);
  p.y=Math.min(p.y,bottom)-2;
  if(t.pendingFuelCount||t.pendingSalesCount||source.unbilledCount)p.note(`APURAÇÃO PARCIAL: ${source.unbilledCount} frete(s) sem faturamento; ${t.pendingFuelCount} sem combustível realizado; ${t.pendingSalesCount} venda(s) com custos pendentes.`);
  else p.note('Somente receitas e despesas atribuídas à Frota. Vendas vinculadas não são contadas novamente.');
@@ -94,7 +94,7 @@ export async function renderMonthlyReportPdf(source:MonthlySource,closing?:Month
  p.newPage('Registros que compõem as receitas e os custos');
  if(closing)p.note(`Fechado por ${closing.closedByName} em ${formatDate(closing.closedAt)}.${closing.reopenedAt?` Reaberto: ${closing.reopenReason}`:''}`);
  p.section('03  Fretes operacionais');
- const freightRows=source.freights.map(f=>[f.saleNumber||'Não disponível',formatDate(f.date),f.client,f.driverName||'Não detalhado',num(f.revenueCents),f.driverCommissionCents===undefined?'Não detalhada':num(f.driverCommissionCents),num(f.directCostCents-(f.driverCommissionCents??0)),num(f.standaloneCostCents),num(f.revenueCents-f.directCostCents-f.standaloneCostCents)]);
+ const freightRows=source.freights.map(f=>[f.saleNumber||'Não disponível',formatDate(f.date),f.commissionOnly?`${f.client} (somente comissão)`:f.client,f.driverName||'Não detalhado',num(f.revenueCents),f.driverCommissionCents===undefined?'Não detalhada':num(f.driverCommissionCents),num(f.directCostCents-(f.driverCommissionCents??0)),num(f.standaloneCostCents),num(f.revenueCents-f.directCostCents-f.standaloneCostCents)]);
  p.table(cols(['Venda','Data base','Cliente','Motorista','Receita (R$)','Comissão (R$)','Diretos (R$)','Transporte direto (R$)','Saldo (R$)'],[47,63,111,101,90,90,80,94,p.width-676],4),[...freightRows,['TOTAL','','','',num(t.fleetRevenueCents),detailed?num(t.driverCommissionCents):'Não detalhada',num(t.directCostCents-t.driverCommissionCents),num(sum(source.freights.map(f=>f.standaloneCostCents))),num(t.fleetRevenueCents-t.directCostCents-sum(source.freights.map(f=>f.standaloneCostCents)))]],{rowHeight:22,total:true});
  p.note('Saldos antes dos custos compartilhados de viagens e das despesas mensais. Diretos excluem comissão quando ela está detalhada. Transporte direto inclui combustível realizado e pedágios de fretes sem viagem vinculada.');
  p.section('04  Vendas Frota sem vínculo operacional');

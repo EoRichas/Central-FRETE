@@ -33,7 +33,7 @@ mock.module('../../lib/server/d1.ts', { namedExports: {
 
 before(async () => {
  await pg.exec('CREATE ROLE anon; CREATE ROLE authenticated;');
- for (let pass = 0; pass < 2; pass++) for (const file of ['001_central_frete_postgres.sql', '002_fleet.sql', '003_fleet_billing.sql', '004_operational_role.sql', '005_detach_driver_vehicle.sql', '006_fleet_vehicle_cost_average_flag.sql', '008_fleet_results.sql', '009_direct_paid_operation_costs.sql', '010_fleet_cargo_sales_orders.sql', '011_sale_origin_location_type.sql', '../supabase/migrations/20260923220518_fleet_operation_integrity.sql', '012_sales_channels_global_numbering_costs.sql', '013_fleet_document_costs.sql', '015_fleet_numbers_and_orders.sql', '../supabase/migrations/20260928224007_user_phone_vehicle_deletion.sql', '016_fleet_monthly_scope.sql', '../supabase/migrations/20260929161711_registry_channels_addresses.sql', '../supabase/migrations/20260929175656_fleet_client_reference.sql', '../supabase/migrations/20260930164106_seller_commission_access.sql', '../supabase/migrations/20260930172047_cegonha_monthly_scope.sql']) await pg.exec(await readFile(new URL(`../../database/${file}`, import.meta.url), 'utf8'));
+ for (let pass = 0; pass < 2; pass++) for (const file of ['001_central_frete_postgres.sql', '002_fleet.sql', '003_fleet_billing.sql', '004_operational_role.sql', '005_detach_driver_vehicle.sql', '006_fleet_vehicle_cost_average_flag.sql', '008_fleet_results.sql', '009_direct_paid_operation_costs.sql', '010_fleet_cargo_sales_orders.sql', '011_sale_origin_location_type.sql', '../supabase/migrations/20260923220518_fleet_operation_integrity.sql', '012_sales_channels_global_numbering_costs.sql', '013_fleet_document_costs.sql', '015_fleet_numbers_and_orders.sql', '../supabase/migrations/20260928224007_user_phone_vehicle_deletion.sql', '016_fleet_monthly_scope.sql', '../supabase/migrations/20260929161711_registry_channels_addresses.sql', '../supabase/migrations/20260929175656_fleet_client_reference.sql', '../supabase/migrations/20260930164106_seller_commission_access.sql', '../supabase/migrations/20260930172047_cegonha_monthly_scope.sql', '../supabase/migrations/20260930183118_fleet_vehicle_model.sql', '../supabase/migrations/20260930184218_fleet_location_types.sql']) await pg.exec(await readFile(new URL(`../../database/${file}`, import.meta.url), 'utf8'));
  await pg.exec("INSERT INTO users(id,email,name,role) VALUES ('admin','admin@example.test','Admin','ADMIN'),('finance','finance@example.test','Finance','FINANCEIRO'),('seller','seller@example.test','Seller','VENDEDOR');");
  await pg.exec("INSERT INTO clients(id,type,legal_name,sale_channel) VALUES ('freight-client-0','PJ','CLIENTE DE TESTE','FROTA'),('freight-client-1','PJ','CLIENTE TESTE','FROTA'),('freight-client-2','PJ','CLIENTE CARGA','FROTA'),('freight-client-3','PJ','ODOMETRO','FROTA'),('freight-client-4','PJ','CLIENTE CUSTOS','FROTA'),('freight-client-5','PJ','CLIENTE OS FROTA','FROTA'),('freight-client-6','PJ','CLIENTE ATUALIZADO','FROTA');");
  process.env.CENTRAL_FRETE_SESSION_SECRET = 'test-secret-never-use-in-production-1234';
@@ -575,7 +575,10 @@ test('faturamento mensal não trunca em 500 e preserva comissões sem cadastro d
  await pg.exec(`insert into fleet_freights(id,vehicle_plate,driver_id,driver_name,client_name,origin,destination,pickup_date,billing_date,operational_status,freight_amount_cents,distance_meters,driver_commission_cents)
  select 'billing-'||i,'ABC1D23',case when i<=600 then 'results-driver' else null end,'MOTORISTA','CLIENTE','A','B','2031-01-01','2031-02-01','FATURADO',1000,1000,100 from generate_series(1,601) i`);
  const {loadFleetData}=await import('../../lib/server/fleet.ts');const fleet=await loadFleetData(true,true,true,false,'2031-02');
- assert.equal(fleet.freights.length,0);assert.equal(fleet.billing.freightCount,601);assert.equal(fleet.billing.revenueCents,601000);assert.equal(fleet.billing.commissionCents,60100);assert.equal(fleet.billing.drivers.find(d=>d.id==='results-driver')!.freights.length,600);assert.equal(fleet.billing.drivers.length,2);
+ assert.equal(fleet.freights.length,0);assert.equal(fleet.billing.freightCount,601);assert.equal(fleet.billing.revenueCents,601000);assert.equal(fleet.billing.commissionCents,0);assert.equal(fleet.billing.drivers.length,0);
+ const january=await loadFleetData(true,true,true,false,'2031-01');
+ assert.equal(january.billing.commissionCents,60100);assert.equal(january.billing.drivers.find(d=>d.id==='results-driver')!.freights.length,600);assert.equal(january.billing.drivers.length,2);
+ await pg.exec("delete from fleet_freights where id like 'billing-%'");
  assert.equal('possibleMatchCount' in fleet.summary,false);assert.equal('matchWindowDays' in fleet.parameters,false);
 });
 
@@ -855,14 +858,14 @@ test('Frota gera número global e OS própria, adota o documento ao vincular ven
  const orders=await import('../../app/api/fleet/freights/[id]/service-order/route.ts');const sales=await import('../../app/api/sales/route.ts');
  const {loadFleetData}=await import('../../lib/server/fleet.ts');const {readOrderVersion}=await import('../../lib/server/service-orders.ts');
  const before=Number((await queryFirst('select last_value from global_sale_number_counter where id=1') as {last_value:number}).last_value);
- const payload={vehicleId:'results-truck',driverId:'results-driver',clientId:'freight-client-5',clientName:'CLIENTE OS FROTA',origin:'ORIGEM OS',destination:'DESTINO OS',pickupDate:'2035-01-01',operationalStatus:'EM_ROTA',priority:'NORMAL',freightAmountCents:100000,distanceMeters:100000,tollCents:1000,driverCommissionCents:2000,actualFuelCostCents:10000,cargoVehicles:[{model:'UNO',plate:'ABC1D23'}]};
+ const payload={vehicleId:'results-truck',driverId:'results-driver',clientId:'freight-client-5',clientName:'CLIENTE OS FROTA',originLocationType:'PATIO',destinationLocationType:'PORTA',origin:'ORIGEM OS',destination:'DESTINO OS',pickupDate:'2035-01-01',operationalStatus:'EM_ROTA',priority:'NORMAL',freightAmountCents:100000,distanceMeters:100000,tollCents:1000,driverCommissionCents:2000,actualFuelCostCents:10000,cargoVehicles:[{model:'UNO',plate:'ABC1D23'}]};
  const created=await create.POST(await request('/api/fleet/freights','admin','POST',payload));assert.equal(created.status,201,await created.clone().text());const {id}=await created.json();const ctx={params:Promise.resolve({id})};
  const f=(await loadFleetData(true,true,true,false,'2035-01')).freights.find(f=>f.id===id)!;assert.equal(f.saleNumber,String(before+1));
  const cegonha=await sales.POST(await request('/api/sales','seller','POST',salePayload));assert.equal(cegonha.status,201);const c=await cegonha.json();assert.equal(c.saleNumber,String(before+2));
  for(const role of ['seller','operator']){assert.equal((await orders.GET(await request('/api/fleet/freights/x/service-order',role),ctx)).status,403);assert.equal((await orders.POST(await request('/api/fleet/freights/x/service-order',role,'POST'),ctx)).status,403);}
  assert.equal((await orders.GET(await request('/api/fleet/freights/x/service-order?format=pdf','finance'),ctx)).status,404);
  const result=await orders.POST(await request('/api/fleet/freights/x/service-order','finance','POST'),ctx);assert.equal(result.status,200,await result.clone().text());const first=await result.json();
- assert.equal(first.latest.snapshot.saleNumber,f.saleNumber);assert.equal(first.latest.snapshot.clientName,payload.clientName);assert.equal(first.latest.snapshot.financialDueDate,null);assert.equal(first.latest.snapshot.installments.length,0);assert.equal(first.latest.snapshot.cargoVehicles.length,1);assert.equal(first.latest.snapshot.operationValues,undefined);
+ assert.equal(first.latest.snapshot.saleNumber,f.saleNumber);assert.equal(first.latest.snapshot.clientName,payload.clientName);assert.equal(first.latest.snapshot.originLocationType,'PATIO');assert.equal(first.latest.snapshot.destinationLocationType,'PORTA');assert.equal(first.latest.snapshot.financialDueDate,null);assert.equal(first.latest.snapshot.installments.length,0);assert.equal(first.latest.snapshot.cargoVehicles.length,1);assert.equal(first.latest.snapshot.operationValues,undefined);
  await Promise.all(Array.from({length:3},async()=>orders.POST(await request('/api/fleet/freights/x/service-order','admin','POST'),ctx)));
  assert.equal((await queryAll('select version from service_order_versions where order_id=?',[first.latest.orderId])).length,1);
  assert.equal((await edit.PATCH(await request('/api/fleet/freights/x','finance','PATCH',{insuranceCostCents:3000}),ctx)).status,200);
@@ -995,16 +998,16 @@ test('faturamento e fechamento incluem vendas Frota, fretes antigos e comissão 
  assert.equal(response.status,200,await response.clone().text());
  const {fleet}=await response.json() as {fleet:import('../../lib/domain/fleet.ts').FleetData};
  assert.equal(fleet.billing.sales.length,501);assert.equal(fleet.billing.freightCount,502);
- assert.equal(fleet.billing.revenueCents,511000);assert.equal(fleet.billing.commissionCents,2000);
- assert.equal(fleet.billing.drivers.reduce((sum,d)=>sum+d.commissionCents,0),2000);
+ assert.equal(fleet.billing.revenueCents,511000);assert.equal(fleet.billing.commissionCents,700);
+ assert.equal(fleet.billing.drivers.reduce((sum,d)=>sum+d.commissionCents,0),700);
  assert.equal(fleet.billing.drivers.length,1);
  assert.equal(fleet.billing.freights.find(f=>f.id==='consolidated-freight')!.driverCommissionCents,2000);
  const monthly=await (await monthlyApi.GET(await request('/api/fleet/monthly?competency=2041-02','finance'))).json() as import('../../lib/domain/fleet-results.ts').MonthlyReport;
  const totals=calculateMonthlyResult(monthly.current);
  assert.equal(totals.fleetSalesRevenueCents,501000);assert.equal(totals.fleetRevenueCents,13000);
  assert.equal(totals.fleetRevenueCents+totals.fleetSalesRevenueCents-fleet.billing.revenueCents,3000); // apuração inclui o frete ainda não faturado
- assert.equal(totals.revenueCents,514000);assert.equal(totals.driverCommissionCents,2700);
- assert.equal(totals.variableCostCents,2700);assert.equal(monthly.current.unbilledCount,1);
+ assert.equal(totals.revenueCents,514000);assert.equal(totals.driverCommissionCents,700);
+ assert.equal(totals.variableCostCents,700);assert.equal(monthly.current.unbilledCount,1);
  assert.ok(monthly.current.freights.every(f=>f.saleNumber && f.date));
  assert.equal(monthly.current.sales?.find(s=>s.id==='consolidated-sale-1')?.saleChannel,'FROTA');
  const january=await (await fleetApi.GET(await request('/api/fleet?competency=2041-01','finance'))).json();
@@ -1118,9 +1121,9 @@ test('faturamento aceita data ou status Faturado, não inclui recebimento isolad
  ('bill-pending','TES1T23','MOTORISTA','CLIENTE','A','B','2043-01-01',null,'ENTREGUE',30000,1000,3000);
  update fleet_freights set payment_status='PAGO' where id='bill-pending';`);
  const jan=await loadFleetData(true,true,true,false,'2043-01');
- assert.deepEqual(jan.billing.freights.map(f=>f.id),['bill-status']);assert.equal(jan.billing.commissionCents,2000);
+ assert.deepEqual(jan.billing.freights.map(f=>f.id),['bill-status']);assert.equal(jan.billing.commissionCents,6000);
  assert.equal(jan.freights.length,3); // operação preservada
- const feb=await loadFleetData(true,true,true,false,'2043-02');assert.deepEqual(feb.billing.freights.map(f=>f.id),['bill-explicit']);
+ const feb=await loadFleetData(true,true,true,false,'2043-02');assert.deepEqual(feb.billing.freights.map(f=>f.id),['bill-explicit']);assert.equal(feb.billing.commissionCents,0);
  const sales=await import('../../app/api/sales/route.ts');const edit=await import('../../app/api/sales/[id]/route.ts');
  const payload={...salePayload,saleChannel:'FROTA',saleDate:'2043-01-02',financialDueDate:'2043-03-01',paymentMethod:'FATURADO',billingDate:'2043-02-02'};
  const created=await sales.POST(await request('/api/sales','seller','POST',payload));assert.equal(created.status,201,await created.clone().text());const {id}=await created.json();
@@ -1389,4 +1392,37 @@ test('fechamento Cegonha mantém escopo, bloqueia pendências, preserva versões
  assert.equal((await post({action:'REOPEN',id:saved.id,reason:'Conferência do valor'})).status,200);
  assert.equal((await post({action:'CLOSE',reviewed:true})).status,200);assert.equal((await get()).history.length,2);
  const feb=await (await api.GET(await request('/api/cegonha/monthly?competency=2060-02','finance'))).json();assert.equal(feb.current.sales.length,0);assert.ok(feb.periods.some((p:{competency:string})=>p.competency==='2060-01'));
+});
+
+
+test('modelo do veículo persiste, valida limite e preserva os registros existentes', async()=>{
+ const api=await import('../../app/api/fleet/vehicles/route.ts');
+ const edit=await import('../../app/api/fleet/vehicles/[id]/route.ts');
+ const create=await api.POST(await request('/api/fleet/vehicles','admin','POST',{plate:'MOD1A23',model:'Volvo FH 540',active:true}));
+ assert.equal(create.status,201,await create.clone().text());const {id}=await create.json();
+ const ctx={params:Promise.resolve({id})};
+ assert.deepEqual(await queryFirst('select plate,model from fleet_vehicles where id=?',[id]),{plate:'MOD1A23',model:'VOLVO FH 540'});
+ assert.equal((await edit.PATCH(await request('/api/fleet/vehicles/x','admin','PATCH',{plate:'MOD1A23',model:'X'.repeat(121)}),ctx)).status,400);
+ assert.equal((await edit.PATCH(await request('/api/fleet/vehicles/x','seller','PATCH',{plate:'MOD1A23',model:'Outro'}),ctx)).status,403);
+ assert.equal((await edit.PATCH(await request('/api/fleet/vehicles/x','admin','PATCH',{plate:'MOD1A23',model:'Scania R450',active:false}),ctx)).status,200);
+ const {loadFleetData}=await import('../../lib/server/fleet.ts');
+ const fleet=await loadFleetData(true,true,true,false,'2070-01');
+ assert.equal(fleet.vehicles.find(v=>v.id===id)?.model,'SCANIA R450');
+});
+
+test('comissão do motorista usa coleta na apuração, não duplica no mês faturado e preserva snapshot', async()=>{
+ await pg.exec(`insert into fleet_freights(id,vehicle_plate,driver_name,client_name,origin,destination,pickup_date,billing_date,operational_status,freight_amount_cents,distance_meters,driver_commission_cents,actual_fuel_cost_cents)
+ values('commission-month','MOD1A23','MOTORISTA','CLIENTE','A','B','2070-01-15',null,'ENTREGUE',100000,1000,12000,0)`);
+ const {loadFleetData}=await import('../../lib/server/fleet.ts');
+ const {loadMonthlyReport}=await import('../../lib/server/monthly-results.ts');
+ const {calculateMonthlyResult}=await import('../../lib/domain/fleet-results.ts');
+ const before=await loadMonthlyReport('2070-01');const frozen=JSON.stringify(before.current);
+ assert.equal((await loadFleetData(true,true,true,false,'2070-01')).billing.commissionCents,12000);
+ await pg.exec("update fleet_freights set billing_date='2070-02-01',operational_status='FATURADO' where id='commission-month'");
+ const jan=(await loadMonthlyReport('2070-01')).current,feb=(await loadMonthlyReport('2070-02')).current;
+ assert.equal(calculateMonthlyResult(jan).revenueCents,0);assert.equal(calculateMonthlyResult(jan).driverCommissionCents,12000);assert.equal(calculateMonthlyResult(jan).resultCents,-12000);
+ assert.equal(jan.freights[0].commissionOnly,true);
+ assert.equal(calculateMonthlyResult(feb).revenueCents,100000);assert.equal(calculateMonthlyResult(feb).driverCommissionCents,0);assert.equal(calculateMonthlyResult(feb).resultCents,100000);
+ assert.equal(calculateMonthlyResult(JSON.parse(frozen)).driverCommissionCents,12000);
+ assert.equal((await loadFleetData(true,true,true,false,'2070-02')).billing.commissionCents,0);
 });
