@@ -367,7 +367,7 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
             <div className="cost-list-head"><div><h3>Custos da operação</h3><p>Preencha apenas as linhas que possuem valor.</p></div><span className="cost-currency-tag">TODOS OS VALORES EM BRL</span></div>
             <div className="fixed-cost-grid">
               {costs.map((cost, index) => (
-                <label className={`fixed-cost-row ${cost.category === "OUTRAS_DESPESAS" ? "other-expense-compact" : ""}`} key={cost.key}>
+                <label className="fixed-cost-row" key={cost.key}>
                   <span className="cost-index">{String(index + 1).padStart(2, "0")}</span>
                   <strong>{cost.label}</strong>
                   <div className="money-field compact"><span>R$</span><input aria-label={`Valor de ${cost.label}`} inputMode="decimal" placeholder="0,00" value={cost.amount} onChange={(event) => updateCost(cost.key, event.target.value)} /></div>

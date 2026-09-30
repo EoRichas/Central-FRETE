@@ -607,7 +607,7 @@ test('exclusão de frete sem vínculo preserva histórico mensal; migration nova
  assert.equal((await queryAll("select 1 from information_schema.role_table_grants where table_name='storage_cleanup_jobs' and grantee in ('anon','authenticated')")).length,0);
 });
 
-test('venda Frota usa sequência global, escopo do vendedor e OS comum; operacional cria somente Cegonha',async()=>{
+test('venda Frota usa sequência global, escopo do vendedor e OS comum; operacional cria Cegonha e Frota sem comissão',async()=>{
  const sales=await import('../../app/api/sales/route.ts');
  const detail=await import('../../app/api/sales/[id]/route.ts');
  const orders=await import('../../app/api/sales/[id]/service-order/route.ts');
@@ -621,13 +621,13 @@ test('venda Frota usa sequência global, escopo do vendedor e OS comum; operacio
  const operational=await sales.POST(await request('/api/sales','operator','POST',{...salePayload,sellerName:undefined,sellerId:'seller'}));
  assert.equal(operational.status,201,await operational.clone().text());const c=await operational.json();
  assert.equal(Number(c.saleNumber),before+2);
- assert.equal((await sales.POST(await request('/api/sales','operator','POST',{...salePayload,saleChannel:'FROTA',sellerId:'seller'}))).status,403);
+ assert.equal((await sales.POST(await request('/api/sales','operator','POST',{...salePayload,saleChannel:'FROTA',sellerId:'seller'}))).status,201);
  assert.equal((await sales.POST(await request('/api/sales','operator','POST',{...salePayload,sellerId:'admin'}))).status,201);
  assert.equal((await sales.POST(await request('/api/sales','operator','POST',{...salePayload,sellerId:'seller',advanceAmountCents:100}))).status,403);
  assert.equal((await detail.DELETE(await request('/api/sales/x','operator','DELETE'),{params:Promise.resolve({id:c.id})})).status,403);
  assert.equal((await fleet.GET(await request('/api/fleet','seller'))).status,403);
  assert.equal((await clients.GET(await request('/api/clients','operator'))).status,200);
- assert.equal((await clients.POST(await request('/api/clients','operator','POST',{}))).status,403);
+ assert.equal((await clients.POST(await request('/api/clients','operator','POST',{}))).status,400);
  const sellerOptions=await sellers.GET(await request('/api/sales/sellers','operator'));
  assert.equal(sellerOptions.status,403);
  const listed=await sales.GET(await request('/api/sales?competency=2026-09&saleChannel=FROTA','seller')).then(r=>r.json());
@@ -1425,4 +1425,30 @@ test('comissão do motorista usa coleta na apuração, não duplica no mês fatu
  assert.equal(calculateMonthlyResult(feb).revenueCents,100000);assert.equal(calculateMonthlyResult(feb).driverCommissionCents,0);assert.equal(calculateMonthlyResult(feb).resultCents,100000);
  assert.equal(calculateMonthlyResult(JSON.parse(frozen)).driverCommissionCents,12000);
  assert.equal((await loadFleetData(true,true,true,false,'2070-02')).billing.commissionCents,0);
+});
+
+test('operacional cria frete Frota sem comissão, cadastra cliente e consulta prestadores mantendo escopo próprio', async()=>{
+ const freights=await import('../../app/api/fleet/freights/route.ts');
+ const options=await import('../../app/api/fleet/freights/options/route.ts');
+ const detail=await import('../../app/api/fleet/freights/[id]/route.ts');
+ const clients=await import('../../app/api/clients/route.ts');
+ const providers=await import('../../app/api/providers/route.ts');
+ const fleetApi=await import('../../app/api/fleet/route.ts');
+ assert.equal((await options.GET(await request('/api/fleet/freights/options','operator'))).status,200);
+ const payload={...registeredFreight,clientId:'lookup-a',pickupDate:'2071-01-10',sellerId:'seller',sellerCommissionBasisPoints:5000};
+ const res=await freights.POST(await request('/api/fleet/freights','operator','POST',payload));
+ assert.equal(res.status,201,await res.clone().text());const {id}=await res.json();
+ assert.deepEqual(await queryFirst('select seller_id,created_by,seller_commission_basis_points from fleet_freights where id=?',[id]),{seller_id:'operator',created_by:'operator',seller_commission_basis_points:0});
+ const context={params:Promise.resolve({id})};
+ const own=await detail.GET(await request('/api/fleet/freights/x','operator'),context);assert.equal(own.status,200);const f=(await own.json()).freight;
+ assert.equal('sellerCommissionCents' in f,false);assert.equal('sellerCommissionBasisPoints' in f,false);
+ const other=await detail.GET(await request('/api/fleet/freights/x','seller'),context);assert.equal(other.status,404);
+ const list=(await (await fleetApi.GET(await request('/api/fleet?competency=2071-01','operator'))).json()).fleet;
+ assert.equal(list.freights.length,1);assert.equal(list.freights[0].id,id);assert.equal('sellerCommissionCents' in list.freights[0],false);
+ assert.equal((await freights.POST(await request('/api/fleet/freights','operator','POST',{...payload,tripId:'admin-trip'}))).status,403);
+ const client=await clients.POST(await request('/api/clients','operator','POST',{type:'PJ',legalName:'CLIENTE OPERACIONAL',saleChannel:'AMBOS',active:true,contacts:[{name:'CONTATO',phone:'11999999999'}]}));
+ assert.equal(client.status,201,await client.clone().text());
+ assert.equal((await providers.GET(await request('/api/providers','operator'))).status,200);
+ assert.equal((await providers.POST(await request('/api/providers','operator','POST',{}))).status,403);
+ assert.equal((await detail.DELETE(await request('/api/fleet/freights/x','operator','DELETE'),context)).status,403);
 });

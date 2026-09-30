@@ -20,7 +20,7 @@ export async function GET(request: Request) {
   try {
     // Prestadores são dados de referência comercial. Vendedores podem consultar;
     // somente o Administrador pode alterar o cadastro.
-    await authorize(request, ["ADMIN", "GERENCIA", "VENDEDOR", "FINANCEIRO"]);
+    await authorize(request, ["ADMIN", "GERENCIA", "VENDEDOR", "FINANCEIRO", "OPERACIONAL"]);
     const providers = await queryAll<ProviderRow>(
       `select id, name, reference_name as referenceName,
         yard_address as yardAddress, address_details as addressDetails, document, phone, email, active

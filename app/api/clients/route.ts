@@ -107,7 +107,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const user = await authorize(request, ["ADMIN", "VENDEDOR"]);
+    const user = await authorize(request, ["ADMIN", "VENDEDOR", "OPERACIONAL"]);
     const payload = asObject(await request.json());
     const type = enumValue(payload.type, "Tipo de pessoa", ["PF", "PJ"] as const);
     const saleChannel = enumValue(payload.saleChannel ?? "AMBOS", "Canal", CLIENT_CHANNELS);
