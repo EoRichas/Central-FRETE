@@ -268,8 +268,7 @@ export async function loadFleetData(
   });
 
   const visibleFreights = allFreights.filter(row => (!selection?.id || row.id === selection.id)
-    && (selection?.user?.role !== 'VENDEDOR' || row.sellerId === selection.user.id)
-    && (selection?.user?.role !== 'OPERACIONAL' || row.createdBy === selection.user.id));
+    && (selection?.user?.role !== 'VENDEDOR' || row.sellerId === selection.user.id));
   const freights = visibleFreights.filter(row => !competency || row.pickupDate.slice(0, 7) === competency);
   const billingFreights = visibleFreights.filter(row => (Boolean(row.billingDate) || row.operationalStatus === 'FATURADO') && (!competency || (row.billingDate || row.pickupDate).slice(0,7) === competency));
   const driverGroups = new Map<string, FleetBillingData['drivers'][number]>();

@@ -63,7 +63,6 @@ export async function listSales(
   const where: string[] = [];
   const params: unknown[] = [];
   if (filters.saleChannel) { where.push("s.sale_channel = ?"); params.push(filters.saleChannel); }
-  if (user.role === "OPERACIONAL") { where.push("s.sale_channel = 'CEGONHA'"); }
   if (filters.id) { where.push("s.id = ?"); params.push(filters.id); }
   if (filters.competency) {
     where.push("s.competency = ?");

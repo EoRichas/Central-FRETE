@@ -96,7 +96,7 @@ export async function GET(request: Request) {
     const freights = await queryAll<import("@/lib/domain/fleet").SellerFreightSummary>(
       `select id, sale_number as saleNumber, client_name as clientName, origin, destination,
         pickup_date as pickupDate, freight_amount_cents as freightAmountCents
-       from fleet_freights where ${user.role === 'VENDEDOR' ? 'seller_id' : 'created_by'}=? order by created_at desc, id desc limit 100`, [user.id]);
+       from fleet_freights ${user.role === 'VENDEDOR' ? 'where seller_id=?' : ''} order by created_at desc, id desc limit 100`, user.role === 'VENDEDOR' ? [user.id] : []);
     return Response.json({freights});
   } catch (error) { return jsonError(error); }
 }

@@ -22,7 +22,7 @@ export async function GET(request: Request, context: RouteContext) {
 export async function POST(request: Request, context: RouteContext) {
   let uploadedKey: string | null = null;
   try {
-    const user = await authorize(request, ["ADMIN", "FINANCEIRO", "VENDEDOR"]);
+    const user = await authorize(request, ["ADMIN", "FINANCEIRO", "VENDEDOR", "OPERACIONAL"]);
     const { id: saleId } = await context.params;
     const sale = await getSale(user, saleId);
     if (!sale) throw new ApiError(404, "Venda não encontrada.");

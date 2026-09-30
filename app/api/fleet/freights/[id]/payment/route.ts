@@ -3,7 +3,7 @@ import { ApiError, getD1, jsonError, queryFirst } from "@/lib/server/d1";
 import { asObject, dateOnly, enumValue } from "@/lib/server/validation";
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
  try {
-  const user = await authorize(request, ["ADMIN", "FINANCEIRO"]);
+  const user = await authorize(request, ["ADMIN", "FINANCEIRO", "OPERACIONAL"]);
   const { id } = await context.params;
   const data = asObject(await request.json());
   const status = enumValue(data.status, "Situação", ["EM_ABERTO", "PAGO"]);

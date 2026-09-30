@@ -1,5 +1,6 @@
 "use client";
 
+import { SaleBillingAction } from "@/components/sale-billing-action";
 import { roleCan } from "@/lib/domain/permissions";
 import Link from "next/link";
 import { useState } from "react";
@@ -74,12 +75,13 @@ export function SaleDetailScreen({ id }: { id: string }) {
   const sale = saleApi.data?.sale;
   const user = meApi.data?.user;
   const canManageProviders =
-    user?.role === "ADMIN" || user?.role === "FINANCEIRO";
+    user?.role === "ADMIN" || user?.role === "FINANCEIRO" || user?.role === "OPERACIONAL";
   const canManagePayments = canManageProviders;
   const canManageOperationCosts = canManageProviders;
+  const canDeletePayment = user?.role === "ADMIN" || user?.role === "FINANCEIRO";
   const canEditSale = user?.role === "ADMIN";
   const canAttach =
-    user?.role === "ADMIN" || user?.role === "FINANCEIRO" || user?.role === "VENDEDOR";
+    user?.role === "ADMIN" || user?.role === "FINANCEIRO" || user?.role === "VENDEDOR" || user?.role === "OPERACIONAL";
 
   async function registerPayment(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -274,6 +276,7 @@ export function SaleDetailScreen({ id }: { id: string }) {
               Voltar
             </Link>
             {user && roleCan(user.role, "VIEW_SERVICE_ORDERS") && <Link className="button secondary" href={`/vendas/${sale.id}/os`}>Visualizar OS</Link>}
+            {canManagePayments && <SaleBillingAction sale={sale} onSaved={saleApi.refresh} />}
             {canEditSale && (
               <Link className="button primary" href={`/vendas/${sale.id}/editar`}>
                 Editar frete
@@ -306,6 +309,7 @@ export function SaleDetailScreen({ id }: { id: string }) {
           <header><div><span className="eyebrow">Cadastro</span><h2>Dados da operação</h2></div></header>
           <dl className="details-list">
             <div className="full"><dt>Veículos transportados ({sale.cargoVehicles.length})</dt><dd>{sale.cargoVehicles.map((v, i) => <div key={i}>{i + 1}. {[v.model, v.plate].filter(Boolean).join(" · ") || "Não informado"}</div>)}</dd></div>
+            <div><dt>Data do faturamento</dt><dd>{formatDate(sale.billingDate)}</dd></div>
             <div><dt>Cliente</dt><dd>{sale.clientName ?? "CLIENTE NÃO INFORMADO"}</dd></div>
             <div><dt>Prestador inicial</dt><dd>{sale.initialProviderName ?? "—"}</dd></div>
             <div><dt>Local da origem</dt><dd>{sale.originLocationType ? ORIGIN_LOCATION_TYPE_LABELS[sale.originLocationType] : "—"}</dd></div>
@@ -386,7 +390,7 @@ export function SaleDetailScreen({ id }: { id: string }) {
                   <td data-label="Situação"><StatusBadge status={payment.status} /></td>
                   <td data-label="Observação">{payment.notes ?? "—"}{payment.proofName && <> · <a href={`/api/payments/${payment.id}/proof`} target="_blank" rel="noreferrer">Comprovante</a></>}</td>
                   <td data-label="Valor" className={payment.type === "ESTORNO" ? "negative" : "positive"}><strong>{payment.type === "ESTORNO" ? "− " : ""}{formatMoney(payment.amountCents)}</strong></td>
-                  <td data-label="Ações">{canManagePayments && payment.canDelete && <div className="table-actions"><button type="button" className="table-action" aria-label="Gerenciar recebimento" title="Gerenciar recebimento" onClick={() => setSelectedPayment(payment)}><Icons.chevron /></button></div>}</td>
+                  <td data-label="Ações">{canDeletePayment && payment.canDelete && <div className="table-actions"><button type="button" className="table-action" aria-label="Gerenciar recebimento" title="Gerenciar recebimento" onClick={() => setSelectedPayment(payment)}><Icons.chevron /></button></div>}</td>
                 </tr>
               )) : <tr><td colSpan={7} className="empty-cell">Nenhum recebimento registrado.</td></tr>}
             </tbody>

@@ -16,7 +16,7 @@ export async function GET(request: Request) {
     const isOperational = user.role === "OPERACIONAL";
     const fleet = await loadFleetData(
       isManager,
-      user.role === "ADMIN" || user.role === "FINANCEIRO",
+      user.role === "ADMIN" || user.role === "FINANCEIRO" || isOperational,
       isManager || isOperational,
       isOperational,
       competency,

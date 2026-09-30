@@ -17,7 +17,7 @@ test('regras de custos, locais e permissões comerciais',()=>{
  assert.deepEqual(visibleOperationCosts([{amountCents:0},{amountCents:123}]),[{amountCents:123}]);
  for(const category of ['NOTA_FISCAL_IMPOSTO','SEGURO_ALLIANZ','ICMS']) assert.ok(isDirectPaidOperationCostCategory(category));
  for(const category of ['CTE','MDFE','CTE_MDFE','ICMS_CTE_MDFE']) {assert.equal(isDirectPaidOperationCostCategory(category),false);assert.equal(normalizeCostCategory(category),category);}
- assert.ok(roleCan('OPERACIONAL','CREATE_CEGONHA_SALE'));assert.equal(roleCan('OPERACIONAL','CREATE_FLEET_SALE'),false);
+ assert.ok(roleCan('OPERACIONAL','CREATE_CEGONHA_SALE'));assert.equal(roleCan('OPERACIONAL','CREATE_FLEET_SALE'),true);
  assert.ok(roleCan('VENDEDOR','CREATE_FLEET_SALE'));assert.ok(roleCan('VENDEDOR','FLEET_SALES_ONLY'));assert.equal(roleCan('VENDEDOR','MANAGE_PAYMENTS'),false);
 });
 
