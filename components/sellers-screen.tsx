@@ -59,6 +59,15 @@ export function SellersScreen({
       ),
     [commissions],
   );
+  const groups = useMemo(() => {
+    const grouped = new Map<string, {id:string; name:string; total:number; items:SellerCommissionRecord[]}>();
+    for (const item of commissions) {
+      const id = item.sellerId || `historical:${item.sellerName}`;
+      const group = grouped.get(id) ?? {id, name:item.sellerName, total:0, items:[]};
+      group.total += item.commissionCents; group.items.push(item); grouped.set(id,group);
+    }
+    return [...grouped.values()].sort((a,b)=>a.name.localeCompare(b.name,"pt-BR"));
+  }, [commissions]);
   const isAdmin = meApi.data?.user.role === "ADMIN";
   const canManage = isAdmin;
 
@@ -144,12 +153,13 @@ export function SellersScreen({
               <small>Vendas Cegonha e Frota</small>
             </article>
           </section>
-          <section className="panel table-panel">
+          {groups.map(group => <details key={`${competency}:${group.id}`} className="panel seller-commission-group">
+            <summary>{group.name} · {formatMoney(group.total)} · {group.items.length} vendas</summary>
             <div className="responsive-table">
               <table>
                 <thead>
                   <tr>
-                    <th>Vendedor(a)</th>
+
                     <th>Venda</th>
                     <th>Data</th>
                     <th>Cliente</th>
@@ -163,9 +173,9 @@ export function SellersScreen({
                   </tr>
                 </thead>
                 <tbody>
-                  {commissions.map((item) => (
+                  {group.items.map((item) => (
                     <tr key={`${item.sellerName}-${item.saleId ?? item.saleNumber ?? item.saleDate}`}>
-                      <td data-label="Vendedor(a)"><strong>{item.sellerName}</strong></td>
+
                       <td data-label="Venda"><strong>{item.saleNumber ?? "—"}</strong></td>
                       <td data-label="Data">{item.saleDate ? formatDate(item.saleDate) : "—"}</td>
                       <td data-label="Cliente">{item.clientName ?? "—"}</td>
@@ -199,7 +209,7 @@ export function SellersScreen({
                 </tbody>
               </table>
             </div>
-          </section>
+          </details>)}
         </div>
       )}
       <Modal

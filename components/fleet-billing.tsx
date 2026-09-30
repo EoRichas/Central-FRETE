@@ -79,7 +79,7 @@ export function FleetBilling({
         <div>
           <h2>Comissões dos motoristas</h2>
           <p>
-            {formatMoney(data.commissionCents)} gerados no período. Não indica
+            {formatMoney(data.commissionCents)} gerados pelos fretes coletados no mês, mesmo sem faturamento. Não indica
             pagamento da comissão ao motorista.
           </p>
         </div>
@@ -94,7 +94,7 @@ export function FleetBilling({
             {driver.freights.map((f) => (
               <li key={f.id}>
                 <button className="text-button" onClick={() => onOpen(f)}>
-                  {formatDate(f.billingDate || f.pickupDate)} · {f.clientName} ·{" "}
+                  {formatDate(f.pickupDate)} · {f.clientName} ·{" "}
                   {f.vehiclePlate} · {formatMoney(f.driverCommissionCents)}
                 </button>
               </li>

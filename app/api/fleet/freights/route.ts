@@ -28,11 +28,11 @@ export async function POST(request: Request) {
         .prepare(
           `insert into fleet_freights (
             id, seller_id, seller_name, seller_commission_basis_points, vehicle_id, vehicle_plate, driver_id, driver_name,
-            client_id, client_name, cargo_vehicle_model, cargo_plate, origin, destination,
+            client_id, client_name, cargo_vehicle_model, cargo_plate, origin, destination, origin_location_type, destination_location_type,
             pickup_date, delivery_date, billing_date, operational_status,
             priority, freight_amount_cents, distance_meters, toll_cents,
             driver_commission_cents, created_by, updated_by, origin_cep, destination_cep, trip_id, yard_cost_cents, pickup_cost_cents, delivery_cost_cents, other_cost_cents, actual_fuel_cost_cents, cargo_vehicles, fuel_liters_milli, fuel_pump_amount_cents, route_distance_meters, odometer_start_meters, odometer_end_meters, insurance_cost_cents, invoice_cost_cents, icms_cost_cents, cte_mdfe_cost_cents
-          ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::text::jsonb, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::text::jsonb, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           id,
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
           data.cargoVehicleModel,
           data.cargoPlate,
           data.origin,
-          data.destination,
+          data.destination, data.originLocationType, data.destinationLocationType,
           data.pickupDate,
           data.deliveryDate,
           data.billingDate,

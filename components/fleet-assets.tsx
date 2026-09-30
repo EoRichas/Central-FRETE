@@ -68,6 +68,7 @@ export function VehicleModal({
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             plate: form.get("plate"),
+            model: form.get("model"),
             active: form.get("active") === "true",
           }),
         },
@@ -99,6 +100,7 @@ export function VehicleModal({
               required
             />
           </Field>
+          <Field label="Modelo do veículo"><input name="model" defaultValue={vehicle?.model ?? ""} maxLength={120} /></Field>
           <ActiveSelect active={vehicle?.active ?? true}/>
         </fieldset>
         {vehicle && <FleetVehicleHistory vehicle={vehicle} />}
@@ -331,6 +333,7 @@ export function FleetAssetsPanel({fleet,openVehicle,openDriver}: {
                             >
                               {vehicle.plate}
                             </button>
+                            <small>{vehicle.model || "Modelo não informado"}</small>
                           </td>
                           <td data-label="Situação">
                             <StatusBadge

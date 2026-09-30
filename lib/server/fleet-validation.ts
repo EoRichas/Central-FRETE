@@ -1,3 +1,4 @@
+import { ORIGIN_LOCATION_TYPES } from "@/lib/domain/operations";
 import { parseRegistryAddress, registryAddressText } from "@/lib/server/registry-validation";
 import { lower, upper, digits } from "@/lib/server/validation";
 import { effectiveFleetDistance } from "@/lib/domain/fleet-distance";
@@ -87,6 +88,8 @@ export function parseFleetFreightPayload(payload: Record<string, unknown>) {
     clientName: boundedRequiredUpper(payload.clientName, "Cliente", 140),
     cargoVehicleModel: cargoVehicles[0].model,
     cargoPlate: cargoVehicles[0].plate,
+    originLocationType: payload.originLocationType == null || payload.originLocationType === "" ? null : enumValue(payload.originLocationType, "Tipo de local de origem", ORIGIN_LOCATION_TYPES),
+    destinationLocationType: payload.destinationLocationType == null || payload.destinationLocationType === "" ? null : enumValue(payload.destinationLocationType, "Tipo de local de destino", ORIGIN_LOCATION_TYPES),
     originCep: optionalCep(payload.originCep),
     destinationCep: optionalCep(payload.destinationCep),
     origin: boundedRequiredUpper(payload.origin, "Origem", 180),
@@ -162,6 +165,7 @@ export function parseFleetVehiclePayload(payload: Record<string, unknown>) {
   if (!plate) throw new ApiError(400, "Placa do veículo é obrigatória.");
   return {
     plate,
+    model: payload.model == null || payload.model === "" ? null : boundedRequiredUpper(payload.model, "Modelo", 120),
     active: "active" in payload
       ? booleanValue(payload.active, "Situação do veículo")
       : true,

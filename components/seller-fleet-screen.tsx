@@ -18,7 +18,7 @@ export function SellerFleetScreen() {
   const list = useApi<{freights:SellerFreightSummary[]}>("/api/fleet/freights");
   return <>
     <PageHeader title="Frota" eyebrow="Operação logística" description="Cadastre um frete e acompanhe os seus últimos 100 registros."
-      actions={<button className="button primary" onClick={()=>setOpen(true)}>Novo frete</button>}/>
+      actions={<button className="button secondary create-sale-action" onClick={()=>setOpen(true)}>Novo frete</button>}/>
     {success && <p role="status" className="success-banner">{success}</p>}
     {list.loading && <LoadingState label="Carregando seus fretes…"/>}
     {list.error && <ErrorState message={list.error} retry={list.refresh}/>}

@@ -27,6 +27,7 @@ export async function migrateDatabase(configuration) {
     "../supabase/migrations/20260929175656_fleet_client_reference.sql",
     "../supabase/migrations/20260930164106_seller_commission_access.sql",
     "../supabase/migrations/20260930172047_cegonha_monthly_scope.sql",
+    "../supabase/migrations/20260930183118_fleet_vehicle_model.sql", "../supabase/migrations/20260930184218_fleet_location_types.sql",
   ];
   const migrations = await Promise.all(
     migrationFiles.map((file) =>

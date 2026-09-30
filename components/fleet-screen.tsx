@@ -51,12 +51,17 @@ export function FleetScreen() {
 }
 
 function FleetOperationsScreen() {
-  const [competency, setCompetency] = useState(currentCompetency);
+  const [selectedTab, setTab] = useState<FleetTab>("overview");
+  const [periods, setPeriods] = useState<Record<FleetTab, string>>(() => {
+    const month = currentCompetency();
+    return {overview: month, freights: month, assets: month, monthly: month, billing: month};
+  });
+  const competency = periods[selectedTab];
+  const setCompetency = (value: string) => setPeriods(current => ({...current, [selectedTab]: value}));
   const api = useApi<{ fleet: FleetData }>(
     `/api/fleet?${competency ? `competency=${competency}` : "period=all"}`,
   );
   const fleet = api.data?.fleet;
-  const [selectedTab, setTab] = useState<FleetTab>("overview");
   const tab = fleet?.freightOnly ? "freights" : selectedTab;
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -182,7 +187,7 @@ function FleetOperationsScreen() {
               />
             </label>
             {fleet?.canEditFreights && (
-              <button className="button primary" onClick={openNewFreight}>
+              <button className="button secondary create-sale-action" onClick={openNewFreight}>
                 <Icons.plus /> Novo frete
               </button>
             )}
@@ -216,7 +221,7 @@ function FleetOperationsScreen() {
                 role="tab"
                 aria-selected={tab === item.id}
                 className={tab === item.id ? "active" : ""}
-                onClick={() => { if (item.id === "monthly" && !competency) setCompetency(currentCompetency()); setTab(item.id); }}
+                onClick={() => setTab(item.id)}
               >
                 {item.label}
               </button>
@@ -241,7 +246,7 @@ function FleetOperationsScreen() {
                 <article className="kpi-card">
                   <span>Comissões dos motoristas</span>
                   <strong>{formatMoney(fleet.billing.commissionCents)}</strong>
-                  <small>Comissões dos fretes incluídos no período</small>
+                  <small>Fretes coletados no mês, mesmo sem faturamento</small>
                   <button
                     className="text-button"
                     onClick={() => setTab("billing")}

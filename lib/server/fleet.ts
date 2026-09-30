@@ -32,6 +32,7 @@ type SettingsRow = {
 };
 
 type VehicleRow = {
+  model: string | null;
   id: string;
   plate: string;
   active: number;
@@ -58,6 +59,9 @@ type VehicleCostRow = {
 };
 
 type FreightRow = {
+  originLocationType?: import("@/lib/domain/operations").OriginLocationType | null;
+  destinationLocationType?: import("@/lib/domain/operations").OriginLocationType | null;
+
   sellerId: string | null;
   sellerName: string | null;
   sellerCommissionBasisPoints: number;
@@ -152,7 +156,7 @@ export async function loadFleetData(
     await Promise.all([
       loadParameters(),
       queryAll<VehicleRow>(
-        `select id, plate, active from fleet_vehicles
+        `select id, plate, model, active from fleet_vehicles
          order by active desc, plate`,
       ),
       queryAll<DriverRow>(
@@ -174,7 +178,7 @@ export async function loadFleetData(
           id, sale_number as saleNumber, vehicle_id as vehicleId, vehicle_plate as vehiclePlate,
           driver_id as driverId, driver_name as driverName,
           client_id as clientId, client_name as clientName, cargo_vehicle_model as cargoVehicleModel,
-          cargo_plate as cargoPlate, origin, destination, origin_cep as originCep, destination_cep as destinationCep, payment_status as paymentStatus,
+          cargo_plate as cargoPlate, origin, destination, origin_location_type as originLocationType, destination_location_type as destinationLocationType, origin_cep as originCep, destination_cep as destinationCep, payment_status as paymentStatus,
           paid_at as paidAt, proof_attachment_id as proofAttachmentId,
           pickup_date as pickupDate, delivery_date as deliveryDate,
           billing_date as billingDate, operational_status as operationalStatus,
@@ -224,6 +228,7 @@ export async function loadFleetData(
     return {
       id: row.id,
       plate: row.plate,
+      model: row.model,
       active: Boolean(row.active),
       averageCostPerKmCents: averageVehicleCostPerKmCents(costs),
       costs,
@@ -268,7 +273,7 @@ export async function loadFleetData(
   const freights = visibleFreights.filter(row => !competency || row.pickupDate.slice(0, 7) === competency);
   const billingFreights = visibleFreights.filter(row => (Boolean(row.billingDate) || row.operationalStatus === 'FATURADO') && (!competency || (row.billingDate || row.pickupDate).slice(0,7) === competency));
   const driverGroups = new Map<string, FleetBillingData['drivers'][number]>();
-  for (const freight of billingFreights) {
+  for (const freight of freights) {
     // Preserve historical commissions even after the driver's registration is removed.
     // Missing IDs are grouped separately by recorded name, never matched to a live homonym.
     const key = freight.driverId ?? `historical:${freight.driverName.trim().toLocaleUpperCase('pt-BR')}`;
@@ -281,7 +286,7 @@ export async function loadFleetData(
   return {
     canDeleteFreights: false,
     billing: {revenueCents: billingFreights.reduce((sum,f) => sum+f.freightAmountCents,0) + billingSales.reduce((sum,s) => sum+s.freightAmountCents,0), freightCount: billingFreights.length + billingSales.length, sales: billingSales,
-      commissionCents: billingFreights.reduce((sum,f) => sum+f.driverCommissionCents,0), freights: billingFreights, drivers: commissionDrivers},
+      commissionCents: freights.reduce((sum,f) => sum+f.driverCommissionCents,0), freights: billingFreights, drivers: commissionDrivers},
     trips: freightOnly ? [] : trips,
     tripResults: freightOnly ? [] : trips.filter(trip => !competency || trip.operationDate.slice(0, 7) === competency).map(trip => calculateTripResult(trip, allFreights)),
     parameters,
@@ -301,7 +306,7 @@ export async function loadFleetData(
 export async function loadFleetCreationData(): Promise<import("@/lib/domain/fleet").FleetFreightFormData> {
   const [parameters, vehicles, drivers, costs] = await Promise.all([
     loadParameters(),
-    queryAll<VehicleRow>("select id, plate, active from fleet_vehicles where active=1 order by plate"),
+    queryAll<VehicleRow>("select id, plate, model, active from fleet_vehicles where active=1 order by plate"),
     queryAll<{id:string;name:string}>("select id, name from fleet_drivers where active=1 order by name"),
     queryAll<VehicleCostRow>(`select id, vehicle_id as vehicleId, competency, distance_meters as distanceMeters,
       monthly_cost_cents as monthlyCostCents, include_in_rate_average as includeInRateAverage
