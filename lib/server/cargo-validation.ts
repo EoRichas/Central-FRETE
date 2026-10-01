@@ -15,7 +15,8 @@ export function parseCargoVehicles(value: unknown, legacyModel: unknown, legacyP
     const item = asObject(entry);
     return { model: boundedText(item.model, `Modelo do veículo ${index + 1}`, 80),
       plate: normalizePlate(boundedText(item.plate, 'Placa', 8)),
-      identification: boundedText(item.identification, 'Identificação', 120) };
+      identification: boundedText(item.identification, 'Identificação', 120),
+      ...(item.fipeValueCents === undefined ? {} : { fipeValueCents: nullableInteger(item.fipeValueCents, `Tabela FIPE do veículo ${index + 1}`, 9_000_000_000_000) }) };
   });
 }
 export function nullableInteger(value: unknown, label: string, max: number): number | null {

@@ -323,6 +323,7 @@ td > small { max-width: 270px; margin-top: 2px; overflow: hidden; color: var(--m
 .details-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px 22px; }
 .details-list div { min-width: 0; }
 .details-list .full { grid-column: 1 / -1; }
+.details-list .detail-due-date { grid-column: 1; }
 .details-list dt { color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
 .details-list dd { margin: 4px 0 0; overflow-wrap: anywhere; color: var(--ink); font-size: 11px; font-weight: 650; }
 .money-breakdown { display: flex; flex-direction: column; }

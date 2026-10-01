@@ -1,6 +1,5 @@
 "use client";
 
-import { SaleBillingAction } from "@/components/sale-billing-action";
 import { roleCan } from "@/lib/domain/permissions";
 import Link from "next/link";
 import { useState } from "react";
@@ -276,22 +275,10 @@ export function SaleDetailScreen({ id }: { id: string }) {
               Voltar
             </Link>
             {user && roleCan(user.role, "VIEW_SERVICE_ORDERS") && <Link className="button secondary" href={`/vendas/${sale.id}/os`}>Visualizar OS</Link>}
-            {canManagePayments && <SaleBillingAction sale={sale} onSaved={saleApi.refresh} />}
             {canEditSale && (
               <Link className="button primary" href={`/vendas/${sale.id}/editar`}>
                 Editar frete
               </Link>
-            )}
-            {canManagePayments && (
-              <button
-                className="button primary"
-                onClick={() => {
-                  setError(null);
-                  setPaymentOpen(true);
-                }}
-              >
-                <Icons.plus /> Registrar recebimento
-              </button>
             )}
           </>
         }
@@ -308,8 +295,7 @@ export function SaleDetailScreen({ id }: { id: string }) {
         <article className="panel detail-card">
           <header><div><span className="eyebrow">Cadastro</span><h2>Dados da operação</h2></div></header>
           <dl className="details-list">
-            <div className="full"><dt>Veículos transportados ({sale.cargoVehicles.length})</dt><dd>{sale.cargoVehicles.map((v, i) => <div key={i}>{i + 1}. {[v.model, v.plate].filter(Boolean).join(" · ") || "Não informado"}</div>)}</dd></div>
-            <div><dt>Data do faturamento</dt><dd>{formatDate(sale.billingDate)}</dd></div>
+            <div className="full"><dt>Veículos transportados ({sale.cargoVehicles.length})</dt><dd>{sale.cargoVehicles.map((v, i) => <div key={i}>{i + 1}. {[v.model, v.plate, sale.saleChannel !== "CEGONHA" || v.fipeValueCents == null ? null : `FIPE: ${formatMoney(v.fipeValueCents)}`].filter(Boolean).join(" · ") || "Não informado"}</div>)}</dd></div>
             <div><dt>Cliente</dt><dd>{sale.clientName ?? "CLIENTE NÃO INFORMADO"}</dd></div>
             <div><dt>Prestador inicial</dt><dd>{sale.initialProviderName ?? "—"}</dd></div>
             <div><dt>Local da origem</dt><dd>{sale.originLocationType ? ORIGIN_LOCATION_TYPE_LABELS[sale.originLocationType] : "—"}</dd></div>
@@ -319,7 +305,8 @@ export function SaleDetailScreen({ id }: { id: string }) {
             <div><dt>Prazo operacional</dt><dd>{sale.operationalDeadlineDays ? `${sale.operationalDeadlineDays} dias` : "—"}</dd></div>
             <div><dt>Entrada no pátio de origem</dt><dd>{formatDate(sale.originYardEntryDate)}</dd></div>
             <div><dt>Chegada prevista no destino</dt><dd>{formatDate(sale.deliveryDeadline)}</dd></div>
-            <div><dt>Vencimento da cobrança</dt><dd>{formatDate(sale.financialDueDate)}</dd></div>
+            <div className="detail-due-date"><dt>Vencimento da cobrança</dt><dd>{formatDate(sale.financialDueDate)}</dd></div>
+            <div><dt>Data do faturamento</dt><dd>{formatDate(sale.billingDate)}</dd></div>
             <div className="full"><dt>Observações</dt><dd>{sale.notes ?? "—"}</dd></div>
           </dl>
         </article>
