@@ -28,7 +28,6 @@ export function CargoVehiclesEditor({ vehicles, onChange, disabled = false, show
           }}
         /></Field>}
       </div>
-      {!disabled && <button type="button" className="button secondary compact-button" disabled={vehicles.length === 1} aria-label={`Remover veículo ${index + 1}`} onClick={() => onChange(vehicles.filter((_, i) => i !== index))}>Remover</button>}
     </div>)}
     {!disabled && <button type="button" className="button secondary" disabled={vehicles.length >= 100} onClick={() => onChange([...vehicles, { model: null, plate: null, identification: null }])}>Adicionar veículo</button>}
   </fieldset>;

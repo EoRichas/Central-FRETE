@@ -270,7 +270,7 @@ export function SaleDetailScreen({ id }: { id: string }) {
         title={`${sale.origin} → ${sale.destination}`}
         description={`${sale.sellerName} · ${formatDate(sale.saleDate)} · ${sale.vehicle ?? "VEÍCULO NÃO INFORMADO"}${sale.plate ? ` / ${sale.plate}` : ""}`}
         actions={
-          <>
+          <div className="sale-detail-actions">
             <Link className="button secondary" href={sale.saleChannel === "FROTA" ? "/frota" : "/vendas"}>
               Voltar
             </Link>
@@ -280,7 +280,7 @@ export function SaleDetailScreen({ id }: { id: string }) {
                 Editar frete
               </Link>
             )}
-          </>
+          </div>
         }
       />
       {error && <p className="form-error" role="alert">{error}</p>}
