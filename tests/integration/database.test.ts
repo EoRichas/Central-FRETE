@@ -1481,3 +1481,19 @@ test('operacional fatura vendas de terceiros, anexa comprovante e confirma receb
  const updated=await fleetEdit.PATCH(await request('/api/fleet/freights/x','operator','PATCH',{billingDate:'2072-01-20',operationalStatus:'FATURADO',sellerId:'operator',sellerCommissionBasisPoints:0}),{params:Promise.resolve({id:f.id})});assert.equal(updated.status,200,await updated.clone().text());
  assert.deepEqual(await queryFirst('select seller_id,seller_commission_basis_points from fleet_freights where id=?',[f.id]),owner);
 });
+
+test('FIPE por veículo persiste na venda Cegonha, permite limpar e valida centavos sem alterar frete', async()=>{
+ const sales=await import('../../app/api/sales/route.ts');
+ const saleEdit=await import('../../app/api/sales/[id]/route.ts');
+ const cargoVehicles=[{model:'CARRO A',plate:'ABC1D23',fipeValueCents:5023456},{model:'CARRO B',plate:'DEF2G34',fipeValueCents:null}];
+ const payload={...salePayload,sellerId:'seller',clientId:'lookup-a',saleChannel:'CEGONHA',cargoVehicles};
+ const res=await sales.POST(await request('/api/sales','admin','POST',payload));assert.equal(res.status,201,await res.clone().text());const {id}=await res.json();const ctx={params:Promise.resolve({id})};
+ const detail=async()=>(await (await saleEdit.GET(await request('/api/sales/x','admin'),ctx)).json()).sale;
+ const initial=await detail();assert.equal(initial.cargoVehicles[0].fipeValueCents,5023456);assert.equal(initial.cargoVehicles[1].fipeValueCents,null);
+ const edited=await saleEdit.PATCH(await request('/api/sales/x','admin','PATCH',{...payload,cargoVehicles:[{...cargoVehicles[0],fipeValueCents:6000000},cargoVehicles[1]]}),ctx);assert.equal(edited.status,200,await edited.clone().text());
+ const after=await detail();assert.equal(after.cargoVehicles[0].fipeValueCents,6000000);assert.equal(after.freightAmountCents,initial.freightAmountCents);assert.deepEqual(after.financial,initial.financial);
+ const cleared=await saleEdit.PATCH(await request('/api/sales/x','admin','PATCH',{...payload,cargoVehicles:[{...cargoVehicles[0],fipeValueCents:null},cargoVehicles[1]]}),ctx);assert.equal(cleared.status,200);assert.equal((await detail()).cargoVehicles[0].fipeValueCents,null);
+ for(const invalid of [-1,1.5,'5023456',true,9_000_000_000_001]){
+  assert.equal((await sales.POST(await request('/api/sales','seller','POST',{...payload,cargoVehicles:[{...cargoVehicles[0],fipeValueCents:invalid}]}))).status,400);
+ }
+});

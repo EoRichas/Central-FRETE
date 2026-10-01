@@ -1,4 +1,4 @@
-export type CargoVehicle = { model: string | null; plate: string | null; identification: string | null };
+export type CargoVehicle = { model: string | null; plate: string | null; identification: string | null; fipeValueCents?: number | null };
 
 /** Legacy records represented one unit, even when its identification was not filled. */
 export function cargoVehiclesOrLegacy(vehicles: CargoVehicle[] | null | undefined, model: string | null, plate: string | null): CargoVehicle[] {

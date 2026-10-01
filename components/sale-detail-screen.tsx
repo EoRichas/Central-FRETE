@@ -295,7 +295,7 @@ export function SaleDetailScreen({ id }: { id: string }) {
         <article className="panel detail-card">
           <header><div><span className="eyebrow">Cadastro</span><h2>Dados da operação</h2></div></header>
           <dl className="details-list">
-            <div className="full"><dt>Veículos transportados ({sale.cargoVehicles.length})</dt><dd>{sale.cargoVehicles.map((v, i) => <div key={i}>{i + 1}. {[v.model, v.plate].filter(Boolean).join(" · ") || "Não informado"}</div>)}</dd></div>
+            <div className="full"><dt>Veículos transportados ({sale.cargoVehicles.length})</dt><dd>{sale.cargoVehicles.map((v, i) => <div key={i}>{i + 1}. {[v.model, v.plate, sale.saleChannel !== "CEGONHA" || v.fipeValueCents == null ? null : `FIPE: ${formatMoney(v.fipeValueCents)}`].filter(Boolean).join(" · ") || "Não informado"}</div>)}</dd></div>
             <div><dt>Cliente</dt><dd>{sale.clientName ?? "CLIENTE NÃO INFORMADO"}</dd></div>
             <div><dt>Prestador inicial</dt><dd>{sale.initialProviderName ?? "—"}</dd></div>
             <div><dt>Local da origem</dt><dd>{sale.originLocationType ? ORIGIN_LOCATION_TYPE_LABELS[sale.originLocationType] : "—"}</dd></div>
