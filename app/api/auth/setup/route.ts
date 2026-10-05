@@ -1,3 +1,6 @@
+import { assertTrustedMutation, readAuthJson } from '@/lib/server/request-security';
+import { assertAccessGateway } from '@/lib/server/access-gateway';
+import { assertSetupToken } from '@/lib/server/auth-security';
 import { ApiError, getD1, jsonError, queryFirst } from "@/lib/server/d1";
 import { createPasswordCredential } from "@/lib/server/local-session";
 import { asObject, requiredUpper } from "@/lib/server/validation";
@@ -10,11 +13,12 @@ function normalizeUsername(value: unknown) {
   return username;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    await assertAccessGateway(request);
     const count = await queryFirst<{ total: number }>(`select count(*)::integer as total from users`);
     return Response.json(
-      { setupRequired: Number(count?.total ?? 0) === 0 },
+      { setupRequired: Number(count?.total ?? 0) === 0 && Boolean(process.env.CENTRAL_FRETE_SETUP_TOKEN?.trim()) },
       { headers: { "cache-control": "no-store" } },
     );
   } catch (error) {
@@ -24,12 +28,15 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    assertTrustedMutation(request);
+    await assertAccessGateway(request);
+    assertSetupToken(request);
     const count = await queryFirst<{ total: number }>(`select count(*)::integer as total from users`);
     if (Number(count?.total ?? 0) !== 0) {
       throw new ApiError(409, "O administrador inicial já foi cadastrado.");
     }
 
-    const payload = asObject(await request.json());
+    const payload = asObject(await readAuthJson(request));
     const username = normalizeUsername(payload.username);
     const name = requiredUpper(payload.name, "Nome");
     const password = String(payload.password ?? "");
@@ -50,11 +57,12 @@ export async function POST(request: Request) {
     const email = `${username}@centralfrete.local`;
     const db = await getD1();
 
-    await db.batch([
+    const results = await db.batch([
+      db.prepare("select pg_advisory_xact_lock(hashtext('central-frete-initial-admin'))"),
       db.prepare(
         `insert into users (
           id, email, username, password_salt, password_hash, name, role, active
-        ) values (?, ?, ?, ?, ?, ?, 'ADMIN', 1)`,
+        ) select ?, ?, ?, ?, ?, ?, 'ADMIN', 1 where not exists (select 1 from users) returning id`,
       ).bind(
         id,
         email,
@@ -66,15 +74,17 @@ export async function POST(request: Request) {
       db.prepare(
         `insert into audit_logs (
           id, entity_type, entity_id, action, actor_email, new_value
-        ) values (?, 'USER', ?, 'INITIAL_ADMIN_CREATED', ?, ?)`
+        ) select ?, 'USER', ?, 'INITIAL_ADMIN_CREATED', ?, ? where exists (select 1 from users where id = ?)`
       ).bind(
         crypto.randomUUID(),
         id,
         email,
         JSON.stringify({ username, name, role: "ADMIN" }),
+        id,
       ),
     ]);
 
+    if (!results[1]?.results.length) throw new ApiError(409, "O administrador inicial já foi cadastrado.");
     return Response.json({ created: true, username }, { status: 201 });
   } catch (error) {
     if (error instanceof Error && error.message.includes("UNIQUE constraint")) {

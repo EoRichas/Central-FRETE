@@ -28,13 +28,14 @@ export async function migrateDatabase(configuration) {
     "../supabase/migrations/20260930164106_seller_commission_access.sql",
     "../supabase/migrations/20260930172047_cegonha_monthly_scope.sql",
     "../supabase/migrations/20260930183118_fleet_vehicle_model.sql", "../supabase/migrations/20260930184218_fleet_location_types.sql",
+    "../supabase/migrations/20261005122915_security_sessions_and_login_limits.sql",
   ];
   const migrations = await Promise.all(
     migrationFiles.map((file) =>
       readFile(new URL(`../database/${file}`, import.meta.url), "utf8"),
     ),
   );
-  const sql = postgres(config.databaseUrl, {
+  const sql = postgres(config.migrationDatabaseUrl || config.databaseUrl, {
     max: 1,
     prepare: false,
     ssl: "require",

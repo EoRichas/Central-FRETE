@@ -1,5 +1,7 @@
 "use client";
 
+import { safeReturnPath } from "@/lib/client/safe-return-path";
+
 import { useEffect, useState } from "react";
 import { apiMutation } from "@/components/use-api";
 import { Field } from "@/components/ui";
@@ -64,9 +66,9 @@ export function LoginScreen() {
           password: form.get("password"),
         }),
       });
-      const returnTo = new URLSearchParams(window.location.search).get("return_to");
+      const returnTo = safeReturnPath(new URLSearchParams(window.location.search).get("return_to"), window.location.origin);
       window.location.assign(
-        returnTo?.startsWith("/") && !returnTo.startsWith("//")
+        returnTo
           ? returnTo
           : result.role === "OPERACIONAL"
             ? "/frota"

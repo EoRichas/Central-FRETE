@@ -1,7 +1,9 @@
+import { ApiError, queryFirst } from './d1';
 export const LOCAL_SESSION_COOKIE = "cf_local_session";
 
 export type UserSession = {
   userId: string;
+  tokenHash: string;
   email: string;
   username: string;
   name: string;
@@ -22,12 +24,6 @@ function base64UrlDecode(value: string) {
   return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }
 
-async function sessionSecret() {
-  const secret = process.env.CENTRAL_FRETE_SESSION_SECRET?.trim();
-  if (!secret) throw new Error("CENTRAL_FRETE_SESSION_SECRET não configurado.");
-  return secret;
-}
-
 async function derivePassword(password: string, salt: Uint8Array<ArrayBuffer>) {
   const keyMaterial = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
   const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations: 120_000 }, keyMaterial, 256);
@@ -39,11 +35,6 @@ function constantTimeEqual(left: Uint8Array, right: Uint8Array) {
   let difference = 0;
   for (let index = 0; index < left.length; index += 1) difference |= left[index] ^ right[index];
   return difference === 0;
-}
-
-async function signature(payload: string) {
-  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(await sessionSecret()), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  return base64UrlEncode(new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload))));
 }
 
 export function isLocalRequest(request: Request) {
@@ -69,33 +60,46 @@ export async function verifyPassword(passwordValue: unknown, passwordSalt: strin
   }
 }
 
-export async function createUserSessionToken(user: { id: string; email: string; username: string; name: string }): Promise<string> {
-  const session: UserSession = { userId: user.id, email: user.email, username: user.username, name: user.name, expiresAt: Date.now() + 12 * 60 * 60 * 1000 };
-  const payload = base64UrlEncode(JSON.stringify(session));
-  return `${payload}.${await signature(payload)}`;
+async function tokenHash(token: string) {
+  return base64UrlEncode(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token))));
+}
+
+export async function createUserSessionToken(user: { id: string; email: string; username: string; name: string; securityVersion?: number }): Promise<string> {
+  const token = base64UrlEncode(crypto.getRandomValues(new Uint8Array(32)));
+  const hash = await tokenHash(token);
+  const saved = await queryFirst(`insert into auth_sessions(token_hash,user_id,security_version,expires_at)
+    select ?,id,security_version,now()+interval '12 hours' from users
+    where id=? and (?::integer is null or security_version=?) returning token_hash`,
+    [hash,user.id,user.securityVersion ?? null,user.securityVersion ?? null]);
+  if (!saved) throw new ApiError(401, 'O acesso foi alterado. Entre novamente.');
+  return token;
 }
 
 function cookieValue(request: Request, name: string) {
-  const cookies = request.headers.get("cookie") ?? "";
-  for (const item of cookies.split(";")) {
-    const [key, ...value] = item.trim().split("=");
-    if (key === name) return value.join("=");
-  }
-  return null;
+  const matches = (request.headers.get('cookie') || '').split(';')
+    .map(item => item.trim().split('=')).filter(([key]) => key === name);
+  // Reject ambiguous cookies instead of trusting a sibling-subdomain cookie.
+  return matches.length === 1 ? matches[0].slice(1).join('=') : null;
 }
 
-export async function verifyLocalSession(request: Request) {
+export async function verifyLocalSession(request: Request): Promise<UserSession | null> {
   const token = cookieValue(request, LOCAL_SESSION_COOKIE);
-  if (!token) return null;
-  const [payload, suppliedSignature, extra] = token.split(".");
-  if (!payload || !suppliedSignature || extra) return null;
-  const expectedSignature = await signature(payload);
-  if (!constantTimeEqual(new TextEncoder().encode(suppliedSignature), new TextEncoder().encode(expectedSignature))) return null;
-  try {
-    const session = JSON.parse(new TextDecoder().decode(base64UrlDecode(payload))) as UserSession;
-    if (!session.userId || !session.email || !session.username || !session.name || !Number.isFinite(session.expiresAt) || session.expiresAt <= Date.now()) return null;
-    return session;
-  } catch {
-    return null;
+  // Legacy signed sessions deliberately require a new login after deployment.
+  if (!token || !/^[A-Za-z0-9_-]{43}$/.test(token)) return null;
+  return queryFirst<UserSession>(`select s.token_hash as tokenHash,u.id as userId,u.email,
+    coalesce(u.username,u.id) as username,u.name,extract(epoch from s.expires_at)*1000 as expiresAt
+    from auth_sessions s join users u on u.id=s.user_id
+    where s.token_hash=? and s.revoked_at is null and s.expires_at>now()
+      and s.security_version=u.security_version limit 1`, [await tokenHash(token)]);
+}
+
+export async function revokeSession(request: Request, all = false) {
+  const session = await verifyLocalSession(request);
+  if (!session) return null;
+  if (all) {
+    await queryFirst('update users set security_version=security_version+1 where id=? returning id', [session.userId]);
+  } else {
+    await queryFirst('update auth_sessions set revoked_at=now() where token_hash=? returning token_hash', [session.tokenHash]);
   }
+  return session;
 }

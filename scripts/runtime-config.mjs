@@ -31,6 +31,8 @@ export function readRuntimeConfig(environment = process.env, options = {}) {
 
   return {
     databaseUrl,
+    migrationDatabaseUrl: environment.DATABASE_MIGRATION_URL?.trim() || databaseUrl,
+    migrateOnStart: environment.CENTRAL_FRETE_MIGRATE_ON_START !== "false",
     databaseHost: parsedDatabaseUrl.hostname,
     sessionSecret,
     supabaseUrl: environment.SUPABASE_URL?.trim().replace(/\/$/, "") ?? "",

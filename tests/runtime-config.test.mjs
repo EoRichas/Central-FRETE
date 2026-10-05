@@ -41,3 +41,16 @@ test("permite executar somente a migração sem segredo de sessão", () => {
   );
   assert.equal(config.databaseHost, "aws-0-sa-east-1.pooler.supabase.com");
 });
+
+test("separa conexão de migração e permite desligar DDL no startup sem mudar o padrão", () => {
+  const config = readRuntimeConfig({ ...validEnvironment,
+    DATABASE_MIGRATION_URL: 'postgresql://migration:fictional@localhost/lab',
+    CENTRAL_FRETE_MIGRATE_ON_START: 'false',
+  });
+  assert.equal(config.databaseUrl, validEnvironment.DATABASE_URL);
+  assert.equal(config.migrationDatabaseUrl, 'postgresql://migration:fictional@localhost/lab');
+  assert.equal(config.migrateOnStart, false);
+  const defaults = readRuntimeConfig(validEnvironment);
+  assert.equal(defaults.migrateOnStart, true);
+  assert.equal(defaults.migrationDatabaseUrl, defaults.databaseUrl);
+});

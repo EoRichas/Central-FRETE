@@ -1,3 +1,5 @@
+import { assertTrustedMutation } from './request-security';
+import { assertAccessGateway } from './access-gateway';
 import type { CurrentUser, Role } from "@/lib/contracts";
 import { roleCan } from "@/lib/domain/permissions";
 import { ApiError, queryFirst } from "@/lib/server/d1";
@@ -18,6 +20,8 @@ export async function authorize(
   request: Request,
   allowedRoles: Role[] = ALLOWED_ROLES,
 ): Promise<CurrentUser> {
+  assertTrustedMutation(request);
+  await assertAccessGateway(request);
   const session = await verifyLocalSession(request);
   if (!session) {
     throw new ApiError(401, "Informe usuário e senha para acessar o sistema.");

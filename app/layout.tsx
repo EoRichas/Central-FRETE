@@ -16,6 +16,7 @@ import "./cargo-orders.css";
 import "./fleet-navigation.css";
 
 export const metadata: Metadata = {
+  robots: {index: false, follow: false, nocache: true},
   title: {
     default: "Central Express",
     template: "%s | Central Express",

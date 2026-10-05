@@ -11,9 +11,6 @@ import { calculateDestinationArrivalDate, isEditableOperationCostCategory, norma
 import { roleCan } from "../lib/domain/permissions.ts";
 import {
   createPasswordCredential,
-  createUserSessionToken,
-  LOCAL_SESSION_COOKIE,
-  verifyLocalSession,
   verifyPassword,
 } from "../lib/server/local-session.ts";
 
@@ -98,19 +95,4 @@ test("armazena somente o hash da senha e rejeita credenciais incorretas", async 
   assert.notEqual(credential.passwordHash, "senha-de-teste");
   assert.equal(await verifyPassword("senha-de-teste", credential.passwordSalt, credential.passwordHash), true);
   assert.equal(await verifyPassword("senha-incorreta", credential.passwordSalt, credential.passwordHash), false);
-});
-
-test("cria e verifica uma sessão assinada do administrador", async () => {
-  const previousSecret = process.env.CENTRAL_FRETE_SESSION_SECRET;
-  process.env.CENTRAL_FRETE_SESSION_SECRET = "segredo-de-teste-com-pelo-menos-32-caracteres";
-  try {
-    const token = await createUserSessionToken({ id: "user-1", email: "admin@centralfrete.local", username: "admin", name: "ADMINISTRADOR" });
-    const request = new Request("https://central-frete.example/inicio", { headers: { cookie: `${LOCAL_SESSION_COOKIE}=${token}` } });
-    const session = await verifyLocalSession(request);
-    assert.equal(session?.username, "admin");
-    assert.equal(session?.userId, "user-1");
-  } finally {
-    if (previousSecret === undefined) delete process.env.CENTRAL_FRETE_SESSION_SECRET;
-    else process.env.CENTRAL_FRETE_SESSION_SECRET = previousSecret;
-  }
 });
