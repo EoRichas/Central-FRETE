@@ -38,7 +38,7 @@ export function AdminSetupScreen() {
     try {
       await apiMutation("/api/auth/setup", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", "x-setup-token": String(form.get("setupToken") || "") },
         body: JSON.stringify({
           name: form.get("name"),
           username: form.get("username"),
@@ -95,6 +95,9 @@ export function AdminSetupScreen() {
         <h1>Configurar administrador</h1>
         <p>Crie o primeiro administrador. Você escolherá o usuário e a senha que serão usados no login.</p>
         <form className="form-stack" onSubmit={submit}>
+          <Field label="Código de configuração">
+            <input name="setupToken" type="password" autoComplete="off" required minLength={32} maxLength={256} />
+          </Field>
           <Field label="Nome">
             <input name="name" autoComplete="name" autoFocus required />
           </Field>

@@ -174,6 +174,24 @@ class SupabaseStorageObject {
 }
 
 class SupabaseStorageBucket {
+  private verifiedUntil = 0;
+  private checking: Promise<void> | null = null;
+
+  async assertPrivate() {
+    if (Date.now() < this.verifiedUntil) return;
+    this.checking ??= (async () => {
+      const {url,key} = supabaseConfig();
+      const response = await fetch(`${url}/storage/v1/bucket/${encodeURIComponent(STORAGE_BUCKET)}`, {
+        headers: {Authorization: `Bearer ${key}`, apikey: key}, cache: 'no-store', signal: AbortSignal.timeout(5000),
+      });
+      if (!response.ok || (await response.json()).public !== false) {
+        throw new ApiError(503, 'Armazenamento de comprovantes requer um bucket privado.');
+      }
+      this.verifiedUntil = Date.now() + 60000;
+    })().finally(() => { this.checking = null; });
+    await this.checking;
+  }
+
   async put(
     path: string,
     body: ArrayBuffer,
@@ -194,8 +212,8 @@ class SupabaseStorageBucket {
       body,
     });
     if (!response.ok) {
-      const message = await response.text();
-      throw new ApiError(503, `Falha ao salvar comprovante no Supabase Storage: ${message}`);
+      console.error("storage_upload_failed", {status: response.status});
+      throw new ApiError(503, "Não foi possível salvar o comprovante.");
     }
   }
 
@@ -229,6 +247,7 @@ let bucket: SupabaseStorageBucket | null = null;
 
 export async function getBucket() {
   bucket ??= new SupabaseStorageBucket();
+  await bucket.assertPrivate();
   return bucket;
 }
 
@@ -246,7 +265,10 @@ export function jsonError(error: unknown): Response {
   if (error instanceof ApiError) {
     return Response.json(
       { error: error.message, details: error.details ?? null },
-      { status: error.status },
+      { status: error.status, headers: {
+        'cache-control': 'private, no-store',
+        ...(error.status === 429 ? {'retry-after': String(error.details?.retryAfter ?? 900)} : {}),
+      } },
     );
   }
   console.error("central_frete_unhandled_error", error);

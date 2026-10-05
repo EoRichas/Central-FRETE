@@ -1,3 +1,6 @@
+import { assertTrustedMutation, readAuthJson } from '@/lib/server/request-security';
+import { assertAccessGateway } from '@/lib/server/access-gateway';
+import { limitLogin, recordAuthEvent } from '@/lib/server/auth-security';
 import { ApiError, jsonError, queryFirst } from "@/lib/server/d1";
 import {
   createUserSessionToken,
@@ -16,6 +19,7 @@ type LoginUserRow = {
   name: string;
   role: string;
   active: number;
+  securityVersion: number;
 };
 
 function normalizeUsername(value: unknown) {
@@ -24,11 +28,15 @@ function normalizeUsername(value: unknown) {
 
 export async function POST(request: Request) {
   try {
-    const payload = asObject(await request.json());
+    assertTrustedMutation(request);
+    await assertAccessGateway(request);
+    const payload = asObject(await readAuthJson(request));
     const username = normalizeUsername(payload.username);
     const password = String(payload.password ?? "");
     if (!username) throw new ApiError(400, "Informe o usuário.");
     if (!password) throw new ApiError(400, "Informe a senha.");
+    if (username.length > 40 || password.length > 4096) throw new ApiError(400, "Credenciais inválidas.");
+    await limitLogin(username);
 
     const count = await queryFirst<{ total: number }>(`select count(*)::integer as total from users`);
     if (Number(count?.total ?? 0) === 0) {
@@ -37,7 +45,7 @@ export async function POST(request: Request) {
 
     const user = await queryFirst<LoginUserRow>(
       `select id, email, username, password_salt as passwordSalt,
-        password_hash as passwordHash, name, role, active
+        password_hash as passwordHash, name, role, active, security_version as securityVersion
        from users
        where lower(coalesce(username, '')) = ?
        limit 1`,
@@ -45,10 +53,12 @@ export async function POST(request: Request) {
     );
 
     if (!user || !user.active || !user.passwordHash || !user.passwordSalt) {
+      await recordAuthEvent("LOGIN_FAILED", username);
       throw new ApiError(401, "Usuário ou senha incorretos.");
     }
 
     if (!(await verifyPassword(password, user.passwordSalt, user.passwordHash))) {
+      await recordAuthEvent("LOGIN_FAILED", username);
       throw new ApiError(401, "Usuário ou senha incorretos.");
     }
 
@@ -58,8 +68,10 @@ export async function POST(request: Request) {
       email: user.email,
       username: sessionUsername,
       name: user.name,
+      securityVersion: user.securityVersion,
     });
-    const secure = isLocalRequest(request) ? "" : "; Secure";
+    await recordAuthEvent("LOGIN_SUCCEEDED", username, user.id);
+    const secure = process.env.NODE_ENV !== "production" && isLocalRequest(request) ? "" : "; Secure";
     return Response.json(
       { authenticated: true, role: user.role },
       {

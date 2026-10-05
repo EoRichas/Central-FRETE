@@ -20,14 +20,15 @@ async function ensureStorageBucket(config) {
     body: JSON.stringify({ id: config.storageBucket, name: config.storageBucket, public: false }),
   });
 
-  if (response.ok || response.status === 409) {
-    console.info(`Bucket privado de comprovantes disponível: ${config.storageBucket}.`);
-    return;
-  }
-
-  const body = await response.text();
-  if (/already exists|duplicate/i.test(body)) {
-    console.info(`Bucket privado de comprovantes disponível: ${config.storageBucket}.`);
+  if (response.ok || response.status === 409 || /already exists|duplicate/i.test(await response.text())) {
+    const check = await fetch(`${config.supabaseUrl}/storage/v1/bucket/${encodeURIComponent(config.storageBucket)}`, {
+      headers: {Authorization: `Bearer ${config.serviceRoleKey}`, apikey: config.serviceRoleKey},
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!check.ok || (await check.json()).public !== false) {
+      throw new Error('O bucket de comprovantes precisa estar privado. Anexos permanecerão bloqueados.');
+    }
+    console.info('Bucket privado de comprovantes verificado.');
     return;
   }
 
@@ -39,7 +40,7 @@ async function ensureStorageBucket(config) {
 
 try {
   const config = readRuntimeConfig();
-  await migrateDatabase(config);
+  if (config.migrateOnStart) await migrateDatabase(config);
   try {
     await ensureStorageBucket(config);
   } catch (error) {
