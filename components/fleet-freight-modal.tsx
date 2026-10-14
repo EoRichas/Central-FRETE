@@ -56,7 +56,7 @@ export function FreightModal({
   const me = useApi<{user:CurrentUser}>("/api/me");
   const sellers = useApi<{sellers:{id:string;name:string;commissionBasisPoints:number}[]}>(['ADMIN','FINANCEIRO'].includes(me.data?.user.role ?? '') && !editing ? '/api/sales/sellers' : null);
   const canSeeCommission = me.data?.user.role === 'ADMIN' || me.data?.user.role === 'VENDEDOR' || (me.data?.user.role === 'OPERACIONAL' && (!editing || freight?.sellerId === me.data.user.id));
-  const [commissionValue,setCommissionValue] = useState(freight?.sellerCommissionOverrideCents == null ? '' : centsToInput(freight.sellerCommissionOverrideCents));
+  const [commissionValue,setCommissionValue] = useState<string | null>(freight?.sellerCommissionOverrideCents == null ? null : centsToInput(freight.sellerCommissionOverrideCents));
   const [sellerId,setSellerId] = useState(freight?.sellerId ?? '');
   const sellerRate = editing ? freight?.sellerCommissionBasisPoints ?? 0 : ['VENDEDOR','OPERACIONAL'].includes(me.data?.user.role ?? '') ? me.data?.user.commissionBasisPoints ?? 0 : sellers.data?.sellers.find(s=>s.id===sellerId)?.commissionBasisPoints ?? 0;
   const [client, setClient] = useState<SelectedClient | null>(freight ? {id: freight.clientId ?? null, legalName: freight.clientName} : null);
@@ -270,7 +270,7 @@ export function FreightModal({
   }
 
   const calculatedCommission = (() => {
-    try { return commissionCents(moneyInputToCents(freightValue || "0"), sellerRate, commissionValue.trim() ? moneyInputToCents(commissionValue) : null); }
+    try { return commissionCents(moneyInputToCents(freightValue || "0"), sellerRate, commissionValue?.trim() ? moneyInputToCents(commissionValue) : null); }
     catch { return null; }
   })();
   const preview = (() => {
@@ -297,7 +297,7 @@ export function FreightModal({
           tollCents: moneyInputToCents(toll || "0"),
           driverCommissionCents: moneyInputToCents(driverCommission || "0"),
           sellerCommissionBasisPoints: sellerRate,
-          sellerCommissionOverrideCents: commissionValue.trim() ? moneyInputToCents(commissionValue) : null,
+          sellerCommissionOverrideCents: commissionValue?.trim() ? moneyInputToCents(commissionValue) : null,
         },
         fleet.parameters,
         fleet.vehicles,
@@ -373,7 +373,7 @@ export function FreightModal({
         driverCommissionCents: moneyInputToCents(driverCommission || "0"),
         ...(!editing ? {sellerId} : {}),
         notes: form.get("notes"),
-        ...(canSeeCommission ? {sellerCommissionOverrideCents: commissionValue.trim() ? moneyInputToCents(commissionValue) : null} : {}),
+        ...(canSeeCommission ? {sellerCommissionOverrideCents: commissionValue?.trim() ? moneyInputToCents(commissionValue) : null} : {}),
       };
       const saved = await apiMutation<{id: string}>(
         editing ? `/api/fleet/freights/${freight!.id}` : "/api/fleet/freights",
@@ -775,7 +775,7 @@ export function FreightModal({
             </Field>
           </div>
           <Field label="Observações" hint="Anotações sobre despesas à parte. Para incluir um valor no resultado, registre-o no custo correspondente."><textarea name="notes" rows={4} maxLength={5000} defaultValue={freight?.notes ?? ''} /></Field>
-          {canSeeCommission && <Field label="Valor da comissão (R$)" hint={`Em branco usa o percentual cadastrado. Atual: ${calculatedCommission === null ? 'valor inválido' : formatMoney(calculatedCommission)}.`}><input inputMode="decimal" value={commissionValue} onChange={e=>setCommissionValue(e.target.value)} placeholder="Automático" /><button type="button" className="button secondary" onClick={()=>setCommissionValue('')}>Usar percentual cadastrado</button></Field>}
+          {canSeeCommission && <Field label="Valor da comissão (R$)" hint="Preenchido automaticamente. Altere o valor se houver uma comissão combinada."><input inputMode="decimal" value={commissionValue ?? centsToInput(calculatedCommission ?? 0)} onChange={e=>setCommissionValue(e.target.value)} onBlur={()=>{if (!commissionValue?.trim()) setCommissionValue(null);}} required /></Field>}
           {preview && (!editing || freight?.sellerCommissionBasisPoints != null) && (
             <>
               <div className="fleet-form-preview fleet-result-preview">

@@ -138,7 +138,7 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
   );
   const isAdmin = ['ADMIN', 'FINANCEIRO'].includes(meApi.data?.user.role ?? '');
   const canSeeCommission = ['ADMIN','VENDEDOR','OPERACIONAL'].includes(meApi.data?.user.role ?? '');
-  const [commissionValue, setCommissionValue] = useState(initialSale?.commissionOverrideCents == null ? '' : centsToInput(initialSale.commissionOverrideCents));
+  const [commissionValue, setCommissionValue] = useState<string | null>(initialSale?.commissionOverrideCents == null ? null : centsToInput(initialSale.commissionOverrideCents));
   const commissionBasisPoints = editing && sellerId === (initialSale?.sellerId ?? 'historical')
     ? initialSale?.commissionBasisPoints ?? 0
     : isAdmin ? sellersApi.data?.sellers.find(s=>s.id===sellerId)?.commissionBasisPoints ?? 0
@@ -149,14 +149,14 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
   const [error, setError] = useState<string | null>(null);
 
   const calculatedCommission = (() => {
-    try { return commissionCents(moneyInputToCents(freightValue || "0"), commissionBasisPoints, commissionValue.trim() ? moneyInputToCents(commissionValue) : null); }
+    try { return commissionCents(moneyInputToCents(freightValue || "0"), commissionBasisPoints, commissionValue?.trim() ? moneyInputToCents(commissionValue) : null); }
     catch { return null; }
   })();
   const preview = (() => {
     try {
       const freight = moneyInputToCents(freightValue || "0");
       const basisPoints = commissionBasisPoints;
-      const commission = commissionCents(freight, basisPoints, commissionValue.trim() ? moneyInputToCents(commissionValue) : null);
+      const commission = commissionCents(freight, basisPoints, commissionValue?.trim() ? moneyInputToCents(commissionValue) : null);
       const expenses = costs.reduce(
         (sum, cost) =>
           sum + (cost.amount ? moneyInputToCents(cost.amount) : 0),
@@ -235,7 +235,7 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
         financialDueDate: form.get("financialDueDate"),
         operationalStatus: isAdmin ? form.get("operationalStatus") : "CONFIRMAR",
         notes: form.get("notes"),
-        ...(canSeeCommission ? {commissionOverrideCents: commissionValue.trim() ? moneyInputToCents(commissionValue) : null} : {}),
+        ...(canSeeCommission ? {commissionOverrideCents: commissionValue?.trim() ? moneyInputToCents(commissionValue) : null} : {}),
         freightAmountCents: moneyInputToCents(freightValue),
         paymentMethod: form.get("paymentMethod"),
         costs: costPayload(),
@@ -363,7 +363,7 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
           <header><span>03</span><div><h2>Valores e despesas</h2><p>Todos os custos ficam visíveis e cada linha aceita somente um valor em reais.</p></div></header>
           <div className="form-grid three">
             <Field label="Valor total do frete"><div className="money-field"><span>R$</span><input value={freightValue} onChange={(event) => setFreightValue(event.target.value)} placeholder="0,00" inputMode="decimal" required /></div></Field>
-            {canSeeCommission && <Field label="Valor da comissão (R$)" hint={`Deixe em branco para calcular pelo percentual cadastrado. Atual: ${calculatedCommission === null ? 'valor inválido' : formatMoney(calculatedCommission)}.`}><input inputMode="decimal" value={commissionValue} onChange={e=>setCommissionValue(e.target.value)} placeholder="Automático" /><button type="button" className="button secondary" onClick={()=>setCommissionValue('')}>Usar percentual cadastrado</button></Field>}
+            {canSeeCommission && <Field label="Valor da comissão (R$)" hint="Preenchido automaticamente. Altere o valor se houver uma comissão combinada."><input inputMode="decimal" value={commissionValue ?? centsToInput(calculatedCommission ?? 0)} onChange={e=>setCommissionValue(e.target.value)} onBlur={()=>{if (!commissionValue?.trim()) setCommissionValue(null);}} required /></Field>}
           </div>
           <div className="cost-list">
             <div className="cost-list-head"><div><h3>Custos da operação</h3><p>Preencha apenas as linhas que possuem valor.</p></div><span className="cost-currency-tag">TODOS OS VALORES EM BRL</span></div>
