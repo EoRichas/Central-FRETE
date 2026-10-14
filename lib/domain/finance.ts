@@ -11,6 +11,7 @@ export type FinancialTransaction = {
 export type SaleFinancialInput = {
   freightAmountCents: number;
   commissionBasisPoints: number;
+  commissionOverrideCents?: number | null;
   expenseAmountsCents: number[];
   transactions: FinancialTransaction[];
   dueDate: string;
@@ -40,7 +41,13 @@ function requireSafeInteger(value: number, label: string) {
 export function commissionCents(
   freightAmountCents: number,
   commissionBasisPoints: number,
+  overrideCents?: number | null,
 ): number {
+  if (overrideCents != null) {
+    requireSafeInteger(overrideCents, "Comissão combinada");
+    if (overrideCents < 0 || overrideCents > 9_000_000_000_000) throw new Error("Comissão combinada inválida.");
+    return overrideCents;
+  }
   requireSafeInteger(freightAmountCents, "Valor do frete");
   requireSafeInteger(commissionBasisPoints, "Percentual de comissão");
   if (freightAmountCents < 0) throw new Error("Valor do frete não pode ser negativo.");
@@ -67,6 +74,7 @@ export function calculateSaleFinancials(
   const commission = commissionCents(
     input.freightAmountCents,
     input.commissionBasisPoints,
+    input.commissionOverrideCents,
   );
   const expenses = input.expenseAmountsCents.reduce((sum, amount) => {
     requireSafeInteger(amount, "Despesa");

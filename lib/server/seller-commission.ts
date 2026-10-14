@@ -13,17 +13,18 @@ export function commissionProfileValue(value: unknown, fallback = 700) {
 
 type Seller = { id: string; name: string; commissionBasisPoints: number };
 export async function resolveSaleSeller(user: CurrentUser, payload: Record<string, unknown>, previous?: Pick<SaleRecord, 'sellerId' | 'sellerName' | 'commissionBasisPoints'>): Promise<Seller | {id: null; name: string; commissionBasisPoints: number}> {
-  if (user.role !== 'ADMIN') {
-    const actor = await queryFirst<Seller>(`select id,name,case when role='VENDEDOR' then commission_basis_points else 0 end as commissionBasisPoints from users where id=? and active=1`, [user.id]);
+  if (user.role !== 'ADMIN' && user.role !== 'FINANCEIRO') {
+    const actor = await queryFirst<Seller>(`select id,name,case when role in ('VENDEDOR','OPERACIONAL') then commission_basis_points else 0 end as commissionBasisPoints from users where id=? and active=1`, [user.id]);
     if (!actor) throw new ApiError(403, 'Usuário inativo.');
     return actor;
   }
+  if (previous && user.role === 'FINANCEIRO' && payload.sellerId === undefined) return {id: previous.sellerId, name: previous.sellerName, commissionBasisPoints: previous.commissionBasisPoints};
   const id = String(payload.sellerId ?? '').trim();
   const name = String(payload.sellerName ?? '').trim().toUpperCase();
   if (previous && ((id && id === previous.sellerId) || (!id && name === previous.sellerName.toUpperCase()))) {
     return {id: previous.sellerId, name: previous.sellerName, commissionBasisPoints: previous.commissionBasisPoints};
   }
-  const matches = await queryAll<Seller>(`select id,name,commission_basis_points as commissionBasisPoints from users where role='VENDEDOR' and active=1 and ${id ? 'id=?' : 'upper(name)=?'} limit 2`, [id || name]);
+  const matches = await queryAll<Seller>(`select id,name,commission_basis_points as commissionBasisPoints from users where role in ('VENDEDOR','OPERACIONAL') and active=1 and ${id ? 'id=?' : 'upper(name)=?'} limit 2`, [id || name]);
   if (matches.length !== 1) throw new ApiError(400, 'Selecione um vendedor ativo no cadastro.');
   return matches[0];
 }
@@ -41,16 +42,26 @@ export async function assertFleetAccess(user: CurrentUser, id: string) {
 }
 
 export function saleForViewer(sale: SaleRecord, user: CurrentUser) {
-  if (canViewSellerCommission(user.role)) return sale;
-  const { commissionBasisPoints: _rate, financial, ...rest } = sale;
+  if (canViewSellerCommission(user.role) || (user.role === 'OPERACIONAL' && sale.sellerId === user.id)) return sale;
+  const { commissionBasisPoints: _rate, commissionOverrideCents: _override, financial, ...rest } = sale;
   const { commissionCents: _commission, ...visibleFinancial } = financial;
   void _rate; void _commission;
   return {...rest, financial: visibleFinancial};
 }
 
 export function freightForViewer(freight: FleetFreight, user: CurrentUser) {
-  if (canViewSellerCommission(user.role)) return freight;
-  const {sellerCommissionBasisPoints: _rate, sellerCommissionCents: _commission, ...rest} = freight;
+  if (canViewSellerCommission(user.role) || (user.role === 'OPERACIONAL' && freight.sellerId === user.id)) return freight;
+  const {sellerCommissionBasisPoints: _rate, sellerCommissionOverrideCents: _override, sellerCommissionCents: _commission, ...rest} = freight;
   void _rate; void _commission;
   return rest;
+}
+
+export function saleCommissionOverride(user: CurrentUser, value: unknown, previous: number | null = null, sellerId?: string | null) {
+  if (value === undefined) return previous;
+  if (!(canViewSellerCommission(user.role) || (user.role === 'OPERACIONAL' && sellerId === user.id))) {
+    throw new ApiError(403, 'Seu perfil não pode alterar esta comissão.');
+  }
+  if (value === null || value === '') return null;
+  if (typeof value !== 'number') throw new ApiError(400, 'Comissão combinada inválida.');
+  return integerInRange(value, 'Comissão combinada', 0, 9_000_000_000_000);
 }

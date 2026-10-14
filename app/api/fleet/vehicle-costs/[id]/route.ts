@@ -24,7 +24,7 @@ async function costSnapshot(id: string) {
 
 export async function PATCH(request: Request, context: RouteContext) {
   try {
-    const user = await authorize(request, ["ADMIN", "GERENCIA"]);
+    const user = await authorize(request, ["ADMIN", "GERENCIA", "FINANCEIRO"]);
     const { id } = await context.params;
     const previous = await costSnapshot(id);
     if (!previous) throw new ApiError(404, "Custo mensal não encontrado.");
@@ -75,7 +75,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
 export async function DELETE(request: Request, context: RouteContext) {
   try {
-    const user = await authorize(request, ["ADMIN", "GERENCIA"]);
+    const user = await authorize(request, ["ADMIN", "GERENCIA", "FINANCEIRO"]);
     const { id } = await context.params;
     const previous = await costSnapshot(id);
     if (!previous) throw new ApiError(404, "Custo mensal não encontrado.");

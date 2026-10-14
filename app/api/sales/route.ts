@@ -1,4 +1,4 @@
-import { resolveSaleSeller, saleForViewer } from "@/lib/server/seller-commission";
+import { resolveSaleSeller, saleForViewer, saleCommissionOverride } from "@/lib/server/seller-commission";
 import { validateSaleClient } from "@/lib/server/registry-validation";
 import { roleCan } from "@/lib/domain/permissions";
 import { SALE_CHANNELS, SALE_SORTS, type SaleSort } from "@/lib/domain/sales";
@@ -12,7 +12,7 @@ import {
   OPERATIONAL_STATUSES,
   ORIGIN_LOCATION_TYPES,
 } from "@/lib/domain/operations";
-import { ApiError, getD1, jsonError } from "@/lib/server/d1";
+import { ApiError, getD1, jsonError, queryFirst } from "@/lib/server/d1";
 import { listSales } from "@/lib/server/repository";
 import {
   asObject,
@@ -53,7 +53,7 @@ export async function GET(request: Request) {
       limit: Number(url.searchParams.get("limit") || 200),
       offset: Number(url.searchParams.get("offset") || 0),
     });
-    return Response.json({ sales: sales.map(s => saleForViewer(s, user)), count: sales.length, canCreate: roleCan(user.role, saleChannel === "FROTA" ? "CREATE_FLEET_SALE" : "CREATE_CEGONHA_SALE"), canDelete: user.role === "ADMIN" });
+    return Response.json({ sales: sales.map(s => saleForViewer(s, user)), count: sales.length, canCreate: roleCan(user.role, saleChannel === "FROTA" ? "CREATE_FLEET_SALE" : "CREATE_CEGONHA_SALE"), canDelete: ["ADMIN", "FINANCEIRO"].includes(user.role) });
   } catch (error) {
     return jsonError(error);
   }
@@ -61,7 +61,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const user = await authorize(request, ["ADMIN", "VENDEDOR", "OPERACIONAL"]);
+    const user = await authorize(request, ["ADMIN", "FINANCEIRO", "VENDEDOR", "OPERACIONAL"]);
     const payload = asObject(await request.json());
     if (payload.saleNumber != null && payload.saleNumber !== '') throw new ApiError(400, 'O número da venda é gerado automaticamente.');
     const saleChannel = enumValue(payload.saleChannel ?? "CEGONHA", "Canal da venda", SALE_CHANNELS);
@@ -88,7 +88,7 @@ export async function POST(request: Request) {
       9_000_000_000_000,
     );
     const operationalStatus = enumValue(
-      user.role === "ADMIN" ? payload.operationalStatus : "CONFIRMAR",
+      ["ADMIN", "FINANCEIRO"].includes(user.role) ? payload.operationalStatus : "CONFIRMAR",
       "Status operacional",
       OPERATIONAL_STATUSES,
     );
@@ -140,10 +140,10 @@ export async function POST(request: Request) {
           1,
           9_000_000_000_000,
         ),
-        confirmed: isDirectPaidOperationCostCategory(category) || (user.role === "ADMIN" && cost.confirmed === true),
+        confirmed: isDirectPaidOperationCostCategory(category) || (["ADMIN", "FINANCEIRO"].includes(user.role) && cost.confirmed === true),
         providerSlot,
         paymentStatus:
-          isDirectPaidOperationCostCategory(category) || (user.role === "ADMIN" && cost.confirmed === true) ? "PAGO" : "EM_ABERTO",
+          isDirectPaidOperationCostCategory(category) || (["ADMIN", "FINANCEIRO"].includes(user.role) && cost.confirmed === true) ? "PAGO" : "EM_ABERTO",
       };
     });
     const providerSlots = costs
@@ -162,6 +162,8 @@ export async function POST(request: Request) {
     const installmentId = crypto.randomUUID();
     const seller = await resolveSaleSeller(user, payload);
     const sellerName = seller.name, sellerId = seller.id, commissionBasisPoints = seller.commissionBasisPoints;
+    const linkedCommission = cargo.fleetFreightId ? await queryFirst<{amount: number | null}>("select seller_commission_override_cents as amount from fleet_freights where id=?", [cargo.fleetFreightId]) : null;
+    const commissionOverrideCents = saleCommissionOverride(user, payload.commissionOverrideCents, linkedCommission?.amount ?? null, sellerId);
     const costsPending = costs.some((cost) => !cost.confirmed);
     const db = await getD1();
     const statements: D1PreparedStatement[] = [
@@ -246,8 +248,9 @@ export async function POST(request: Request) {
       );
     }
 
+    statements.push(db.prepare("update freight_sales set commission_override_cents=? where id=?").bind(commissionOverrideCents,saleId));
     if (cargo.fleetFreightId && saleChannel === 'FROTA') {
-      statements.push(db.prepare(`update fleet_freights set seller_id=?,seller_name=?,seller_commission_basis_points=? where id=?`).bind(sellerId,sellerName,commissionBasisPoints,cargo.fleetFreightId));
+      statements.push(db.prepare(`update fleet_freights set seller_id=?,seller_name=?,seller_commission_basis_points=?,seller_commission_override_cents=? where id=?`).bind(sellerId,sellerName,commissionBasisPoints,commissionOverrideCents,cargo.fleetFreightId));
     }
 
     const advanceCents = payload.advanceAmountCents
@@ -259,7 +262,7 @@ export async function POST(request: Request) {
         )
       : 0;
     if (advanceCents > 0) {
-      const status = user.role === "ADMIN" ? "CONFIRMADO" : "PENDENTE";
+      const status = ["ADMIN", "FINANCEIRO"].includes(user.role) ? "CONFIRMADO" : "PENDENTE";
       statements.push(
         db
           .prepare(
@@ -298,7 +301,7 @@ export async function POST(request: Request) {
           JSON.stringify({
             numbering: "AUTOMATIC_GLOBAL", saleChannel, billingDate, actorRole: user.role, fleetFreightId: cargo.fleetFreightId,
             freightAmountCents,
-            commissionBasisPoints,
+            commissionBasisPoints, commissionOverrideCents,
             costCount: costs.length,
             advanceCents,
           }),

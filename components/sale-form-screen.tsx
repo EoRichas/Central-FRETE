@@ -110,10 +110,10 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
   const [cargoVehicles, setCargoVehicles] = useState(() => cargoVehiclesOrLegacy(initialSale?.cargoVehicles, initialSale?.vehicle ?? null, initialSale?.plate ?? null));
   const [fleetFreightId, setFleetFreightId] = useState(initialSale?.fleetFreightId ?? '');
   const meApi = useApi<{ user: CurrentUser }>("/api/me");
-  const sellersApi = useApi<{sellers: {id: string; name: string; commissionBasisPoints: number}[]}>(meApi.data?.user.role === "ADMIN" ? "/api/sales/sellers" : null);
+  const sellersApi = useApi<{sellers: {id: string; name: string; commissionBasisPoints: number}[]}>(["ADMIN", "FINANCEIRO"].includes(meApi.data?.user.role ?? "") ? "/api/sales/sellers" : null);
   const [sellerId, setSellerId] = useState(initialSale ? initialSale.sellerId ?? "historical" : "");
   const canCreateClient = Boolean(meApi.data && roleCan(meApi.data.user.role, "MANAGE_CLIENTS"));
-  const fleetOptions = useApi<{freights: {id:string;label:string}[]}>(saleChannel === "FROTA" && meApi.data?.user.role === "ADMIN" ? "/api/sales/fleet-options" : null);
+  const fleetOptions = useApi<{freights: {id:string;label:string}[]}>(saleChannel === "FROTA" && ["ADMIN", "FINANCEIRO"].includes(meApi.data?.user.role ?? "") ? "/api/sales/fleet-options" : null);
   const [client, setClient] = useState<SelectedClient | null>(initialSale?.clientId ? { id: initialSale.clientId, legalName: initialSale.clientName ?? "Cliente anterior" } : null);
   const [pickupAddress, setPickupAddress] = useState(
     initialSale?.pickupAddressSnapshot ?? "",
@@ -136,8 +136,9 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
   const [freightValue, setFreightValue] = useState(
     initialSale ? centsToInput(initialSale.freightAmountCents) : "",
   );
-  const isAdmin = meApi.data?.user.role === 'ADMIN';
-  const canSeeCommission = isAdmin || meApi.data?.user.role === 'VENDEDOR';
+  const isAdmin = ['ADMIN', 'FINANCEIRO'].includes(meApi.data?.user.role ?? '');
+  const canSeeCommission = ['ADMIN','VENDEDOR','OPERACIONAL'].includes(meApi.data?.user.role ?? '');
+  const [commissionValue, setCommissionValue] = useState(initialSale?.commissionOverrideCents == null ? '' : centsToInput(initialSale.commissionOverrideCents));
   const commissionBasisPoints = editing && sellerId === (initialSale?.sellerId ?? 'historical')
     ? initialSale?.commissionBasisPoints ?? 0
     : isAdmin ? sellersApi.data?.sellers.find(s=>s.id===sellerId)?.commissionBasisPoints ?? 0
@@ -148,14 +149,14 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
   const [error, setError] = useState<string | null>(null);
 
   const calculatedCommission = (() => {
-    try { return commissionCents(moneyInputToCents(freightValue || "0"), commissionBasisPoints); }
+    try { return commissionCents(moneyInputToCents(freightValue || "0"), commissionBasisPoints, commissionValue.trim() ? moneyInputToCents(commissionValue) : null); }
     catch { return null; }
   })();
   const preview = (() => {
     try {
       const freight = moneyInputToCents(freightValue || "0");
       const basisPoints = commissionBasisPoints;
-      const commission = commissionCents(freight, basisPoints);
+      const commission = commissionCents(freight, basisPoints, commissionValue.trim() ? moneyInputToCents(commissionValue) : null);
       const expenses = costs.reduce(
         (sum, cost) =>
           sum + (cost.amount ? moneyInputToCents(cost.amount) : 0),
@@ -234,6 +235,7 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
         financialDueDate: form.get("financialDueDate"),
         operationalStatus: isAdmin ? form.get("operationalStatus") : "CONFIRMAR",
         notes: form.get("notes"),
+        ...(canSeeCommission ? {commissionOverrideCents: commissionValue.trim() ? moneyInputToCents(commissionValue) : null} : {}),
         freightAmountCents: moneyInputToCents(freightValue),
         paymentMethod: form.get("paymentMethod"),
         costs: costPayload(),
@@ -324,7 +326,7 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
               <Field label="Prestador inicial"><input name="initialProviderName" defaultValue={initialSale?.initialProviderName ?? ""} /></Field>
               <Field label="Prazo operacional (dias)"><input type="number" min={1} max={365} inputMode="numeric" value={operationalDeadlineDays} onChange={(event) => { const value = event.target.value; setOperationalDeadlineDays(value); const calculated = calculateDestinationArrivalDate(originYardEntryDate, value); if (calculated) setDestinationArrivalDate(calculated); }} /></Field>
             </div>
-            {saleChannel === 'FROTA' && meApi.data?.user.role === 'ADMIN' && <Field label="Operação da Frota (opcional)" hint="Quando vinculada, a venda e a OS consultam os veículos diretamente no frete."><select value={fleetFreightId} onChange={e => setFleetFreightId(e.target.value)}><option value="">Sem vínculo com a Frota</option>{initialSale?.fleetFreightId && <option value={initialSale.fleetFreightId}>Operação vinculada</option>}{fleetOptions.data?.freights.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}</select>{fleetOptions.error && <span role="alert">{fleetOptions.error}</span>}</Field>}
+            {saleChannel === 'FROTA' && ['ADMIN', 'FINANCEIRO'].includes(meApi.data?.user.role ?? '') && <Field label="Operação da Frota (opcional)" hint="Quando vinculada, a venda e a OS consultam os veículos diretamente no frete."><select value={fleetFreightId} onChange={e => setFleetFreightId(e.target.value)}><option value="">Sem vínculo com a Frota</option>{initialSale?.fleetFreightId && <option value={initialSale.fleetFreightId}>Operação vinculada</option>}{fleetOptions.data?.freights.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}</select>{fleetOptions.error && <span role="alert">{fleetOptions.error}</span>}</Field>}
             {fleetFreightId ? <p className="fleet-update-note">Os veículos transportados serão consultados na operação da Frota vinculada.</p> : <CargoVehiclesEditor vehicles={cargoVehicles} onChange={setCargoVehicles} showFipe={saleChannel === "CEGONHA"} />}
             <div className="operation-timing-grid">
               <Field label="Entrada no pátio de origem"><input type="date" value={originYardEntryDate} onChange={(event) => { const value = event.target.value; setOriginYardEntryDate(value); const calculated = calculateDestinationArrivalDate(value, operationalDeadlineDays); if (calculated) setDestinationArrivalDate(calculated); }} /></Field>
@@ -361,7 +363,7 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
           <header><span>03</span><div><h2>Valores e despesas</h2><p>Todos os custos ficam visíveis e cada linha aceita somente um valor em reais.</p></div></header>
           <div className="form-grid three">
             <Field label="Valor total do frete"><div className="money-field"><span>R$</span><input value={freightValue} onChange={(event) => setFreightValue(event.target.value)} placeholder="0,00" inputMode="decimal" required /></div></Field>
-            {canSeeCommission && <div className="calculation-summary" aria-live="polite"><span>Comissão calculada</span><strong>{calculatedCommission === null ? "Informe um valor válido" : formatMoney(calculatedCommission)}</strong><small>{isAdmin && !sellerId ? "Selecione o vendedor para calcular a comissão." : "Atualizada automaticamente pelo percentual do vendedor."}</small></div>}
+            {canSeeCommission && <Field label="Valor da comissão (R$)" hint={`Deixe em branco para calcular pelo percentual cadastrado. Atual: ${calculatedCommission === null ? 'valor inválido' : formatMoney(calculatedCommission)}.`}><input inputMode="decimal" value={commissionValue} onChange={e=>setCommissionValue(e.target.value)} placeholder="Automático" /><button type="button" className="button secondary" onClick={()=>setCommissionValue('')}>Usar percentual cadastrado</button></Field>}
           </div>
           <div className="cost-list">
             <div className="cost-list-head"><div><h3>Custos da operação</h3><p>Preencha apenas as linhas que possuem valor.</p></div><span className="cost-currency-tag">TODOS OS VALORES EM BRL</span></div>
@@ -391,7 +393,7 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
 
         {error && <p className="form-error" role="alert">{error}</p>}
         <div className="sale-form-actions">
-          {editing && meApi.data?.user.role === "ADMIN" && (
+          {editing && ["ADMIN", "FINANCEIRO"].includes(meApi.data?.user.role ?? "") && (
             <button
               type="button"
               className="button danger delete-sale-button"

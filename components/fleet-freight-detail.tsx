@@ -29,6 +29,7 @@ export function FleetFreightDetail({freight: f}: {freight: FleetFreight}) {
           <div><dt>Distância {f.odometerStartMeters!=null && f.odometerEndMeters!=null ? 'realizada' : 'informada'}</dt><dd>{(f.distanceMeters/1000).toLocaleString('pt-BR')} km</dd></div>
           <div><dt>Data da coleta</dt><dd>{formatDate(f.pickupDate)}</dd></div>
           <div><dt>Data da entrega</dt><dd>{formatDate(f.deliveryDate)}</dd></div>
+          <div className="full"><dt>Observações</dt><dd style={{whiteSpace:"pre-wrap"}}>{f.notes || "—"}</dd></div>
           <div><dt>Faturamento</dt><dd>{formatDate(f.billingDate)}</dd></div>
         </dl>
       </article>
@@ -37,7 +38,7 @@ export function FleetFreightDetail({freight: f}: {freight: FleetFreight}) {
         <div className="money-breakdown">
           <div><span>Valor do frete</span><strong>{formatMoney(f.freightAmountCents)}</strong></div>
           <div><span>Motorista / comissão</span><strong>− {formatMoney(f.driverCommissionCents)}</strong></div>
-          {f.sellerCommissionCents != null && <div><span>Comissão do vendedor ({formatPercent(f.sellerCommissionBasisPoints ?? 0)})</span><strong>− {formatMoney(f.sellerCommissionCents)}</strong></div>}
+          {f.sellerCommissionCents != null && <div><span>Comissão {f.sellerCommissionOverrideCents != null ? "combinada" : `(${formatPercent(f.sellerCommissionBasisPoints ?? 0)})`}</span><strong>− {formatMoney(f.sellerCommissionCents)}</strong></div>}
           <div><span>Demais despesas</span><strong>− {formatMoney(f.totalCostCents-f.driverCommissionCents-(f.sellerCommissionCents??0))}</strong></div>
           <div className="total"><span>Margem da Central</span><strong className={f.netRevenueCents<0?'negative':'positive'}>{formatMoney(f.netRevenueCents)}</strong></div>
         </div>

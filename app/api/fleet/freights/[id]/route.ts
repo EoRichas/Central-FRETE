@@ -1,8 +1,7 @@
-import { assertFleetAccess, freightForViewer } from "@/lib/server/seller-commission";
+import { assertFleetAccess, freightForViewer, saleCommissionOverride } from "@/lib/server/seller-commission";
 import { loadFleetData } from "@/lib/server/fleet";
 import { resolveFreightClient } from "@/lib/server/registry-validation";
 import { drainStorageCleanup } from "@/lib/server/storage-cleanup";
-import { cargoVehiclesOrLegacy } from "@/lib/domain/cargo-vehicles";
 import { authorize } from "@/lib/server/auth";
 import { ApiError, getD1, jsonError, queryFirst } from "@/lib/server/d1";
 import { resolveFleetReferences } from "@/lib/server/fleet-mutations";
@@ -12,6 +11,9 @@ import { asObject } from "@/lib/server/validation";
 type RouteContext = { params: Promise<{ id: string }> };
 
 type FreightSnapshot = {
+  sellerId: string | null;
+  sellerCommissionOverrideCents: number | null;
+  notes: string | null;
   originLocationType?: import("@/lib/domain/operations").OriginLocationType | null;
   destinationLocationType?: import("@/lib/domain/operations").OriginLocationType | null;
 
@@ -58,7 +60,7 @@ type FreightSnapshot = {
 
 async function freightSnapshot(id: string) {
   return queryFirst<FreightSnapshot>(
-    `select trip_id as tripId, yard_cost_cents as yardCostCents, pickup_cost_cents as pickupCostCents,
+    `select seller_id as sellerId,seller_commission_override_cents as sellerCommissionOverrideCents,notes,trip_id as tripId, yard_cost_cents as yardCostCents, pickup_cost_cents as pickupCostCents,
       delivery_cost_cents as deliveryCostCents, other_cost_cents as otherCostCents, insurance_cost_cents as insuranceCostCents, invoice_cost_cents as invoiceCostCents, icms_cost_cents as icmsCostCents, cte_mdfe_cost_cents as cteMdfeCostCents, actual_fuel_cost_cents as actualFuelCostCents, cargo_vehicles as cargoVehicles,
           fuel_liters_milli as fuelLitersMilli, fuel_pump_amount_cents as fuelPumpAmountCents,
       id, vehicle_id as vehicleId, vehicle_plate as vehiclePlate,
@@ -87,35 +89,8 @@ export async function PATCH(request: Request, context: RouteContext) {
     if (payload.saleNumber !== undefined) throw new ApiError(400, "O número da venda não pode ser alterado.");
     const submitted = parseFleetFreightPayload({ ...previous, ...payload,
       cargoVehicles: payload.cargoVehicles === undefined ? previous.cargoVehicles ?? undefined : payload.cargoVehicles });
-    const data = user.role === "FINANCEIRO"
-      ? {
-          ...submitted,
-          vehicleId: previous.vehicleId ?? submitted.vehicleId,
-          driverId: previous.driverId ?? submitted.driverId,
-          tripId: previous.tripId,
-          clientId: previous.clientId,
-          clientName: previous.clientName,
-          cargoVehicleModel: previous.cargoVehicleModel,
-          cargoPlate: previous.cargoPlate,
-          cargoVehicles: cargoVehiclesOrLegacy(previous.cargoVehicles, previous.cargoVehicleModel, previous.cargoPlate),
-          origin: previous.origin,
-          originLocationType: previous.originLocationType, destinationLocationType: previous.destinationLocationType,
-          destination: previous.destination,
-          originCep: previous.originCep,
-          destinationCep: previous.destinationCep,
-          pickupDate: previous.pickupDate,
-          deliveryDate: previous.deliveryDate,
-          billingDate: previous.billingDate,
-          operationalStatus: previous.operationalStatus,
-          priority: previous.priority,
-          distanceMeters: previous.distanceMeters,
-          routeDistanceMeters: previous.routeDistanceMeters,
-          odometerStartMeters: previous.odometerStartMeters,
-          odometerEndMeters: previous.odometerEndMeters,
-          tollCents: previous.tripId ? previous.tollCents : submitted.tollCents,
-          actualFuelCostCents: submitted.actualFuelCostCents,
-        }
-      : submitted;
+    const data = submitted;
+    const commissionOverrideCents = saleCommissionOverride(user, payload.sellerCommissionOverrideCents, previous.sellerCommissionOverrideCents, previous.sellerId);
     Object.assign(data, await resolveFreightClient(data, previous));
     const { vehicle, driver } = await resolveFleetReferences(
       data.vehicleId,
@@ -123,7 +98,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     );
     const db = await getD1();
     const next = {
-      ...data,
+      ...data, sellerCommissionOverrideCents: commissionOverrideCents,
       vehiclePlate: vehicle.plate,
       driverName: driver.name,
     };
@@ -131,7 +106,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       db
         .prepare(
           `update fleet_freights set
-            vehicle_id = ?, vehicle_plate = ?, driver_id = ?, driver_name = ?,
+            notes = ?, seller_commission_override_cents = ?, vehicle_id = ?, vehicle_plate = ?, driver_id = ?, driver_name = ?,
             client_id = ?, client_name = ?, cargo_vehicle_model = ?, cargo_plate = ?,
             origin = ?, destination = ?, origin_location_type = ?, destination_location_type = ?, pickup_date = ?, delivery_date = ?,
             billing_date = ?, operational_status = ?, priority = ?,
@@ -143,7 +118,7 @@ export async function PATCH(request: Request, context: RouteContext) {
            where id = ?`,
         )
         .bind(
-          vehicle.id,
+          data.notes, commissionOverrideCents, vehicle.id,
           vehicle.plate,
           driver.id,
           driver.name,
@@ -170,6 +145,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           data.insuranceCostCents, data.invoiceCostCents, data.icmsCostCents, data.cteMdfeCostCents,
           id,
         ),
+      db.prepare("update freight_sales set commission_override_cents=? where fleet_freight_id=? and sale_channel='FROTA'").bind(commissionOverrideCents,id),
       db
         .prepare(
           `insert into audit_logs (
@@ -195,7 +171,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
 export async function DELETE(request: Request, context: RouteContext) {
   try {
-    const user = await authorize(request, ["ADMIN"]);
+    const user = await authorize(request, ["ADMIN", "FINANCEIRO"]);
     const { id } = await context.params;
     await assertFleetAccess(user, id);
     const previous = await freightSnapshot(id);

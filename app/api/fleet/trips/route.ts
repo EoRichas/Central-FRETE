@@ -5,7 +5,7 @@ import { parseTrip } from '@/lib/server/fleet-results-validation';
 import { asObject } from '@/lib/server/validation';
 export async function POST(request: Request) {
   try {
-    const user = await authorize(request, ['ADMIN', 'GERENCIA']);
+    const user = await authorize(request, ['ADMIN', 'GERENCIA', 'FINANCEIRO']);
     const data = parseTrip(asObject(await request.json()));
     await resolveFleetReferences(data.vehicleId, data.driverId);
     const id = crypto.randomUUID();

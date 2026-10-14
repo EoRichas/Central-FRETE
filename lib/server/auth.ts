@@ -46,7 +46,7 @@ export async function authorize(
     email: row.email,
     name: row.name,
     role: row.role as Role,
-    ...(row.role === "VENDEDOR" ? {commissionBasisPoints: row.commissionBasisPoints} : {}),
+    ...(["VENDEDOR", "OPERACIONAL"].includes(row.role) ? {commissionBasisPoints: row.commissionBasisPoints} : {}),
   };
 }
 

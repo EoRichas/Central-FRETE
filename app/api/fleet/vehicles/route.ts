@@ -5,7 +5,7 @@ import { asObject } from "@/lib/server/validation";
 
 export async function POST(request: Request) {
   try {
-    const user = await authorize(request, ["ADMIN", "GERENCIA"]);
+    const user = await authorize(request, ["ADMIN", "GERENCIA", "FINANCEIRO"]);
     const data = parseFleetVehiclePayload(asObject(await request.json()));
     const id = crypto.randomUUID();
     const db = await getD1();

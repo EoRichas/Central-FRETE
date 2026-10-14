@@ -1,4 +1,4 @@
-import { resolveSaleSeller, saleForViewer } from "@/lib/server/seller-commission";
+import { resolveSaleSeller, saleForViewer, saleCommissionOverride } from "@/lib/server/seller-commission";
 import { validateSaleClient } from "@/lib/server/registry-validation";
 import { drainStorageCleanup } from "@/lib/server/storage-cleanup";
 import { parseSaleCargo } from "@/lib/server/sale-cargo";
@@ -52,7 +52,7 @@ export async function GET(request: Request, context: RouteContext) {
 
 export async function DELETE(request: Request, context: RouteContext) {
   try {
-    const user = await authorize(request, ["ADMIN"]);
+    const user = await authorize(request, ["ADMIN", "FINANCEIRO"]);
     const { id } = await context.params;
     const sale = await getSale(user, id);
     if (!sale) throw new ApiError(404, "Venda não encontrada.");
@@ -96,7 +96,7 @@ export async function DELETE(request: Request, context: RouteContext) {
 
 export async function PATCH(request: Request, context: RouteContext) {
   try {
-    const user = await authorize(request, ["ADMIN"]);
+    const user = await authorize(request, ["ADMIN", "FINANCEIRO"]);
     const { id } = await context.params;
     const sale = await getSale(user, id);
     if (!sale) throw new ApiError(404, "Venda não encontrada.");
@@ -236,7 +236,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         amountCents,
         confirmed: isDirectPaidOperationCostCategory(category) || (category === "PRESTADOR_SERVICO"
           ? preservedProviderPayment?.paymentStatus === "PAGO"
-          : user.role === "ADMIN" ? Boolean(cost.confirmed) : availableConfirmed > 0),
+          : ["ADMIN", "FINANCEIRO"].includes(user.role) ? Boolean(cost.confirmed) : availableConfirmed > 0),
         providerSlot,
         paymentStatus:
           category === "PRESTADOR_SERVICO"
@@ -267,6 +267,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     const seller = await resolveSaleSeller(user, payload, sale);
     const sellerName = seller.name, sellerId = seller.id, commissionBasisPoints = seller.commissionBasisPoints;
+    const commissionOverrideCents = saleCommissionOverride(user, payload.commissionOverrideCents, sale.commissionOverrideCents ?? null, sellerId);
     const costsPending = costs.some((cost) => !cost.confirmed);
     const db = await getD1();
     const statements: D1PreparedStatement[] = [
@@ -280,7 +281,7 @@ export async function PATCH(request: Request, context: RouteContext) {
             operational_deadline_days = ?, origin_yard_entry_date = ?,
             delivery_deadline = ?, financial_due_date = ?,
             operational_status = ?, notes = ?, freight_amount_cents = ?,
-            commission_basis_points = ?, costs_pending = ?, cargo_vehicles = ?::text::jsonb, fleet_freight_id = ?, destination_location_type = ?, billing_date = ?,
+            commission_basis_points = ?, commission_override_cents = ?, costs_pending = ?, cargo_vehicles = ?::text::jsonb, fleet_freight_id = ?, destination_location_type = ?, billing_date = ?,
             updated_at = to_char(timezone('UTC', now()), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
           where id = ?`,
         )
@@ -308,7 +309,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           operationalStatus,
           upper(payload.notes),
           freightAmountCents,
-          commissionBasisPoints,
+          commissionBasisPoints, commissionOverrideCents,
           costsPending ? 1 : 0,
           JSON.stringify(cargo.cargoVehicles), cargo.fleetFreightId, destinationLocationType, billingDate,
           id,
@@ -317,7 +318,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     ];
 
     if (cargo.fleetFreightId && sale.saleChannel === 'FROTA') {
-      statements.push(db.prepare(`update fleet_freights set seller_id=?,seller_name=?,seller_commission_basis_points=? where id=?`).bind(sellerId,sellerName,commissionBasisPoints,cargo.fleetFreightId));
+      statements.push(db.prepare(`update fleet_freights set seller_id=?,seller_name=?,seller_commission_basis_points=?,seller_commission_override_cents=? where id=?`).bind(sellerId,sellerName,commissionBasisPoints,commissionOverrideCents,cargo.fleetFreightId));
     }
 
     const firstInstallment = sale.installments.find(
@@ -406,7 +407,7 @@ export async function PATCH(request: Request, context: RouteContext) {
             clientId: sale.clientId,
             operationalStatus: sale.operationalStatus,
             freightAmountCents: sale.freightAmountCents,
-            commissionBasisPoints: sale.commissionBasisPoints,
+            commissionBasisPoints: sale.commissionBasisPoints, commissionOverrideCents: sale.commissionOverrideCents,
             costCount: sale.costs.length,
           }),
           JSON.stringify({
@@ -415,7 +416,7 @@ export async function PATCH(request: Request, context: RouteContext) {
             clientId,
             operationalStatus,
             freightAmountCents,
-            commissionBasisPoints,
+            commissionBasisPoints, commissionOverrideCents,
             costCount: costs.length,
           }),
           request.headers.get("x-request-id") ?? crypto.randomUUID(),

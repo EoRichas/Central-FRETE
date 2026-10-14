@@ -2,6 +2,11 @@ export const PROOF_ACCEPT = ".pdf,.jpg,.jpeg,.png,.webp,.gif,.bmp,.tif,.tiff,.av
 export const PROOF_FORMATS = "PDF, JPG, PNG, WebP, GIF, BMP, TIFF, AVIF ou HEIC; até 10 MB.";
 export const PROOF_MIME_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp", "image/gif", "image/bmp", "image/tiff", "image/avif", "image/heic", "image/heif"] as const;
 
+export function automaticProofId(attachments: {id: string; mimeType: string}[]) {
+  const eligible = attachments.filter(a => isProofMimeType(a.mimeType));
+  return eligible.length === 1 ? eligible[0].id : null;
+}
+
 export function isProofMimeType(value: string) {
   return PROOF_MIME_TYPES.some((type) => type === value);
 }

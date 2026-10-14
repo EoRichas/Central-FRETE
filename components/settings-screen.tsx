@@ -153,7 +153,7 @@ export function SettingsScreen() {
               <option value="OPERACIONAL">Operacional</option>
             </select>
           </Field>
-          {newRole === "VENDEDOR" && <Field label="Comissão (%)"><input name="commissionPercent" inputMode="decimal" defaultValue="7" required /></Field>}
+          {["VENDEDOR", "OPERACIONAL"].includes(newRole) && <Field label="Comissão (%)"><input name="commissionPercent" inputMode="decimal" defaultValue="7" required /></Field>}
           <button className="button secondary" disabled={savingUser}>
             {savingUser ? "Adicionando…" : "Criar acesso"}
           </button>
@@ -247,7 +247,7 @@ export function SettingsScreen() {
                 <option value="OPERACIONAL">Operacional</option>
               </select>
             </Field>
-            {editRole === "VENDEDOR" && <Field label="Comissão (%)" hint="Vendas anteriores mantêm a taxa registrada."><input name="commissionPercent" inputMode="decimal" defaultValue={((editingUser.commissionBasisPoints ?? 700)/100).toFixed(2).replace(".",",")} required /></Field>}
+            {["VENDEDOR", "OPERACIONAL"].includes(editRole) && <Field label="Comissão (%)" hint="Vendas anteriores mantêm a taxa registrada."><input name="commissionPercent" inputMode="decimal" defaultValue={((editingUser.commissionBasisPoints ?? 700)/100).toFixed(2).replace(".",",")} required /></Field>}
             <Field label="Situação">
               <select name="active" defaultValue={editingUser.active ? "true" : "false"}>
                 <option value="true">Ativo</option>

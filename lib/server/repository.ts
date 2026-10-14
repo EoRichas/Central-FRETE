@@ -111,7 +111,7 @@ export async function listSales(
       s.operational_status as operationalStatus,
       s.legacy_operational_status as legacyOperationalStatus,
       s.notes, s.freight_amount_cents as freightAmountCents,
-      s.commission_basis_points as commissionBasisPoints,
+      s.commission_basis_points as commissionBasisPoints, s.commission_override_cents as commissionOverrideCents,
       s.costs_pending as costsPending, s.source_row as sourceRow
     from freight_sales s
     left join clients c on c.id = s.client_id
@@ -184,6 +184,7 @@ export async function listSales(
     const financial = calculateSaleFinancials({
       freightAmountCents: row.freightAmountCents,
       commissionBasisPoints: row.commissionBasisPoints,
+      commissionOverrideCents: row.commissionOverrideCents,
       expenseAmountsCents: saleCosts.map((cost) => cost.amountCents),
       transactions: payments.map((payment) => ({
         type: payment.type,

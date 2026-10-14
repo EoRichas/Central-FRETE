@@ -5,7 +5,7 @@ import { asObject } from "@/lib/server/validation";
 
 export async function POST(request: Request) {
   try {
-    const user = await authorize(request, ["ADMIN", "GERENCIA"]);
+    const user = await authorize(request, ["ADMIN", "GERENCIA", "FINANCEIRO"]);
     const data = parseFleetVehicleCostPayload(asObject(await request.json()));
     const vehicle = await queryFirst<{ id: string }>(
       "select id from fleet_vehicles where id = ?",
