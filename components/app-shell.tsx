@@ -35,6 +35,7 @@ const navigation: Array<{
   { href: "/financeiro", label: "Financeiro", icon: Icons.wallet, roles: ["ADMIN", "GERENCIA", "FINANCEIRO"] },
   { href: "/vendedores", label: "Comissões", icon: Icons.users, roles: ["ADMIN", "VENDEDOR"] },
   { href: "/vendas-gerais", label: "Vendas Geral", icon: Icons.chart, roles: ["ADMIN", "GERENCIA", "FINANCEIRO", "VENDEDOR"] },
+  { href: "/suporte", label: "Suporte", icon: Icons.support, roles: ["ADMIN", "GERENCIA", "VENDEDOR", "FINANCEIRO", "OPERACIONAL"] },
   { href: "/configuracoes", label: "Configurações", icon: Icons.settings, roles: ["ADMIN"] },
 ];
 
