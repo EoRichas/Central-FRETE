@@ -11,6 +11,7 @@ function IconBase({ children, ...props }: IconProps) {
 }
 
 export const Icons = {
+  support: (props: IconProps) => <IconBase {...props}><path d="M4 13v-2a8 8 0 0 1 16 0v6a4 4 0 0 1-4 4h-3"/><rect x="2" y="11" width="4" height="7" rx="2"/><rect x="18" y="11" width="4" height="7" rx="2"/></IconBase>,
   home: (props: IconProps) => <IconBase {...props}><path d="m3 11 9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/></IconBase>,
   truck: (props: IconProps) => <IconBase {...props}><path d="M3 6h11v11H3z"/><path d="M14 10h4l3 3v4h-7z"/><circle cx="7" cy="18" r="2"/><circle cx="18" cy="18" r="2"/></IconBase>,
   fleet: (props: IconProps) => <IconBase {...props}><path d="M4 6h11v9H4z"/><path d="M15 9h3l3 3v3h-6z"/><circle cx="7" cy="17" r="2"/><circle cx="18" cy="17" r="2"/><path d="M7 3h9"/></IconBase>,
