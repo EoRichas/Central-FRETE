@@ -344,3 +344,7 @@
     font-size: 26px;
   }
 }
+
+.directMessages { max-height:50vh; min-height:180px; overflow:auto; overscroll-behavior:contain; }
+.directList { padding-bottom:18px; border-bottom:1px solid var(--border,#dde3e1); margin-bottom:18px; }
+.directList h2 { font-size:1rem; margin-bottom:12px; }

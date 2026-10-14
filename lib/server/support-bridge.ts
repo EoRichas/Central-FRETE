@@ -46,10 +46,10 @@ export async function forwardSupport(
     throw new SupportError(503, "Suporte indisponível.");
   const route = segments.join("/");
   const read =
-    /^(?:me|tickets(?:\/[0-9a-f-]{36})?|attachments\/[0-9a-f-]{36})$/.test(
+    /^(?:me|chats(?:\/[0-9a-f-]{36})?|tickets(?:\/[0-9a-f-]{36})?|attachments\/[0-9a-f-]{36})$/.test(
       route,
     );
-  const write = /^tickets(?:\/[0-9a-f-]{36}\/(?:messages|attachments))?$/.test(
+  const write = /^(?:chats\/[0-9a-f-]{36}\/messages|tickets(?:\/[0-9a-f-]{36}\/(?:messages|attachments))?)$/.test(
     route,
   );
   if (
@@ -93,7 +93,7 @@ export async function forwardSupport(
   }
   const page = new URL(request.url).searchParams.get("page");
   const suffix =
-    route === "tickets" &&
+    ["tickets", "chats"].includes(route) &&
     request.method === "GET" &&
     page &&
     /^\d{1,5}$/.test(page)

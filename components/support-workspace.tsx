@@ -6,6 +6,7 @@ import {
   useState,
   type FormEvent,
 } from "react";
+import { DirectSupportChat } from "./direct-support-chat";
 import styles from "./support-workspace.module.css";
 
 type Ticket = {
@@ -64,6 +65,7 @@ async function api<T>(
   return data;
 }
 export function SupportWorkspace({ endpoint }: { endpoint: string }) {
+  const [chats,setChats]=useState<Array<{id:string;created_at:string}>>([]),[directSelected,setDirectSelected]=useState<string|null>(null);
   const [profile, setProfile] = useState<Profile | null>(null),
     [tickets, setTickets] = useState<Ticket[]>([]),
     [page, setPage] = useState(0),
@@ -84,7 +86,7 @@ export function SupportWorkspace({ endpoint }: { endpoint: string }) {
     const current = ++generation.current;
     activeRefreshes.current++;
     try {
-      const [p, list, d] = await Promise.all([
+      const [p, list, d, direct] = await Promise.all([
         api<Profile>(endpoint, "me"),
         api<{ tickets: Ticket[]; hasMore: boolean }>(
           endpoint,
@@ -96,8 +98,13 @@ export function SupportWorkspace({ endpoint }: { endpoint: string }) {
               throw error;
             })
           : Promise.resolve(null),
+        api<{chats:Array<{id:string;created_at:string}>}>(endpoint,"chats"),
       ]);
       if (current !== generation.current) return;
+      setChats(direct.chats);
+      if(directSelected && !direct.chats.some(c=>c.id===directSelected)) {
+        setDirectSelected(null);setNotice("O suporte encerrou o chat. A conversa e suas mensagens foram apagadas.");
+      } else if(!directSelected && !selected && !creating && direct.chats[0]) setDirectSelected(direct.chats[0].id);
       setProfile(p);
       setTickets(list.tickets);
       setMore(list.hasMore);
@@ -115,7 +122,7 @@ export function SupportWorkspace({ endpoint }: { endpoint: string }) {
       activeRefreshes.current--;
       if (current === generation.current) setLoading(false);
     }
-  }, [endpoint, page, selected]);
+  }, [endpoint, page, selected, directSelected, creating]);
   useEffect(() => {
     setLoading(true);
     void refresh();
@@ -129,6 +136,7 @@ export function SupportWorkspace({ endpoint }: { endpoint: string }) {
     };
   }, [refresh]);
   function open(id: string) {
+    setDirectSelected(null);
     setSelected(id);
     setDetail(null);
     setCreating(false);
@@ -231,7 +239,7 @@ export function SupportWorkspace({ endpoint }: { endpoint: string }) {
         <div>
           <span className={styles.eyebrow}>ATENDIMENTO</span>
           <h1>Como podemos ajudar?</h1>
-          <p>Abra um chamado e converse com o suporte sem sair do sistema.</p>
+          <p>Receba chats diretos ou solicite ajuda sem sair do sistema.</p>
         </div>
         <button
           type="button"
@@ -239,6 +247,7 @@ export function SupportWorkspace({ endpoint }: { endpoint: string }) {
           disabled={!profile || busy}
           onClick={() => {
             setCreating(true);
+            setDirectSelected(null);
             setSelected(null);
             setDetail(null);
             setNotice("");
@@ -262,6 +271,7 @@ export function SupportWorkspace({ endpoint }: { endpoint: string }) {
       )}
       <div className={styles.layout}>
         <aside className={styles.list}>
+          {chats.length>0&&<div className={styles.directList}><h2>Chat com o suporte</h2>{chats.map(c=><button key={c.id} type="button" className={styles.ticket} aria-pressed={directSelected===c.id} disabled={busy} onClick={()=>{setDirectSelected(c.id);setSelected(null);setDetail(null);setCreating(false);setNotice("");}}><strong>Conversa direta</strong><span>Sem chamado · conversa temporária</span></button>)}</div>}
           <div className={styles.listHeading}>
             <h2>Meus chamados</h2>
             <button
@@ -321,7 +331,7 @@ export function SupportWorkspace({ endpoint }: { endpoint: string }) {
           </div>
         </aside>
         <div className={styles.panel}>
-          {creating ? (
+          {directSelected ? <DirectSupportChat key={`${endpoint}:${directSelected}`} endpoint={endpoint} id={directSelected} onEnded={()=>{setChats(current=>current.filter(c=>c.id!==directSelected));setDirectSelected(null);setNotice("O suporte encerrou o chat. A conversa e suas mensagens foram apagadas.");}} /> : creating ? (
             <form onSubmit={create} className={styles.form}>
               <div>
                 <h2>Abrir chamado</h2>
