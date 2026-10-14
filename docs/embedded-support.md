@@ -16,7 +16,7 @@ As chamadas são assinadas com HMAC-SHA256, timestamp e nonce; nenhuma senha, co
 
 Arquivos PNG/JPEG/WebP/PDF até 5 MB são enviados pelo servidor e mantidos privados. O formulário orienta a ocultar dados sensíveis: imagens não recebem anonimização automática. Texto livre e anexos não são enviados à IA.
 
-O atendimento limita a repetição de requisições em memória e deve permanecer em uma instância até adotar armazenamento compartilhado para nonces e limites. A consulta automática de respostas ocorre a cada 30 segundos com a página visível. Hospedagens que suspendem por inatividade podem exigir nova tentativa na primeira chamada.
+O atendimento limita a repetição de requisições em memória e deve permanecer em uma instância até adotar armazenamento compartilhado para nonces e limites. A consulta automática de respostas ocorre a cada 5 segundos com a página visível. O ciclo automático aguarda uma atualização em andamento terminar antes de iniciar outra. Hospedagens que suspendem por inatividade podem exigir nova tentativa na primeira chamada.
 
 ## Validação e operação
 

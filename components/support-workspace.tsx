@@ -79,8 +79,10 @@ export function SupportWorkspace({ endpoint }: { endpoint: string }) {
   const createId = useRef(""),
     messageId = useRef("");
   const generation = useRef(0);
+  const activeRefreshes = useRef(0);
   const refresh = useCallback(async () => {
     const current = ++generation.current;
+    activeRefreshes.current++;
     try {
       const [p, list, d] = await Promise.all([
         api<Profile>(endpoint, "me"),
@@ -110,6 +112,7 @@ export function SupportWorkspace({ endpoint }: { endpoint: string }) {
       if (current === generation.current)
         setError(e instanceof Error ? e.message : "Suporte indisponível.");
     } finally {
+      activeRefreshes.current--;
       if (current === generation.current) setLoading(false);
     }
   }, [endpoint, page, selected]);
@@ -117,8 +120,9 @@ export function SupportWorkspace({ endpoint }: { endpoint: string }) {
     setLoading(true);
     void refresh();
     const timer = setInterval(() => {
-      if (document.visibilityState === "visible") void refresh();
-    }, 30000);
+      if (document.visibilityState === "visible" && activeRefreshes.current === 0)
+        void refresh();
+    }, 5000);
     return () => {
       generation.current++;
       clearInterval(timer);
