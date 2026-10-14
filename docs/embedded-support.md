@@ -21,3 +21,9 @@ O atendimento limita a repetição de requisições em memória e deve permanece
 ## Validação e operação
 
 Validar sessão ausente/expirada, CSRF, assinatura inválida, empresa incorreta, usuário diferente, repetição, abertura, resposta pública, nota interna, envio/download de evidências e falhas temporárias. As migrações dos sistemas de origem não são alteradas. Em rollback, retirar o menu/rotas de suporte e preservar os chamados no atendimento.
+
+## Chats iniciados pelo Sup
+
+O suporte pode escolher uma pessoa ativa da empresa e iniciar uma conversa direta. Ela aparece na seção Suporte sem número, prioridade ou formulário de chamado, com atualização a cada cinco segundos enquanto a aba está visível. Somente a equipe encerra: o Sup exclui a conversa e suas mensagens; a tela limpa o chat e seu rascunho na próxima atualização. Chamados existentes e novas solicitações dos usuários mantêm o fluxo anterior.
+
+O endpoint `support-directory` consulta apenas usuários ativos e exige HMAC de servidor, prazo e nonce. Retorna nome de exibição e referência opaca HMAC, sem e-mail, senha, token ou ID interno. Usa as mesmas variáveis `SUP_*_KEY` e `SUP_*_IDENTITY_KEY` da integração. O Sup precisa da origem HTTPS deste sistema em `SUP_SOURCE_ORIGINS_JSON`. Proteções de acesso do proxy permanecem aplicáveis.
