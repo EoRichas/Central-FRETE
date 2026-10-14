@@ -60,7 +60,7 @@ async function api<T>(
   });
   const data = await response.json();
   if (!response.ok)
-    throw new Error(data.error || "Não foi possível concluir a operação.");
+    throw Object.assign(new Error(data.error || "Não foi possível concluir a operação."), { status: response.status });
   return data;
 }
 export function SupportWorkspace({ endpoint }: { endpoint: string }) {
@@ -89,7 +89,10 @@ export function SupportWorkspace({ endpoint }: { endpoint: string }) {
           `tickets?page=${page}`,
         ),
         selected
-          ? api<Detail>(endpoint, `tickets/${selected}`)
+          ? api<Detail>(endpoint, `tickets/${selected}`).catch((error) => {
+              if (error.status === 404) return null;
+              throw error;
+            })
           : Promise.resolve(null),
       ]);
       if (current !== generation.current) return;
@@ -97,6 +100,11 @@ export function SupportWorkspace({ endpoint }: { endpoint: string }) {
       setTickets(list.tickets);
       setMore(list.hasMore);
       setDetail(d);
+      if (selected && !d) {
+        setSelected(null);
+        setMessage("");
+        setNotice("Este chamado não está mais disponível neste sistema. O histórico permanece com a equipe de suporte.");
+      }
       setError("");
     } catch (e) {
       if (current === generation.current)
