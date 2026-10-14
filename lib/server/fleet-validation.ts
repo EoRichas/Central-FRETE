@@ -2,7 +2,7 @@ import { ORIGIN_LOCATION_TYPES } from "@/lib/domain/operations";
 import { parseRegistryAddress, registryAddressText } from "@/lib/server/registry-validation";
 import { lower, upper, digits } from "@/lib/server/validation";
 import { effectiveFleetDistance } from "@/lib/domain/fleet-distance";
-import { parseCargoVehicles, nullableInteger } from "@/lib/server/cargo-validation";
+import { parseCargoVehicles, nullableInteger, boundedText } from "@/lib/server/cargo-validation";
 import { resultMoney } from "@/lib/server/fleet-results-validation";
 import {
   FLEET_OPERATIONAL_STATUSES,
@@ -69,6 +69,7 @@ export function parseFleetFreightPayload(payload: Record<string, unknown>) {
   catch (error) { throw new ApiError(400, error instanceof Error ? error.message : "Distância inválida."); }
   return {
     ...distance,
+    notes: boundedText(payload.notes, "Observações", 5000),
     cargoVehicles,
     fuelLitersMilli: nullableInteger(payload.fuelLitersMilli, "Litros abastecidos", 1_000_000_000),
     fuelPumpAmountCents: nullableInteger(payload.fuelPumpAmountCents, "Valor bomba", MAX_MONEY_CENTS),

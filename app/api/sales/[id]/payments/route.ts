@@ -1,3 +1,4 @@
+import { automaticProofId } from "@/lib/domain/proof-files";
 import { saleProof } from "@/lib/server/sale-proof";
 import { readPaymentProof } from "@/lib/server/payment-proof";
 import { authorize } from "@/lib/server/auth";
@@ -102,7 +103,7 @@ export async function POST(request: Request, context: RouteContext) {
 
     let proofName: string | null = null;
     let existingProofKey: string | null = null;
-    if (status === "CONFIRMADO" && !proof && !values.proofId) throw new ApiError(400, "Comprovante obrigatório para confirmar o pagamento.");
+    if (!proof && !values.proofId) values.proofId = automaticProofId(sale.attachments);
     if (!proof && values.proofId) { const existing = await saleProof(saleId, values.proofId); existingProofKey = existing.storageKey; proofName = existing.fileName; }
     if (proof) {
       const validated = await readPaymentProof(proof);

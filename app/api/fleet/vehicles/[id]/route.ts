@@ -8,7 +8,7 @@ type VehicleSnapshot = { id: string; plate: string; model: string | null; active
 
 export async function PATCH(request: Request, context: RouteContext) {
   try {
-    const user = await authorize(request, ["ADMIN", "GERENCIA"]);
+    const user = await authorize(request, ["ADMIN", "GERENCIA", "FINANCEIRO"]);
     const { id } = await context.params;
     const previous = await queryFirst<VehicleSnapshot>(
       "select id, plate, model, active from fleet_vehicles where id = ?",
@@ -51,7 +51,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
 export async function DELETE(request: Request, context: RouteContext) {
   try {
-    const user = await authorize(request, ["ADMIN", "GERENCIA"]);
+    const user = await authorize(request, ["ADMIN", "GERENCIA", "FINANCEIRO"]);
     const { id } = await context.params;
     const db = await getD1();
     const results = await db.batch([

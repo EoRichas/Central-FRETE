@@ -23,6 +23,7 @@ export type CostPaymentStatus = "NAO_APLICAVEL" | "EM_ABERTO" | "PAGO";
 export type SellerCommissionStatus = "EM_ABERTO" | "PAGO";
 
 export type SellerCommissionRecord = {
+  commissionOverrideCents?: number | null;
   saleId: string | null;
   saleNumber: string | null;
   saleDate: string | null;
@@ -127,6 +128,7 @@ export type SaleRecord = {
   notes: string | null;
   freightAmountCents: number;
   commissionBasisPoints: number;
+  commissionOverrideCents?: number | null;
   costsPending: boolean;
   sourceRow: number | null;
   costs: CostRecord[];

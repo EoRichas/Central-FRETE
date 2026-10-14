@@ -12,7 +12,7 @@ export async function GET(request: Request) {
     const params = new URL(request.url).searchParams;
     const competency = params.get("period") === "all" ? undefined : params.get("competency") || currentCompetency();
     if (competency && !isCompetency(competency)) throw new ApiError(400, "Competência inválida.");
-    const isManager = user.role === "ADMIN" || user.role === "GERENCIA";
+    const isManager = user.role === "ADMIN" || user.role === "GERENCIA" || user.role === "FINANCEIRO";
     const isOperational = user.role === "OPERACIONAL";
     const fleet = await loadFleetData(
       isManager,
@@ -23,7 +23,7 @@ export async function GET(request: Request) {
       user.role === "FINANCEIRO",
       {user},
     );
-    fleet.canDeleteFreights = user.role === "ADMIN";
+    fleet.canDeleteFreights = ["ADMIN", "FINANCEIRO"].includes(user.role);
     return Response.json({ fleet: {...fleet,
       freights: fleet.freights.map(f => freightForViewer(f,user)),
       billing: {...fleet.billing,freights: fleet.billing.freights.map(f => freightForViewer(f,user)),drivers: fleet.billing.drivers.map(d => ({...d,freights:d.freights.map(f=>freightForViewer(f,user))}))},

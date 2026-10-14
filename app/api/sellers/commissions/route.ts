@@ -31,6 +31,7 @@ type CommissionAggregateRow = {
   salesCount: number;
   totalSalesCents: number;
   commissionBasisPoints: number;
+  commissionOverrideCents: number | null;
   status: SellerCommissionStatus | null;
   paidAt: string | null;
   paidByName: string | null;
@@ -87,9 +88,11 @@ function toCommissionRecord(
     salesCount: Number(row.salesCount),
     totalSalesCents,
     commissionBasisPoints: Number(row.commissionBasisPoints),
+    commissionOverrideCents: row.commissionOverrideCents,
     commissionCents: commissionCents(
       totalSalesCents,
       Number(row.commissionBasisPoints),
+      row.commissionOverrideCents == null ? null : Number(row.commissionOverrideCents),
     ),
     status: row.status ?? "EM_ABERTO",
     paidAt: row.paidAt,
@@ -99,30 +102,30 @@ function toCommissionRecord(
 
 export async function GET(request: Request) {
   try {
-    const user = await authorize(request, ["ADMIN", "VENDEDOR"]);
+    const user = await authorize(request, ["ADMIN", "VENDEDOR", "OPERACIONAL"]);
     const url = new URL(request.url);
     const competency = validateCompetency(
       url.searchParams.get("competency") ?? currentCompetency(),
     );
     const sellerScope =
-      user.role === "VENDEDOR"
+      ["VENDEDOR", "OPERACIONAL"].includes(user.role)
         ? "and s.seller_id = ?"
         : "";
     const params: unknown[] = [competency, competency];
-    if (user.role === "VENDEDOR") params.push(user.id);
+    if (["VENDEDOR", "OPERACIONAL"].includes(user.role)) params.push(user.id);
 
     const [rows, sellerUsers, sellerProfiles] = await Promise.all([
       queryAll<CommissionAggregateRow>(
         `select s.id as saleId, s.sale_number as saleNumber, s.sale_date as saleDate,
           coalesce(c.legal_name,s.fleet_client_name) as clientName, s.seller_id as sellerId, upper(s.seller_name) as sellerName,
           1 as salesCount, s.freight_amount_cents as totalSalesCents,
-          s.commission_basis_points as commissionBasisPoints,
+          s.commission_basis_points as commissionBasisPoints, s.commission_override_cents as commissionOverrideCents,
           cs.status, cs.paid_at as paidAt, u.name as paidByName
          from (
-           select id,sale_number,sale_date,client_id,null::text as fleet_client_name,seller_id,seller_name,freight_amount_cents,commission_basis_points,competency
+           select id,sale_number,sale_date,client_id,null::text as fleet_client_name,seller_id,seller_name,freight_amount_cents,commission_basis_points,commission_override_cents,competency
            from freight_sales where not (sale_channel='FROTA' and fleet_freight_id is not null)
            union all
-           select id,sale_number,pickup_date,null,client_name,seller_id,seller_name,freight_amount_cents,seller_commission_basis_points,left(pickup_date,7)
+           select id,sale_number,pickup_date,null,client_name,seller_id,seller_name,freight_amount_cents,seller_commission_basis_points,seller_commission_override_cents,left(pickup_date,7)
            from fleet_freights where seller_name is not null
          ) s
          left join clients c on c.id = s.client_id
@@ -135,7 +138,7 @@ export async function GET(request: Request) {
       ),
       queryAll<SellerUserRow>(
         `select id, name, pix_details as pixDetails
-         from users where role = 'VENDEDOR'`,
+         from users where role in ('VENDEDOR','OPERACIONAL')`,
       ),
       queryAll<SellerPaymentProfileRow>(
         `select seller_name as sellerName, pix_details as pixDetails
@@ -239,7 +242,7 @@ export async function PATCH(request: Request) {
       );
       if (!sellerUser) {
         sellerUser = await queryFirst<{ id: string }>(
-          `select id from users where role = 'VENDEDOR' and upper(name) = ? limit 1`,
+          `select id from users where role in ('VENDEDOR','OPERACIONAL') and upper(name) = ? limit 1`,
           [sellerName],
         );
       }

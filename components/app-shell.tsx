@@ -33,7 +33,7 @@ const navigation: Array<{
   { href: "/prestadores", label: "Prestadores", icon: Icons.briefcase, roles: ["ADMIN", "GERENCIA", "VENDEDOR", "OPERACIONAL"] },
   { href: "/frota", label: "Frota", icon: Icons.fleet, roles: ["ADMIN", "GERENCIA", "FINANCEIRO", "OPERACIONAL", "VENDEDOR"] },
   { href: "/financeiro", label: "Financeiro", icon: Icons.wallet, roles: ["ADMIN", "GERENCIA", "FINANCEIRO"] },
-  { href: "/vendedores", label: "Comissões", icon: Icons.users, roles: ["ADMIN", "VENDEDOR"] },
+  { href: "/vendedores", label: "Comissões", icon: Icons.users, roles: ["ADMIN", "VENDEDOR", "OPERACIONAL"] },
   { href: "/vendas-gerais", label: "Vendas Geral", icon: Icons.chart, roles: ["ADMIN", "GERENCIA", "FINANCEIRO", "VENDEDOR"] },
   { href: "/suporte", label: "Suporte", icon: Icons.support, roles: ["ADMIN", "GERENCIA", "VENDEDOR", "FINANCEIRO", "OPERACIONAL"] },
   { href: "/configuracoes", label: "Configurações", icon: Icons.settings, roles: ["ADMIN"] },
@@ -41,7 +41,7 @@ const navigation: Array<{
 
 function canAccessPath(pathname: string, role: Role) {
   if (pathname.startsWith("/vendas/fechamento") && !["ADMIN","GERENCIA","FINANCEIRO"].includes(role)) return false;
-  if (role !== "ADMIN" && /^\/vendas\/[^/]+\/editar\/?$/.test(pathname)) {
+  if (!["ADMIN", "FINANCEIRO"].includes(role) && /^\/vendas\/[^/]+\/editar\/?$/.test(pathname)) {
     return false;
   }
   if (pathname === "/frota/vendas/nova" && !roleCan(role, "CREATE_FLEET_SALE")) return false;

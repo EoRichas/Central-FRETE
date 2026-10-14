@@ -180,7 +180,7 @@ export function SellersScreen({
                       <td data-label="Data">{item.saleDate ? formatDate(item.saleDate) : "—"}</td>
                       <td data-label="Cliente">{item.clientName ?? "—"}</td>
                       <td data-label="Valor da venda"><strong>{formatMoney(item.totalSalesCents)}</strong></td>
-                      <td data-label="Percentual"><strong>{formatPercent(item.commissionBasisPoints)}</strong></td>
+                      <td data-label="Percentual"><strong>{item.commissionOverrideCents != null ? "Valor combinado" : formatPercent(item.commissionBasisPoints)}</strong></td>
                       <td data-label="Comissão"><strong>{formatMoney(item.commissionCents)}</strong></td>
                       <td data-label="PIX">{item.pixDetails ?? "—"}</td>
                       <td data-label="Situação"><StatusBadge status={item.status} /></td>

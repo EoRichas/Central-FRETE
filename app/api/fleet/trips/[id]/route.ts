@@ -6,7 +6,7 @@ import { asObject } from '@/lib/server/validation';
 type Context = { params: Promise<{ id: string }> };
 export async function PATCH(request: Request, context: Context) {
   try {
-    const user = await authorize(request, ['ADMIN', 'GERENCIA']);
+    const user = await authorize(request, ['ADMIN', 'GERENCIA', 'FINANCEIRO']);
     const { id } = await context.params;
     const data = parseTrip(asObject(await request.json()));
     await resolveFleetReferences(data.vehicleId, data.driverId);
@@ -25,7 +25,7 @@ export async function PATCH(request: Request, context: Context) {
 }
 export async function DELETE(request: Request, context: Context) {
   try {
-    const user = await authorize(request, ['ADMIN', 'GERENCIA']);
+    const user = await authorize(request, ['ADMIN', 'GERENCIA', 'FINANCEIRO']);
     const { id } = await context.params;
     const db = await getD1();
     const result = await db.batch([

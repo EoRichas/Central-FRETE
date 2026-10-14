@@ -12,7 +12,7 @@ type SettingsSnapshot = {
 
 export async function PUT(request: Request) {
   try {
-    const user = await authorize(request, ["ADMIN", "GERENCIA"]);
+    const user = await authorize(request, ["ADMIN", "GERENCIA", "FINANCEIRO"]);
     const data = parseFleetSettingsPayload(asObject(await request.json()));
     const previous = await queryFirst<SettingsSnapshot>(
       `select fuel_price_cents as fuelPriceCents,

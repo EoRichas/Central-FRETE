@@ -1,4 +1,4 @@
-import { resolveSaleSeller } from "@/lib/server/seller-commission";
+import { resolveSaleSeller, saleCommissionOverride } from "@/lib/server/seller-commission";
 import { resolveFreightClient } from "@/lib/server/registry-validation";
 import { authorize } from "@/lib/server/auth";
 import { ApiError, getD1, jsonError, queryAll } from "@/lib/server/d1";
@@ -8,7 +8,7 @@ import { asObject } from "@/lib/server/validation";
 
 export async function POST(request: Request) {
   try {
-    const user = await authorize(request, ["ADMIN", "GERENCIA", "VENDEDOR", "OPERACIONAL"]);
+    const user = await authorize(request, ["ADMIN", "GERENCIA", "FINANCEIRO", "VENDEDOR", "OPERACIONAL"]);
     const payload = asObject(await request.json());
     if (payload.saleNumber != null) throw new ApiError(400, "O número da venda é gerado automaticamente.");
     if ((user.role === "VENDEDOR" || user.role === "OPERACIONAL") && payload.tripId) throw new ApiError(403, "Seu perfil não pode vincular viagens administrativas.");
@@ -18,9 +18,10 @@ export async function POST(request: Request) {
       data.vehicleId,
       data.driverId,
     );
-    const seller = user.role === 'ADMIN' && !payload.sellerId && !payload.sellerName
+    const seller = ['ADMIN','FINANCEIRO'].includes(user.role) && !payload.sellerId && !payload.sellerName
       ? {id: null, name: null, commissionBasisPoints: 0}
       : await resolveSaleSeller(user, payload);
+    const commissionOverrideCents = saleCommissionOverride(user, payload.sellerCommissionOverrideCents, null, seller.id);
     const id = crypto.randomUUID();
     const db = await getD1();
     await db.batch([
@@ -64,6 +65,7 @@ export async function POST(request: Request) {
           data.routeDistanceMeters, data.odometerStartMeters, data.odometerEndMeters,
           data.insuranceCostCents, data.invoiceCostCents, data.icmsCostCents, data.cteMdfeCostCents,
         ),
+      db.prepare("update fleet_freights set notes=?,seller_commission_override_cents=? where id=?").bind(data.notes,commissionOverrideCents,id),
       db
         .prepare(
           `insert into audit_logs (
@@ -77,7 +79,7 @@ export async function POST(request: Request) {
           user.id,
           user.email,
           JSON.stringify({
-            ...data, sellerId: seller.id, sellerName: seller.name, sellerCommissionBasisPoints: seller.commissionBasisPoints,
+            ...data, sellerCommissionOverrideCents: commissionOverrideCents, sellerId: seller.id, sellerName: seller.name, sellerCommissionBasisPoints: seller.commissionBasisPoints,
             vehiclePlate: vehicle.plate,
             driverName: driver.name,
           }),

@@ -24,7 +24,7 @@ import {
   moneyInputToCents,
 } from "@/lib/format";
 import { ProofUpload, UploadButton } from "@/components/proof-upload";
-import { isProofMimeType } from "@/lib/domain/proof-files";
+import { isProofMimeType, automaticProofId } from "@/lib/domain/proof-files";
 import { Icons } from "@/components/icons";
 import {
   ErrorState,
@@ -78,7 +78,7 @@ export function SaleDetailScreen({ id }: { id: string }) {
   const canManagePayments = canManageProviders;
   const canManageOperationCosts = canManageProviders;
   const canDeletePayment = user?.role === "ADMIN" || user?.role === "FINANCEIRO";
-  const canEditSale = user?.role === "ADMIN";
+  const canEditSale = user?.role === "ADMIN" || user?.role === "FINANCEIRO";
   const canAttach =
     user?.role === "ADMIN" || user?.role === "FINANCEIRO" || user?.role === "VENDEDOR" || user?.role === "OPERACIONAL";
 
@@ -314,8 +314,8 @@ export function SaleDetailScreen({ id }: { id: string }) {
           <header><div><span className="eyebrow">Resultado</span><h2>Composição financeira</h2></div></header>
           <div className="money-breakdown">
             <div><span>Valor do frete</span><strong>{formatMoney(sale.freightAmountCents)}</strong></div>
-            {(user?.role === "ADMIN" || user?.role === "VENDEDOR") && <div><span>Comissão ({formatPercent(sale.commissionBasisPoints)})</span><strong>− {formatMoney(sale.financial.commissionCents)}</strong></div>}
-            <div><span>{user?.role === "ADMIN" || user?.role === "VENDEDOR" ? "Demais despesas" : "Custos totais"}</span><strong>− {formatMoney(sale.financial.transportCostCents - (sale.financial.commissionCents ?? 0))}</strong></div>
+            {(user?.role === "ADMIN" || user?.role === "VENDEDOR" || (user?.role === "OPERACIONAL" && sale.sellerId === user.id)) && <div><span>Comissão {sale.commissionOverrideCents != null ? "combinada" : `(${formatPercent(sale.commissionBasisPoints)})`}</span><strong>− {formatMoney(sale.financial.commissionCents)}</strong></div>}
+            <div><span>{user?.role === "ADMIN" || user?.role === "VENDEDOR" || (user?.role === "OPERACIONAL" && sale.sellerId === user.id) ? "Demais despesas" : "Custos totais"}</span><strong>− {formatMoney(sale.financial.transportCostCents - (sale.financial.commissionCents ?? 0))}</strong></div>
             <div className="total"><span>Margem da Central</span><strong>{formatMoney(sale.financial.marginCents)}</strong></div>
           </div>
         </article>
@@ -419,8 +419,8 @@ export function SaleDetailScreen({ id }: { id: string }) {
             <Field label="Forma de pagamento"><select name="paymentMethod" defaultValue="PIX"><option value="BOLETO">Boleto</option><option value="DINHEIRO">Dinheiro</option><option value="CREDITO">Crédito</option><option value="DEBITO">Débito</option><option value="PIX">PIX</option><option value="FATURADO">Faturado</option></select></Field>
           </div>
           <Field label="Observação"><textarea name="notes" rows={3} /></Field>
-          <ProofUpload name="proof" disabled={saving} />
-          <Field label="Comprovante já anexado" hint="Use um comprovante enviado na seção Anexos desta venda."><select name="proofId"><option value="">Selecione</option>{sale.attachments.filter(a => isProofMimeType(a.mimeType)).map(a => <option key={a.id} value={a.id}>{a.fileName}</option>)}</select></Field>
+          <ProofUpload name="proof" label="Enviar outro comprovante (opcional)" disabled={saving} />
+          <Field label="Comprovante já anexado" hint="Opcional. Quando houver um único comprovante anexado, ele será reutilizado automaticamente."><select name="proofId" defaultValue={automaticProofId(sale.attachments) ?? ""}><option value="">Sem seleção</option>{sale.attachments.filter(a => isProofMimeType(a.mimeType)).map(a => <option key={a.id} value={a.id}>{a.fileName}</option>)}</select></Field>
           {error && <p className="form-error" role="alert">{error}</p>}
           <footer className="modal-actions"><button type="button" className="button secondary" onClick={() => setPaymentOpen(false)}>Cancelar</button><button className="button primary" disabled={saving}>{saving ? "Registrando…" : "Registrar"}</button></footer>
         </form>

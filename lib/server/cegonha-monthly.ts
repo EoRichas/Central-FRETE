@@ -7,7 +7,7 @@ select jsonb_build_object('scope','CEGONHA','dateBasis','SALE_DATE','competency'
  'sales',coalesce((select jsonb_agg(jsonb_build_object(
    'id',s.id,'saleNumber',s.sale_number,'saleChannel',s.sale_channel,'client',c.legal_name,'date',s.sale_date,
    'revenueCents',s.freight_amount_cents,
-   'costCents',round(s.freight_amount_cents::numeric*s.commission_basis_points/10000)::bigint + coalesce((select sum(fc.amount_cents) from freight_costs fc where fc.sale_id=s.id),0),
+   'costCents',coalesce(s.commission_override_cents,round(s.freight_amount_cents::numeric*s.commission_basis_points/10000)::bigint) + coalesce((select sum(fc.amount_cents) from freight_costs fc where fc.sale_id=s.id),0),
    'costsPending',s.costs_pending=1) order by s.sale_date,s.id)
    from freight_sales s left join clients c on c.id=s.client_id where s.competency=m.competency and s.sale_channel='CEGONHA'),'[]'::jsonb),
  'freights','[]'::jsonb,'trips','[]'::jsonb,

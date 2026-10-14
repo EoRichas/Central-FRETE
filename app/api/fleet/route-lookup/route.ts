@@ -48,7 +48,7 @@ export async function GET(request: Request) {
 }
 export async function POST(request: Request) {
   try {
-    await authorize(request, ["ADMIN", "GERENCIA", "OPERACIONAL", "VENDEDOR"]);
+    await authorize(request, ["ADMIN", "GERENCIA", "FINANCEIRO", "OPERACIONAL", "VENDEDOR"]);
     const data = asObject(await request.json());
     const [origin, destination] =
       data.originCep || data.destinationCep

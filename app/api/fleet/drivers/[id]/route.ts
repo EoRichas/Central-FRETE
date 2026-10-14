@@ -8,7 +8,7 @@ type DriverSnapshot = { id: string; name: string; active: number; address:string
 
 export async function PATCH(request: Request, context: RouteContext) {
   try {
-    const user = await authorize(request, ["ADMIN", "GERENCIA"]);
+    const user = await authorize(request, ["ADMIN", "GERENCIA", "FINANCEIRO"]);
     const { id } = await context.params;
     const previous = await queryFirst<DriverSnapshot>(
       "select id, name, active, cpf, phone, address, address_details as addressDetails, email, whatsapp, notes from fleet_drivers where id = ?",
@@ -50,7 +50,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
 export async function DELETE(request: Request, context: RouteContext) {
   try {
-    const user = await authorize(request, ["ADMIN", "GERENCIA"]);
+    const user = await authorize(request, ["ADMIN", "GERENCIA", "FINANCEIRO"]);
     const { id } = await context.params;
     const db = await getD1();
     // Lock references against concurrent inserts until the transaction completes.
