@@ -17,7 +17,8 @@ Todas as tabelas operacionais possuem Row Level Security.
 
 | Variável | Obrigatória | Valor |
 | --- | --- | --- |
-| `DATABASE_URL` | Sim | URI **Session Pooler** do Supabase, porta `5432`. |
+| `DATABASE_URL` | Sim | URI do Supabase: **Session Pooler** (`5432`) no Render; **Transaction Pooler** (`6543`) na Vercel. |
+| `DATABASE_MIGRATION_URL` | Para migrações com Transaction Pooler | URI **Session Pooler** (`5432`) ou direta, usada apenas pelo comando de migração. |
 | `CENTRAL_FRETE_SESSION_SECRET` | Sim | Valor aleatório com pelo menos 32 caracteres. |
 | `SUPABASE_URL` | Para anexos | URL pública do projeto, como `https://SEU_PROJECT_REF.supabase.co`. |
 | `SUPABASE_SERVICE_ROLE_KEY` | Para anexos | Chave `service_role`, configurada somente no servidor. |
@@ -44,6 +45,23 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 Não publique a senha do banco ou a chave `service_role` no GitHub.
 Planilhas, vendedores, placas e valores operacionais também não são incluídos
 no repositório público; cadastre esses dados diretamente no sistema.
+
+## Publicar na Vercel
+
+Use o **Transaction pooler** do Supabase (porta `6543`) para as funções serverless.
+Com `VERCEL=1`, o driver também adapta automaticamente uma URI antiga do pooler
+compartilhado (`*.pooler.supabase.com:5432`) para a porta `6543`, mantendo host,
+credenciais, banco e parâmetros. Conexões diretas e hosts/portas personalizados
+não são reescritos.
+
+Cada instância utiliza no máximo uma conexão, libera conexões ociosas após cinco
+segundos e mantém prepared statements desativados. Isso evita reservar as 15
+conexões do Session Pooler entre as instâncias e interromper a validação de sessão.
+
+A adaptação ocorre somente no driver da aplicação. O comando `npm run migrate`
+continua usando `DATABASE_MIGRATION_URL` (ou `DATABASE_URL` quando ela ainda aponta
+para Session Pooler). Migrações usam locks de sessão e não devem usar Transaction
+Pooler. Referência: [conexões Supabase](https://supabase.com/docs/guides/database/connecting-to-postgres).
 
 ## Publicar no Render
 

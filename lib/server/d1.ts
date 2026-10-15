@@ -1,5 +1,6 @@
 import postgres from "postgres";
 import { normalizeDatabaseValue, toPostgresSql } from "./postgres-sql.ts";
+import { postgresRuntimeConfig } from "./postgres-config.ts";
 
 export class ApiError extends Error {
   constructor(
@@ -37,7 +38,7 @@ function databaseUrl() {
   if (!url) {
     throw new ApiError(
       503,
-      "Banco de dados indisponível. Configure DATABASE_URL com a conexão Session Pooler do Supabase.",
+      "Banco de dados indisponível. Configure DATABASE_URL com a conexão do Supabase.",
     );
   }
   return url;
@@ -45,12 +46,9 @@ function databaseUrl() {
 
 function getClient() {
   if (!client) {
-    client = postgres(databaseUrl(), {
-      max: 5,
-      idle_timeout: 20,
-      connect_timeout: 10,
-      prepare: false,
-      ssl: "require",
+    const config = postgresRuntimeConfig(databaseUrl(), process.env.VERCEL === "1");
+    client = postgres(config.url, {
+      ...config.options,
       types: { bigint: postgres.BigInt },
     });
   }
