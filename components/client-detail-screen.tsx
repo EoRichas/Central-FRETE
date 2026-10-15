@@ -167,10 +167,21 @@ export function ClientDetailScreen({ id }: { id: string }) {
             <p>{formatDocument(client.cpfCnpj)}</p>
           </div>
           <dl>
-            <div><dt>Responsável</dt><dd>{contact?.name ?? "—"}</dd></div>
-            <div><dt>E-mail</dt><dd>{contact?.email ?? "—"}</dd></div>
-            <div><dt>Telefone</dt><dd>{contact?.phone ?? "—"}</dd></div>
-            <div><dt>WhatsApp</dt><dd>{contact?.whatsapp ?? "—"}</dd></div>
+            <div><dt>Tipo</dt><dd>{client.type === "PF" ? "Pessoa física" : "Pessoa jurídica"}</dd></div>
+            <div><dt>Nome fantasia</dt><dd>{client.tradeName || "—"}</dd></div>
+            <div><dt>Inscrição estadual</dt><dd>{client.stateRegistration || "—"}</dd></div>
+            <div><dt>Canal de atendimento</dt><dd>{{ FROTA: "Frota", CEGONHA: "Cegonha", AMBOS: "Ambos" }[client.saleChannel]}</dd></div>
+          </dl>
+          {client.contacts.length ? client.contacts.map((item) => (
+            <dl key={item.id}>
+              <div><dt>{item.isPrimary ? "Responsável / contato principal" : "Responsável / contato adicional"}</dt><dd>{item.name || "—"}</dd></div>
+              <div><dt>E-mail</dt><dd>{item.email || "—"}</dd></div>
+              <div><dt>Telefone</dt><dd>{item.phone || "—"}</dd></div>
+              <div><dt>WhatsApp</dt><dd>{item.whatsapp || "—"}</dd></div>
+            </dl>
+          )) : <dl><div><dt>Contatos</dt><dd>Nenhum contato cadastrado.</dd></div></dl>}
+          <dl>
+            <div style={{ gridColumn: "1 / -1" }}><dt>Observações</dt><dd style={{ whiteSpace: "pre-wrap" }}>{client.notes || "—"}</dd></div>
           </dl>
         </article>
         <article className="client-metrics">
@@ -195,8 +206,17 @@ export function ClientDetailScreen({ id }: { id: string }) {
                 <article className="address-card" key={address.id}>
                   <div><StatusBadge status={address.type} />{address.isPrimary && <span className="primary-tag">PRINCIPAL</span>}</div>
                   <h3>{address.label ?? address.type}</h3>
-                  <p>{full}</p>
-                  <small>{address.contactName ?? contact?.name ?? "SEM CONTATO"}{address.phone ? ` · ${address.phone}` : ""}</small>
+                  <dl className="details-list">
+                    <div><dt>CEP</dt><dd>{address.cep || "—"}</dd></div>
+                    <div><dt>Logradouro</dt><dd>{address.street || "—"}</dd></div>
+                    <div><dt>Número</dt><dd>{address.number || "—"}</dd></div>
+                    <div><dt>Complemento</dt><dd>{address.complement || "—"}</dd></div>
+                    <div><dt>Bairro</dt><dd>{address.district || "—"}</dd></div>
+                    <div><dt>Cidade</dt><dd>{address.city || "—"}</dd></div>
+                    <div><dt>UF</dt><dd>{address.state || "—"}</dd></div>
+                    <div><dt>Contato no local</dt><dd>{address.contactName || contact?.name || "—"}</dd></div>
+                    <div><dt>Telefone do local</dt><dd>{address.phone || "—"}</dd></div>
+                  </dl>
                   <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(full)}`} target="_blank" rel="noreferrer"><Icons.map /> Exibir no mapa</a>
                 </article>
               );
