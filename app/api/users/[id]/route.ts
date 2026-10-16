@@ -43,7 +43,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       pixDetails: string | null;
     }>(
       `select id, email, phone, username, name, role, active, commission_basis_points as commissionBasisPoints, pix_details as pixDetails
-       from users where id = ?`,
+       from users where id = ? and deleted_at is null`,
       [id],
     );
     if (!previous) throw new ApiError(404, "Usuário não encontrado.");
@@ -85,7 +85,7 @@ export async function PATCH(request: Request, context: RouteContext) {
             `update users set email = ?, phone = ?, username = ?, name = ?, role = ?, active = ?,
               pix_details = ?, commission_basis_points = ?, password_salt = ?, password_hash = ?,
               updated_at = to_char(timezone('UTC', now()), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
-             where id = ?`,
+             where id = ? and deleted_at is null returning id`,
           )
           .bind(
             email,
@@ -104,18 +104,19 @@ export async function PATCH(request: Request, context: RouteContext) {
           .prepare(
             `update users set email = ?, phone = ?, username = ?, name = ?, role = ?, active = ?,
               pix_details = ?, commission_basis_points = ?, updated_at = to_char(timezone('UTC', now()), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
-             where id = ?`,
+             where id = ? and deleted_at is null returning id`,
           )
           .bind(email, phone, username, name, role, active ? 1 : 0, pixDetails, commissionBasisPoints, id);
 
-    await db.batch([
+    const results = await db.batch([
       update,
       db
         .prepare(
           `insert into audit_logs (
             id, entity_type, entity_id, action, actor_user_id, actor_email,
             previous_value, new_value, request_id
-          ) values (?, 'USER', ?, 'UPDATED', ?, ?, ?, ?, ?)`,
+          ) select ?, 'USER', ?, 'UPDATED', ?, ?, ?, ?, ?
+          where exists (select 1 from users where id = ? and deleted_at is null)`,
         )
         .bind(
           crypto.randomUUID(),
@@ -135,8 +136,10 @@ export async function PATCH(request: Request, context: RouteContext) {
             passwordChanged: Boolean(credential),
           }),
           request.headers.get("x-request-id") ?? crypto.randomUUID(),
+          id,
         ),
     ]);
+    if (!results[0].results.length) throw new ApiError(404, "Usuário não encontrado.");
     return Response.json({ id, updated: true });
   } catch (error) {
     if (error instanceof Error && error.message.includes("UNIQUE constraint")) {
@@ -168,30 +171,37 @@ export async function DELETE(request: Request, context: RouteContext) {
       pixDetails: string | null;
     }>(
       `select id, email, phone, username, name, role, active, commission_basis_points as commissionBasisPoints, pix_details as pixDetails
-       from users where id = ?`,
+       from users where id = ? and deleted_at is null`,
       [id],
     );
     if (!previous) throw new ApiError(404, "Usuário não encontrado.");
 
     const db = await getD1();
-    await db.batch([
-      db
-        .prepare(
-          `insert into audit_logs (
-            id, entity_type, entity_id, action, actor_user_id, actor_email,
-            previous_value, request_id
-          ) values (?, 'USER', ?, 'ACCESS_DELETED', ?, ?, ?, ?)`,
-        )
+    // Keep the same identity for every historical FK. Only credentials and access
+    // are removed; a future account using this login receives a different ID.
+    const results = await db.batch([
+      db.prepare(`with removed as (
+        update users set deleted_at = now(), active = 0, username = null,
+          email = ?, password_salt = null, password_hash = null,
+          security_version = security_version + 1,
+          updated_at = to_char(timezone('UTC', now()), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+        where id = ? and deleted_at is null returning id
+      ) insert into audit_logs (
+        id, entity_type, entity_id, action, actor_user_id, actor_email,
+        previous_value, request_id
+      ) select ?, 'USER', id, 'ACCESS_DELETED', ?, ?, ?, ? from removed returning entity_id`)
         .bind(
-          crypto.randomUUID(),
+          `deleted.${crypto.randomUUID()}@centralfrete.invalid`,
           id,
+          crypto.randomUUID(),
           actor.id,
           actor.email,
           JSON.stringify({ ...previous, active: Boolean(previous.active) }),
           request.headers.get("x-request-id") ?? crypto.randomUUID(),
         ),
-      db.prepare("delete from users where id = ?").bind(id),
+      db.prepare("update auth_sessions set revoked_at = coalesce(revoked_at, now()) where user_id = ?").bind(id),
     ]);
+    if (!results[0].results.length) throw new ApiError(404, "Usuário não encontrado.");
     return Response.json({ id, deleted: true });
   } catch (error) {
     return jsonError(error);

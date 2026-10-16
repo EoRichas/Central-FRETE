@@ -37,7 +37,7 @@ export async function GET(request: Request) {
     }>(
       `select id, name, email, phone, username, pix_details as pixDetails, commission_basis_points as commissionBasisPoints, role, active,
         case when password_hash is not null and password_salt is not null then 1 else 0 end as hasPassword
-       from users order by active desc, name`,
+       from users where deleted_at is null order by active desc, name`,
     );
     return Response.json({
       users: users.map((user) => ({
