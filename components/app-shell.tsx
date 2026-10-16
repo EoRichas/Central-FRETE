@@ -200,7 +200,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
         <main className="page-content">
-          {!userLoaded ? <TruckLoader label="Carregando sessão…" /> : !user ? <section className="panel"><p>Não foi possível verificar sua sessão. Atualize a página.</p></section> : !allowed ? (
+          {!userLoaded ? <TruckLoader label="Carregando sessão…" /> : !user ? <section className="panel"><p role="alert">Não foi possível verificar sua sessão.</p><button className="button primary" onClick={() => { setUserLoaded(false); setSessionRevision(value => value + 1); }}>Tentar novamente</button></section> : !allowed ? (
             <section className="panel">
               <span className="eyebrow">Acesso restrito</span>
               <h2>Seu perfil não permite abrir esta tela.</h2>

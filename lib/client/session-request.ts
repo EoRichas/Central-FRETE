@@ -2,6 +2,8 @@
 let pending: Promise<Response> | null = null;
 
 export function fetchSession(): Promise<Response> {
-  pending ??= fetch('/api/me', {cache: 'no-store'}).finally(() => { pending = null; });
+  pending ??= fetchRead('/api/me').finally(() => { pending = null; });
   return pending.then(response => response.clone());
 }
+import { fetchRead } from "./read-request.ts";
+

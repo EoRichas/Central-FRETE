@@ -17,7 +17,7 @@ test("Vercel usa Transaction Pooler sem alterar credenciais, banco ou parâmetro
   const sql = postgres(config.url, config.options);
   try {
     assert.deepEqual(sql.options.port, [6543]);
-    assert.equal(sql.options.max, 1);
+    assert.equal(sql.options.max, 3);
     assert.equal(sql.options.idle_timeout, 5);
     assert.equal(sql.options.prepare, false);
     assert.equal(sql.options.ssl, "require");

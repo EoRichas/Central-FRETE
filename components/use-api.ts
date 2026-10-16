@@ -2,6 +2,7 @@
 
 import { CurrentUserContext } from "@/components/current-user-context";
 import { fetchSession } from "@/lib/client/session-request";
+import { fetchRead } from "@/lib/client/read-request";
 import { useCallback, useContext, useEffect, useState } from "react";
 
 export function useApi<T>(url: string | null) {
@@ -28,7 +29,7 @@ export function useApi<T>(url: string | null) {
         setError(null);
       }
     });
-    (url === "/api/me" ? fetchSession() : fetch(url, { cache: "no-store", signal: controller.signal }))
+    (url === "/api/me" ? fetchSession() : fetchRead(url, controller.signal))
       .then(async (response) => {
         const payload = (await response.json()) as T & { error?: string };
         if (!response.ok) throw new Error(payload.error || "Erro ao carregar.");

@@ -1,6 +1,7 @@
 import postgres from "postgres";
 import { normalizeDatabaseValue, toPostgresSql } from "./postgres-sql.ts";
 import { postgresRuntimeConfig } from "./postgres-config.ts";
+import { createDatabaseRunner } from "./database-client.ts";
 
 export class ApiError extends Error {
   constructor(
@@ -30,7 +31,6 @@ type Database = {
   batch: <T = Record<string, unknown>>(statements: D1PreparedStatement[]) => Promise<QueryResult<T>[]>;
 };
 
-let client: ReturnType<typeof postgres> | null = null;
 const statementData = new WeakMap<D1PreparedStatement, { query: string; params: unknown[] }>();
 
 function databaseUrl() {
@@ -44,16 +44,13 @@ function databaseUrl() {
   return url;
 }
 
-function getClient() {
-  if (!client) {
+const runDatabase = createDatabaseRunner(() => {
     const config = postgresRuntimeConfig(databaseUrl(), process.env.VERCEL === "1");
-    client = postgres(config.url, {
+    return postgres(config.url, {
       ...config.options,
       types: { bigint: postgres.BigInt },
     });
-  }
-  return client;
-}
+});
 
 function queryResult<T>(rows: readonly unknown[]): QueryResult<T> {
   return {
@@ -70,6 +67,7 @@ export function databaseError(error: unknown, query: string): ApiError {
 
   const constraint = typeof error === "object" && error !== null && "constraint_name" in error ? String(error.constraint_name) : null;
   console.error("central_frete_database_error", { code, constraint, message, query, stack: error instanceof Error ? error.stack : undefined });
+  if (code === "DATABASE_TIMEOUT") return new ApiError(503, "O banco demorou para responder. Atualize os dados antes de repetir uma alteração.");
   if (constraint?.includes("cargo_vehicles")) return new ApiError(400, "Não foi possível salvar os veículos transportados. Confira os dados da carga.");
   if (code === "23514") return new ApiError(400, "Confira os valores informados antes de salvar.");
 
@@ -86,7 +84,7 @@ export function databaseError(error: unknown, query: string): ApiError {
 
 async function execute<T>(sql: string, params: unknown[] = []): Promise<QueryResult<T>> {
   try {
-    const rows = await getClient().unsafe(toPostgresSql(sql), params as never[]);
+    const rows = await runDatabase((client) => client.unsafe(toPostgresSql(sql), params as never[]));
     return queryResult<T>(rows);
   } catch (error) {
     throw databaseError(error, sql);
@@ -118,7 +116,7 @@ export async function getD1(): Promise<Database> {
     prepare: (query: string) => prepared(query),
     batch: async <T = Record<string, unknown>>(statements: D1PreparedStatement[]) => {
       try {
-        return await getClient().begin(async (transaction) => {
+        return await runDatabase((client) => client.begin(async (transaction) => {
           const results: QueryResult<T>[] = [];
           for (const statement of statements) {
             const data = statementData.get(statement);
@@ -129,7 +127,7 @@ export async function getD1(): Promise<Database> {
             } catch (error) { throw databaseError(error, data.query); }
           }
           return results;
-        });
+        }));
       } catch (error) {
         if (error instanceof ApiError) throw error;
         throw databaseError(error, "transaction batch");
