@@ -35,6 +35,7 @@ type OperationCostRow = {
   occurredOn: string | null;
   amountCents: number;
   confirmed: number;
+  proofAttachmentId: string | null;
 };
 
 export async function PATCH(request: Request, context: RouteContext) {
@@ -49,7 +50,8 @@ export async function PATCH(request: Request, context: RouteContext) {
     const previous = await queryFirst<OperationCostRow>(
       `select id, sale_id as saleId, category, description,
         pix_details as pixDetails,
-        occurred_on as occurredOn, amount_cents as amountCents, confirmed
+        occurred_on as occurredOn, amount_cents as amountCents, confirmed,
+        proof_attachment_id as proofAttachmentId
        from freight_costs where id = ? and sale_id = ?`,
       [costId, saleId],
     );
@@ -87,7 +89,12 @@ export async function PATCH(request: Request, context: RouteContext) {
         ? optionalString(payload.pixDetails)
         : previous.pixDetails;
     const confirmed = status === "PAGO";
-    const proof = confirmed && !isDirectPaidOperationCostCategory(previous.category) ? await saleProof(saleId, payload.proofId) : null;
+    // Cost editing is independent of uploading sale documents. Keep any existing
+    // link when the form omits proofId; validate explicit links from older clients.
+    const proof = confirmed && !isDirectPaidOperationCostCategory(previous.category) && payload.proofId
+      ? await saleProof(saleId, payload.proofId)
+      : null;
+    const proofAttachmentId = confirmed ? proof?.id ?? previous.proofAttachmentId : null;
     const db = await getD1();
     await db.batch([
       db.prepare("select id from freight_sales where id=? for update").bind(saleId),
@@ -104,7 +111,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           occurredOn,
           amountCents,
           confirmed ? 1 : 0,
-          status, proof?.id ?? null,
+          status, proofAttachmentId,
           costId,
           saleId,
         ),
