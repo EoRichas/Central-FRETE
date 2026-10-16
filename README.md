@@ -56,7 +56,10 @@ não são reescritos.
 
 Cada instância utiliza no máximo três conexões, com timeout ocioso de cinco
 segundos e prepared statements desativados. O Transaction Pooler compartilha
-conexões do banco sem reservar as 15 vagas do Session Pooler entre as instâncias.
+conexões do banco sem reservar permanentemente uma vaga por cliente.
+Cada operação usa uma transação exclusiva, inclusive leituras: isso impede o
+pipelining de consultas independentes do Postgres.js, incompatível com o pooler
+compartilhado. Aumentar conexões ou timeouts não corrige essa incompatibilidade.
 
 Como a suspensão da Vercel pode pausar os timers, o servidor também substitui o
 cliente após dez segundos sem operações em andamento, antes de voltar a usá-lo.
@@ -126,3 +129,34 @@ O acesso depende da sessão, do usuário ativo e das permissões do perfil. Não
 certificado digital ou bloqueio por mensalidade. A retirada da integração de
 cobrança e as verificações externas estão documentadas em
 [Retirada do certificado digital](docs/retirada-certificado-digital.md).
+
+## Conta restrita e TLS do banco
+
+A migração `20261016124849_restricted_runtime_role.sql` prepara `central_app`
+sem login e sem senha. Ela concede DML apenas nas tabelas do sistema, acesso
+somente de leitura/inclusão à auditoria e políticas RLS exclusivas desse papel.
+Não concede acesso às tabelas de migração, schemas Auth/Storage, DDL, TRUNCATE,
+criação de usuários ou bypass de RLS. Perfis de navegador continuam sem acesso.
+A autorização por usuário continua obrigatória nas APIs do servidor.
+
+O provisionamento é uma etapa administrativa separada: testar a migração,
+aplicá-la como administrador, definir uma senha aleatória forte fora do Git e
+habilitar LOGIN para `central_app`; trocar `DATABASE_URL` na hospedagem pelo
+usuário `central_app.PROJECT_REF` no mesmo pooler e publicar novamente. A senha
+não deve aparecer em chat, logs, commits ou PRs. Até essa troca, o runtime
+continua usando a credencial anterior. Não criar um novo usuário do sistema.
+
+Migrações devem usar uma credencial administrativa separada, fora do runtime.
+Em servidor persistente, configure `CENTRAL_FRETE_MIGRATE_ON_START=false` e
+execute migrações em processo separado. Não colocar a senha administrativa nas
+variáveis das funções Vercel. Novas tabelas precisam de concessões explícitas.
+
+A aplicação e o migrador validam cadeia e hostname TLS (`rejectUnauthorized`).
+O pooler usa as CAs confiáveis do Node; se a conexão exigir a CA privada do
+projeto, configure o PEM oficial em `DATABASE_SSL_CA`. Nunca desabilitar a
+validação para resolver erro de certificado.
+
+Rollback: voltar à versão anterior apenas para regressão funcional e restaurar
+a credencial anterior no gerenciador da hospedagem se a ativação do papel falhar.
+As políticas específicas do papel não alteram o acesso da conta antiga. Para
+desativar a conta nova, use `ALTER ROLE central_app NOLOGIN`; não remover dados.

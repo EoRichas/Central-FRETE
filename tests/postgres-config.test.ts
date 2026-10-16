@@ -20,7 +20,7 @@ test("Vercel usa Transaction Pooler sem alterar credenciais, banco ou parâmetro
     assert.equal(sql.options.max, 3);
     assert.equal(sql.options.idle_timeout, 5);
     assert.equal(sql.options.prepare, false);
-    assert.equal(sql.options.ssl, "require");
+    assert.deepEqual(sql.options.ssl, { rejectUnauthorized: true });
   } finally {
     await sql.end();
   }
@@ -55,4 +55,11 @@ test("erro de configuração não inclui a URL com credenciais", () => {
   assert.throws(() => postgresRuntimeConfig("invalid://fictional-secret@[invalid", true), {
     message: "DATABASE_URL inválida.",
   });
+});
+
+ test("certificado CA opcional preserva validação mesmo com sslmode=require na URL", async () => {
+  const config = postgresRuntimeConfig(sessionUrl, true, "CERTIFICATE\\nCONTENTS");
+  const sql = postgres(config.url, config.options);
+  try { assert.deepEqual(sql.options.ssl, { rejectUnauthorized: true, ca: "CERTIFICATE\nCONTENTS" }); }
+  finally { await sql.end(); }
 });

@@ -2,6 +2,7 @@ import postgres from "postgres";
 import { normalizeDatabaseValue, toPostgresSql } from "./postgres-sql.ts";
 import { postgresRuntimeConfig } from "./postgres-config.ts";
 import { createDatabaseRunner } from "./database-client.ts";
+import { runPostgresQuery } from "./postgres-transaction.ts";
 
 export class ApiError extends Error {
   constructor(
@@ -45,7 +46,7 @@ function databaseUrl() {
 }
 
 const runDatabase = createDatabaseRunner(() => {
-    const config = postgresRuntimeConfig(databaseUrl(), process.env.VERCEL === "1");
+    const config = postgresRuntimeConfig(databaseUrl(), process.env.VERCEL === "1", process.env.DATABASE_SSL_CA);
     return postgres(config.url, {
       ...config.options,
       types: { bigint: postgres.BigInt },
@@ -84,7 +85,7 @@ export function databaseError(error: unknown, query: string): ApiError {
 
 async function execute<T>(sql: string, params: unknown[] = []): Promise<QueryResult<T>> {
   try {
-    const rows = await runDatabase((client) => client.unsafe(toPostgresSql(sql), params as never[]));
+    const rows = await runDatabase((client) => runPostgresQuery(client, toPostgresSql(sql), params));
     return queryResult<T>(rows);
   } catch (error) {
     throw databaseError(error, sql);

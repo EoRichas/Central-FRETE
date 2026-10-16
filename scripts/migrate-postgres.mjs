@@ -39,7 +39,7 @@ export async function migrateDatabase(configuration) {
   const sql = postgres(config.migrationDatabaseUrl || config.databaseUrl, {
     max: 1,
     prepare: false,
-    ssl: "require",
+    ssl: { rejectUnauthorized: true, ...(process.env.DATABASE_SSL_CA?.trim() ? { ca: process.env.DATABASE_SSL_CA.replaceAll("\\n", "\n").trim() } : {}) },
     connect_timeout: 15,
     idle_timeout: 5,
   });

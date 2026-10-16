@@ -1567,3 +1567,29 @@ test('financeiro cria e exclui vendas e fretes, mantendo usuários, cadastros gl
  assert.equal((await clients.POST(await request('/api/clients','finance','POST',{}))).status,403);
  assert.equal((await commissions.GET(await request('/api/sellers/commissions','finance'))).status,403);
 });
+
+test('papel restrito atende Frota e sessões sem DDL, bypass RLS ou alteração de auditoria', async () => {
+ const migration=await readFile(new URL('../../supabase/migrations/20261016124849_restricted_runtime_role.sql',import.meta.url),'utf8');
+ await pg.exec('REVOKE CREATE ON SCHEMA public FROM PUBLIC; CREATE TABLE central_schema_migrations(name text primary key);');
+ await pg.exec(migration); await pg.exec(migration);
+ await pg.exec('SET ROLE central_app');
+ try {
+  const role=(await pg.query<{rolbypassrls:boolean;rolcanlogin:boolean;rolcreaterole:boolean}>("select rolbypassrls,rolcanlogin,rolcreaterole from pg_roles where rolname=current_user")).rows[0];
+  assert.deepEqual(role,{rolbypassrls:false,rolcanlogin:false,rolcreaterole:false});
+  const fleet=await import('../../app/api/fleet/route.ts');
+  const response=await fleet.GET(await request('/api/fleet?competency=2026-10','admin'));
+  assert.equal(response.status,200,await response.clone().text());
+  assert.ok(Array.isArray((await response.json()).fleet.freights));
+  const vehicles=await import('../../app/api/fleet/vehicles/route.ts');
+  const created=await vehicles.POST(await request('/api/fleet/vehicles','admin','POST',{plate:'ZZZ0Z99',model:'TEST',active:true}));
+  assert.equal(created.status,201,await created.clone().text());
+  await assert.rejects(pg.exec('ALTER TABLE fleet_drivers ADD COLUMN forbidden integer'),/owner|permission/i);
+  await assert.rejects(pg.exec('TRUNCATE fleet_drivers'),/permission/i);
+  await assert.rejects(pg.exec('UPDATE audit_logs SET action=action'),/permission/i);
+  await assert.rejects(pg.exec('DELETE FROM audit_logs'),/permission/i);
+  await assert.rejects(pg.exec('SELECT * FROM central_schema_migrations'),/permission/i);
+  await assert.rejects(pg.exec('CREATE TABLE forbidden(id integer)'),/permission/i);
+ } finally {await pg.exec('RESET ROLE');}
+ const exposed=await pg.query("select * from information_schema.role_table_grants where grantee in ('anon','authenticated') and table_schema='public'");
+ assert.equal(exposed.rows.length,0);
+});

@@ -1,5 +1,5 @@
 /** Runtime connections only: migrations must keep their session-scoped connection. */
-export function postgresRuntimeConfig(databaseUrl: string, onVercel: boolean) {
+export function postgresRuntimeConfig(databaseUrl: string, onVercel: boolean, certificateAuthority?: string) {
   let url = databaseUrl;
   if (onVercel) {
     let parsed: URL;
@@ -27,7 +27,11 @@ export function postgresRuntimeConfig(databaseUrl: string, onVercel: boolean) {
       idle_timeout: onVercel ? 5 : 20,
       connect_timeout: 10,
       prepare: false,
-      ssl: "require" as const,
+      // Authenticate the server as well as encrypting the transport.
+      ssl: {
+        rejectUnauthorized: true,
+        ...(certificateAuthority?.trim() ? { ca: certificateAuthority.replaceAll("\\n", "\n").trim() } : {}),
+      },
     },
   };
 }
