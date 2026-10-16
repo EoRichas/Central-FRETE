@@ -101,7 +101,7 @@ export function SettingsScreen() {
 
   async function deleteUser(user: UserRow) {
     const confirmed = window.confirm(
-      `Excluir definitivamente o acesso de ${user.name}? O histórico das vendas será preservado, mas esse login deixará de existir.`,
+      `Excluir o acesso de ${user.name}? As sessões serão encerradas e o login removido. Vendas, comprovantes, comissões, OS e relatórios continuarão no histórico.`,
     );
     if (!confirmed) return;
     setDeletingUser(user.id);
@@ -111,7 +111,7 @@ export function SettingsScreen() {
       await apiMutation(`/api/users/${user.id}`, { method: "DELETE" });
       setEditingUser(null);
       usersApi.refresh();
-      setMessage("Acesso excluído com sucesso.");
+      setMessage("Acesso excluído. Os registros e o histórico foram preservados.");
     } catch (userError) {
       setError(
         userError instanceof Error

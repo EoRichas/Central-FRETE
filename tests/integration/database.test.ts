@@ -33,12 +33,73 @@ mock.module('../../lib/server/d1.ts', { namedExports: {
 
 before(async () => {
  await pg.exec('CREATE ROLE anon; CREATE ROLE authenticated;');
- for (let pass = 0; pass < 2; pass++) for (const file of ['001_central_frete_postgres.sql', '002_fleet.sql', '003_fleet_billing.sql', '004_operational_role.sql', '005_detach_driver_vehicle.sql', '006_fleet_vehicle_cost_average_flag.sql', '008_fleet_results.sql', '009_direct_paid_operation_costs.sql', '010_fleet_cargo_sales_orders.sql', '011_sale_origin_location_type.sql', '../supabase/migrations/20260923220518_fleet_operation_integrity.sql', '012_sales_channels_global_numbering_costs.sql', '013_fleet_document_costs.sql', '015_fleet_numbers_and_orders.sql', '../supabase/migrations/20260928224007_user_phone_vehicle_deletion.sql', '016_fleet_monthly_scope.sql', '../supabase/migrations/20260929161711_registry_channels_addresses.sql', '../supabase/migrations/20260929175656_fleet_client_reference.sql', '../supabase/migrations/20260930164106_seller_commission_access.sql', '../supabase/migrations/20260930172047_cegonha_monthly_scope.sql', '../supabase/migrations/20260930183118_fleet_vehicle_model.sql', '../supabase/migrations/20260930184218_fleet_location_types.sql', '../supabase/migrations/20261005122915_security_sessions_and_login_limits.sql', '../supabase/migrations/20261014180528_negotiated_commissions_fleet_notes.sql']) await pg.exec(await readFile(new URL(`../../database/${file}`, import.meta.url), 'utf8'));
+ for (let pass = 0; pass < 2; pass++) for (const file of ['001_central_frete_postgres.sql', '002_fleet.sql', '003_fleet_billing.sql', '004_operational_role.sql', '005_detach_driver_vehicle.sql', '006_fleet_vehicle_cost_average_flag.sql', '008_fleet_results.sql', '009_direct_paid_operation_costs.sql', '010_fleet_cargo_sales_orders.sql', '011_sale_origin_location_type.sql', '../supabase/migrations/20260923220518_fleet_operation_integrity.sql', '012_sales_channels_global_numbering_costs.sql', '013_fleet_document_costs.sql', '015_fleet_numbers_and_orders.sql', '../supabase/migrations/20260928224007_user_phone_vehicle_deletion.sql', '016_fleet_monthly_scope.sql', '../supabase/migrations/20260929161711_registry_channels_addresses.sql', '../supabase/migrations/20260929175656_fleet_client_reference.sql', '../supabase/migrations/20260930164106_seller_commission_access.sql', '../supabase/migrations/20260930172047_cegonha_monthly_scope.sql', '../supabase/migrations/20260930183118_fleet_vehicle_model.sql', '../supabase/migrations/20260930184218_fleet_location_types.sql', '../supabase/migrations/20261005122915_security_sessions_and_login_limits.sql', '../supabase/migrations/20261014180528_negotiated_commissions_fleet_notes.sql', '../supabase/migrations/20261016133115_preserve_deleted_user_history.sql']) await pg.exec(await readFile(new URL(`../../database/${file}`, import.meta.url), 'utf8'));
  await pg.exec("INSERT INTO users(id,email,name,role) VALUES ('admin','admin@example.test','Admin','ADMIN'),('finance','finance@example.test','Finance','FINANCEIRO'),('seller','seller@example.test','Seller','VENDEDOR');");
  await pg.exec("INSERT INTO clients(id,type,legal_name,sale_channel) VALUES ('freight-client-0','PJ','CLIENTE DE TESTE','FROTA'),('freight-client-1','PJ','CLIENTE TESTE','FROTA'),('freight-client-2','PJ','CLIENTE CARGA','FROTA'),('freight-client-3','PJ','ODOMETRO','FROTA'),('freight-client-4','PJ','CLIENTE CUSTOS','FROTA'),('freight-client-5','PJ','CLIENTE OS FROTA','FROTA'),('freight-client-6','PJ','CLIENTE ATUALIZADO','FROTA');");
  process.env.CENTRAL_FRETE_SESSION_SECRET = 'test-secret-never-use-in-production-1234';
 });
 after(async () => { mock.restoreAll(); await pg.close(); });
+
+test('exclusão de usuário revoga acesso e preserva vendas, anexos, OS e relatórios com a identidade original', async () => {
+ const users = await import('../../app/api/users/route.ts');
+ const userApi = await import('../../app/api/users/[id]/route.ts');
+ const sales = await import('../../app/api/sales/route.ts');
+ const attachments = await import('../../app/api/sales/[id]/attachments/route.ts');
+ const reports = await import('../../app/api/reports/sales/route.ts');
+ const sellers = await import('../../app/api/sales/sellers/route.ts');
+ const me = await import('../../app/api/me/route.ts');
+ const login = await import('../../app/api/auth/login/route.ts');
+ const {issueOrder, readOrderVersion} = await import('../../lib/server/service-orders.ts');
+ const data = {name:'HISTÓRICO PRESERVADO',username:'historico.excluido',phone:'11987654321',password:'senha-teste-historico-123',role:'VENDEDOR',commissionPercent:7};
+ const created = await users.POST(await request('/api/users','admin','POST',data));
+ assert.equal(created.status,201,await created.clone().text());
+ const {id} = await created.json();
+ const userContext = {params:Promise.resolve({id})};
+ const oldSession = await request('/api/me',id);
+ assert.equal((await me.GET(oldSession.clone())).status,200);
+ const saleResponse = await sales.POST(await request('/api/sales',id,'POST',{...salePayload,saleDate:'2080-03-01',financialDueDate:'2080-03-31'}));
+ assert.equal(saleResponse.status,201,await saleResponse.clone().text());
+ const sale = await saleResponse.json();
+ const saleContext = {params:Promise.resolve({id:sale.id})};
+ const form = new FormData();
+ form.set('file',new File(['%PDF-1.4\n%%EOF'],'comprovante.pdf',{type:'application/pdf'}));
+ const uploaded = await attachments.POST(await request('/api/sales/x/attachments',id,'POST',form),saleContext);
+ assert.equal(uploaded.status,201,await uploaded.clone().text());
+ const issued = await issueOrder(sale.id,{id,email:`${data.username}@centralfrete.local`,name:data.name,role:'VENDEDOR'});
+ const beforeSale = await queryFirst('select * from freight_sales where id=?',[sale.id]);
+ const beforeAttachment = await queryAll('select * from sale_attachments where sale_id=?',[sale.id]);
+ const beforeReport = await (await reports.GET(await request('/api/reports/sales?competency=2080-03&saleChannel=CEGONHA'))).json();
+ assert.equal(beforeReport.report.sales.length,1);
+ assert.equal(beforeReport.report.sales[0].sellerName,data.name);
+ assert.equal((await userApi.DELETE(await request('/api/users/x','seller','DELETE'),userContext)).status,403);
+ assert.equal((await userApi.DELETE(await request('/api/users/admin','admin','DELETE'),{params:Promise.resolve({id:'admin'})})).status,400);
+ const removed = await userApi.DELETE(await request('/api/users/x','admin','DELETE'),userContext);
+ assert.equal(removed.status,200,await removed.clone().text());
+ assert.deepEqual(await queryFirst('select * from freight_sales where id=?',[sale.id]),beforeSale);
+ assert.deepEqual(await queryAll('select * from sale_attachments where sale_id=?',[sale.id]),beforeAttachment);
+ assert.deepEqual((await readOrderVersion(sale.id))!.snapshot,issued.latest!.snapshot);
+ assert.deepEqual(await (await reports.GET(await request('/api/reports/sales?competency=2080-03&saleChannel=CEGONHA'))).json(),beforeReport);
+ assert.equal((await attachments.GET(await request('/api/sales/x/attachments'),saleContext)).status,200);
+ const archived = await queryFirst('select name,phone,active,username,password_hash,password_salt,deleted_at from users where id=?',[id]) as Record<string,unknown>;
+ assert.equal(archived.name,data.name); assert.equal(archived.phone,data.phone); assert.equal(archived.active,0); assert.ok(archived.deleted_at);
+ assert.equal(archived.username,null); assert.equal(archived.password_hash,null); assert.equal(archived.password_salt,null);
+ assert.equal((await me.GET(oldSession)).status,401);
+ assert.equal((await queryAll('select user_id from auth_sessions where user_id=? and revoked_at is null',[id])).length,0);
+ const loginResult = await login.POST(new Request('https://example.test/api/auth/login',{method:'POST',headers:{origin:'https://example.test','content-type':'application/json'},body:JSON.stringify({username:data.username,password:data.password})}));
+ assert.equal(loginResult.status,401,await loginResult.clone().text());
+ assert.equal((await (await users.GET(await request('/api/users'))).json()).users.some((u:{id:string})=>u.id===id),false);
+ assert.equal((await (await sellers.GET(await request('/api/sales/sellers'))).json()).sellers.some((u:{id:string})=>u.id===id),false);
+ assert.equal((await userApi.PATCH(await request('/api/users/x','admin','PATCH',{...data,active:true}),userContext)).status,404);
+ assert.equal((await userApi.DELETE(await request('/api/users/x','admin','DELETE'),userContext)).status,404);
+ await assert.rejects(pg.query('update users set active=1 where id=$1',[id]),/users_deleted_access_disabled/);
+ assert.equal((await queryAll("select id from audit_logs where entity_id=? and action='ACCESS_DELETED'",[id])).length,1);
+ const recreated = await users.POST(await request('/api/users','admin','POST',data));
+ assert.equal(recreated.status,201,await recreated.clone().text());
+ const newUser = await recreated.json(); assert.notEqual(newUser.id,id);
+ const newReport = await (await reports.GET(await request('/api/reports/sales?competency=2080-03&saleChannel=CEGONHA',newUser.id))).json();
+ assert.equal(newReport.report.sales.length,0);
+ assert.deepEqual(await queryFirst('select * from freight_sales where id=?',[sale.id]),beforeSale);
+});
 
 async function request(path: string, role = 'admin', method = 'GET', body?: object | FormData) {
  const { createUserSessionToken } = await import('../../lib/server/local-session.ts');
