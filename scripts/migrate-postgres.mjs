@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import postgres from "postgres";
+import { databaseTlsOptions } from "../lib/server/database-tls.mjs";
 import { readRuntimeConfig } from "./runtime-config.mjs";
 
 export async function migrateDatabase(configuration) {
@@ -39,7 +40,7 @@ export async function migrateDatabase(configuration) {
   const sql = postgres(config.migrationDatabaseUrl || config.databaseUrl, {
     max: 1,
     prepare: false,
-    ssl: "require",
+    ssl: databaseTlsOptions(config.migrationDatabaseUrl || config.databaseUrl, process.env.DATABASE_SSL_CA),
     connect_timeout: 15,
     idle_timeout: 5,
   });
