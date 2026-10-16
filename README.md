@@ -152,9 +152,10 @@ execute migrações em processo separado. Não colocar a senha administrativa na
 variáveis das funções Vercel. Novas tabelas precisam de concessões explícitas.
 
 A aplicação e o migrador validam cadeia e hostname TLS (`rejectUnauthorized`).
-O pooler usa as CAs confiáveis do Node; se a conexão exigir a CA privada do
-projeto, configure o PEM oficial em `DATABASE_SSL_CA`. Nunca desabilitar a
-validação para resolver erro de certificado.
+Hosts Supabase usam a CA pública oficial incluída no projeto. Outros provedores
+usam as CAs confiáveis do Node. Para rotação ou CA específica, configure o PEM
+oficial em `DATABASE_SSL_CA`. Nunca desabilitar a validação para resolver erro
+de certificado.
 
 Rollback: voltar à versão anterior apenas para regressão funcional e restaurar
 a credencial anterior no gerenciador da hospedagem se a ativação do papel falhar.
