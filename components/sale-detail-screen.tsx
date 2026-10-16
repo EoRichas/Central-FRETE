@@ -200,7 +200,6 @@ export function SaleDetailScreen({ id }: { id: string }) {
           occurredOn: form.get("occurredOn") || null,
           amountCents: moneyInputToCents(form.get("amount")),
           status: operationCostStatus,
-          proofId: await proofForCost(form),
         }),
       });
       setOperationCost(null);
@@ -438,9 +437,8 @@ export function SaleDetailScreen({ id }: { id: string }) {
             <div className="form-grid two">
               <Field label="Valor"><div className="money-field"><span>R$</span><input name="amount" inputMode="decimal" defaultValue={centsToInput(operationCost.amountCents)} placeholder="0,00" required /></div></Field>
               <Field label="Data do pagamento"><input name="occurredOn" type="date" defaultValue={operationCost.occurredOn ?? ""} /></Field>
-              <Field label="Situação"><select disabled={isDirectPaidOperationCostCategory(operationCost.category)} value={operationCostStatus} onChange={(event) => setOperationCostStatus(event.target.value as "EM_ABERTO" | "PAGO")}><option value="EM_ABERTO">Em aberto</option><option value="PAGO">Pago</option></select></Field><Field label="Comprovante já anexado" hint="Use um comprovante enviado na seção Anexos desta venda."><select name="proofId"><option value="">Selecione</option>{sale.attachments.filter(a => isProofMimeType(a.mimeType)).map(a => <option key={a.id} value={a.id}>{a.fileName}</option>)}</select></Field>
+              <Field label="Situação"><select disabled={isDirectPaidOperationCostCategory(operationCost.category)} value={operationCostStatus} onChange={(event) => setOperationCostStatus(event.target.value as "EM_ABERTO" | "PAGO")}><option value="EM_ABERTO">Em aberto</option><option value="PAGO">Pago</option></select></Field>
             </div>
-            <ProofUpload name="proof" disabled={saving} />
             {error && <p className="form-error" role="alert">{error}</p>}
             <footer className="modal-actions"><button type="button" className="button secondary" onClick={() => setOperationCost(null)}>Cancelar</button><button className="button primary" disabled={saving}>{saving ? "Salvando…" : "Salvar custo"}</button></footer>
           </form>

@@ -236,6 +236,38 @@ test('vendedor consulta prestadores e despesas de nota fiscal e outras despesas 
  assert.deepEqual(updated.map(cost=>[cost.category,cost.amount_cents,cost.description]),[['NOTA_FISCAL_IMPOSTO',1500,'EDITADO NOTA_FISCAL_IMPOSTO'],['OUTRAS_DESPESAS',900,'EDITADO OUTRAS_DESPESAS']]);
 });
 
+test('custo da operação pode ser pago sem comprovante e edição preserva anexos já vinculados', async () => {
+ const sales=await import('../../app/api/sales/route.ts');
+ const costsApi=await import('../../app/api/sales/[id]/operation-costs/route.ts');
+ const attachments=await import('../../app/api/sales/[id]/attachments/route.ts');
+ const created=await sales.POST(await request('/api/sales','seller','POST',{...salePayload,saleDate:'2090-04-01',financialDueDate:'2090-04-30',costs:[{category:'OUTRAS_DESPESAS',description:'TRANSFERÊNCIA DE PÁTIO',amountCents:10000,occurredOn:'2090-04-01'}]}));
+ assert.equal(created.status,201,await created.clone().text());
+ const sale=await created.json();const ctx={params:Promise.resolve({id:sale.id})};
+ const cost=await queryFirst('select id from freight_costs where sale_id=?',[sale.id]) as {id:string};
+ const body={costId:cost.id,description:'TRANSFERÊNCIA DE PÁTIO',amountCents:10000,occurredOn:'2090-04-16',status:'PAGO'};
+ const pay=await costsApi.PATCH(await request('/api/sales/x/operation-costs','finance','PATCH',body),ctx);
+ assert.equal(pay.status,200,await pay.clone().text());
+ assert.deepEqual(await queryFirst('select confirmed,payment_status,proof_attachment_id from freight_costs where id=?',[cost.id]),{confirmed:1,payment_status:'PAGO',proof_attachment_id:null});
+ assert.equal((await queryFirst('select costs_pending from freight_sales where id=?',[sale.id]) as {costs_pending:number}).costs_pending,0);
+ const form=new FormData();form.set('file',new File(['%PDF-1.4\n%%EOF'],'recibo.pdf',{type:'application/pdf'}));
+ const uploaded=await attachments.POST(await request('/api/sales/x/attachments','finance','POST',form),ctx);
+ assert.equal(uploaded.status,201,await uploaded.clone().text());const proof=await uploaded.json();
+ const linked=await costsApi.PATCH(await request('/api/sales/x/operation-costs','finance','PATCH',{...body,proofId:proof.id}),ctx);
+ assert.equal(linked.status,200,await linked.clone().text());
+ const edited=await costsApi.PATCH(await request('/api/sales/x/operation-costs','finance','PATCH',{...body,amountCents:12000}),ctx);
+ assert.equal(edited.status,200,await edited.clone().text());
+ assert.deepEqual(await queryFirst('select amount_cents,proof_attachment_id from freight_costs where id=?',[cost.id]),{amount_cents:12000,proof_attachment_id:proof.id});
+ const other=await sales.POST(await request('/api/sales','seller','POST',{...salePayload,saleDate:'2090-04-02',financialDueDate:'2090-04-30',costs:[{category:'OUTRAS_DESPESAS',amountCents:5000}]}));
+ assert.equal(other.status,201,await other.clone().text());const otherSale=await other.json();
+ const otherCost=await queryFirst('select id from freight_costs where sale_id=?',[otherSale.id]) as {id:string};
+ assert.equal((await costsApi.PATCH(await request('/api/sales/x/operation-costs','finance','PATCH',{...body,costId:otherCost.id,proofId:proof.id}),{params:Promise.resolve({id:otherSale.id})})).status,400);
+ assert.equal((await costsApi.PATCH(await request('/api/sales/x/operation-costs','seller','PATCH',body),ctx)).status,403);
+ const reopened=await costsApi.PATCH(await request('/api/sales/x/operation-costs','finance','PATCH',{...body,status:'EM_ABERTO'}),ctx);
+ assert.equal(reopened.status,200,await reopened.clone().text());
+ assert.equal((await queryFirst('select costs_pending from freight_sales where id=?',[sale.id]) as {costs_pending:number}).costs_pending,1);
+ assert.equal((await queryAll('select id from sale_attachments where id=?',[proof.id])).length,1);
+});
+
 test('Frota salva e reabre 1200 km, usa média da placa e mantém histórico ao filtrar mês', async () => {
  const {distanceInputToMeters, distanceToInput}=await import('../../lib/domain/number-input.ts');
  const {calculateFleetFreightPreview}=await import('../../lib/domain/fleet.ts');
