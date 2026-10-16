@@ -1,6 +1,7 @@
 "use client";
 
 import { safeReturnPath } from "@/lib/client/safe-return-path";
+import { fetchRead } from "@/lib/client/read-request";
 
 import { useEffect, useState } from "react";
 import { apiMutation } from "@/components/use-api";
@@ -37,19 +38,23 @@ export function LoginScreen() {
   );
 
   useEffect(() => {
-    fetch("/api/auth/setup", { cache: "no-store" })
+    const controller = new AbortController();
+    fetchRead("/api/auth/setup", controller.signal)
       .then(async (response) => {
         const payload = (await response.json()) as { setupRequired?: boolean; error?: string };
         if (!response.ok) throw new Error(payload.error || "Não foi possível verificar a configuração.");
         return payload;
       })
       .then((payload) => {
+        if (controller.signal.aborted) return;
         if (payload.setupRequired) window.location.assign("/configurar-admin");
       })
       .catch((fetchError) => {
+        if (controller.signal.aborted) return;
         setError(fetchError instanceof Error ? fetchError.message : "Não foi possível verificar a configuração.");
       })
-      .finally(() => setCheckingSetup(false));
+      .finally(() => { if (!controller.signal.aborted) setCheckingSetup(false); });
+    return () => controller.abort();
   }, []);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {

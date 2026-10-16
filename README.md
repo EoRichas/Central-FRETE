@@ -54,9 +54,16 @@ compartilhado (`*.pooler.supabase.com:5432`) para a porta `6543`, mantendo host,
 credenciais, banco e parâmetros. Conexões diretas e hosts/portas personalizados
 não são reescritos.
 
-Cada instância utiliza no máximo uma conexão, libera conexões ociosas após cinco
-segundos e mantém prepared statements desativados. Isso evita reservar as 15
-conexões do Session Pooler entre as instâncias e interromper a validação de sessão.
+Cada instância utiliza no máximo três conexões, com timeout ocioso de cinco
+segundos e prepared statements desativados. O Transaction Pooler compartilha
+conexões do banco sem reservar as 15 vagas do Session Pooler entre as instâncias.
+
+Como a suspensão da Vercel pode pausar os timers, o servidor também substitui o
+cliente após dez segundos sem operações em andamento, antes de voltar a usá-lo.
+Consultas e transações têm prazo total de vinte segundos; um cliente travado é
+descartado, sem repetir automaticamente gravações. As leituras no navegador têm
+prazo de 25 segundos, incluindo o recebimento do corpo da resposta. Se uma
+gravação falhar por timeout, confira os dados antes de repeti-la.
 
 A adaptação ocorre somente no driver da aplicação. O comando `npm run migrate`
 continua usando `DATABASE_MIGRATION_URL` (ou `DATABASE_URL` quando ela ainda aponta

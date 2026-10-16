@@ -23,7 +23,7 @@ export function postgresRuntimeConfig(databaseUrl: string, onVercel: boolean) {
   return {
     url,
     options: {
-      max: onVercel ? 1 : 5,
+      max: onVercel ? 3 : 5,
       idle_timeout: onVercel ? 5 : 20,
       connect_timeout: 10,
       prepare: false,
