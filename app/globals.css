@@ -657,9 +657,9 @@ td > small { max-width: 270px; margin-top: 2px; overflow: hidden; color: var(--m
   border-bottom: 1px solid var(--line);
 }
 .fleet-panel-header .text-button { color: var(--teal); }
-.fleet-table { min-width: 1420px; }
-.fleet-table td:nth-child(3), .fleet-table td:nth-child(5) { min-width: 190px; }
-.fleet-table td:nth-child(8) { min-width: 255px; }
+.fleet-table { min-width: 980px; }
+.fleet-table td:nth-child(2) { min-width: 240px; }
+.fleet-table td:nth-child(3) { min-width: 170px; }
 .fleet-match-badge {
   width: fit-content;
   display: inline-flex;
