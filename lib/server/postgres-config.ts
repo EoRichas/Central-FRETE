@@ -1,3 +1,5 @@
+import { databaseTlsOptions } from "./database-tls.mjs";
+
 /** Runtime connections only: migrations must keep their session-scoped connection. */
 export function postgresRuntimeConfig(databaseUrl: string, onVercel: boolean, certificateAuthority?: string) {
   let url = databaseUrl;
@@ -28,10 +30,7 @@ export function postgresRuntimeConfig(databaseUrl: string, onVercel: boolean, ce
       connect_timeout: 10,
       prepare: false,
       // Authenticate the server as well as encrypting the transport.
-      ssl: {
-        rejectUnauthorized: true,
-        ...(certificateAuthority?.trim() ? { ca: certificateAuthority.replaceAll("\\n", "\n").trim() } : {}),
-      },
+      ssl: databaseTlsOptions(url, certificateAuthority),
     },
   };
 }

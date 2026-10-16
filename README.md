@@ -160,3 +160,5 @@ Rollback: voltar à versão anterior apenas para regressão funcional e restaura
 a credencial anterior no gerenciador da hospedagem se a ativação do papel falhar.
 As políticas específicas do papel não alteram o acesso da conta antiga. Para
 desativar a conta nova, use `ALTER ROLE central_app NOLOGIN`; não remover dados.
+
+O certificado público da autoridade Supabase está incluído em `lib/server/database-tls.mjs`, com origem e fingerprint documentadas, e é utilizado somente nos hosts oficiais de banco/pooler. Não contém chave privada. Hosts de outros provedores continuam usando as autoridades confiáveis do Node. `DATABASE_SSL_CA` permite fornecer uma nova CA quando houver rotação; a validação de certificado e hostname permanece obrigatória.
