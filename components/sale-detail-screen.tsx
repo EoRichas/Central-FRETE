@@ -55,7 +55,12 @@ function formatFileSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1).replace(".", ",")} MB`;
 }
 
-export function SaleDetailScreen({ id }: { id: string }) {
+export function SaleDetailScreen({ id, onBack, onViewOrder, hideDeleteActions = false }: {
+  id: string;
+  onBack?: () => void;
+  onViewOrder?: () => void;
+  hideDeleteActions?: boolean;
+}) {
   const saleApi = useApi<{ sale: SaleRecord }>(`/api/sales/${id}`);
   const meApi = useApi<{ user: CurrentUser }>("/api/me");
   const [paymentOpen, setPaymentOpen] = useState(false);
@@ -271,10 +276,10 @@ export function SaleDetailScreen({ id }: { id: string }) {
         description={`${sale.sellerName} · ${formatDate(sale.saleDate)} · ${sale.vehicle ?? "VEÍCULO NÃO INFORMADO"}${sale.plate ? ` / ${sale.plate}` : ""}`}
         actions={
           <div className="sale-detail-actions">
-            <Link className="button secondary" href={sale.saleChannel === "FROTA" ? "/frota" : "/vendas"}>
+            {onBack ? <button type="button" className="button secondary" onClick={onBack}>Voltar ao relatório</button> : <Link className="button secondary" href={sale.saleChannel === "FROTA" ? "/frota" : "/vendas"}>
               Voltar
-            </Link>
-            {user && roleCan(user.role, "VIEW_SERVICE_ORDERS") && <Link className="button secondary" href={`/vendas/${sale.id}/os`}>Visualizar OS</Link>}
+            </Link>}
+            {user && roleCan(user.role, "VIEW_SERVICE_ORDERS") && (onViewOrder ? <button type="button" className="button secondary" onClick={onViewOrder}>Visualizar OS</button> : <Link className="button secondary" href={`/vendas/${sale.id}/os`}>Visualizar OS</Link>)}
             {canEditSale && (
               <Link className="button primary" href={`/vendas/${sale.id}/editar`}>
                 Editar frete
@@ -402,7 +407,7 @@ export function SaleDetailScreen({ id }: { id: string }) {
             </div>
             {error && <p className="form-error" role="alert">{error}</p>}
             <footer className="modal-actions">
-              <button type="button" className="button danger" onClick={() => deletePayment(selectedPayment.id)}>Excluir recebimento</button>
+              {!hideDeleteActions && canDeletePayment && <button type="button" className="button danger" onClick={() => deletePayment(selectedPayment.id)}>Excluir recebimento</button>}
               <button type="button" className="button secondary" onClick={() => setSelectedPayment(null)}>Fechar</button>
             </footer>
           </div>

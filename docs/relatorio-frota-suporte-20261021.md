@@ -18,6 +18,7 @@ Somente Central-FRETE. Não altera CZAR/EKON, Sup, os dados existentes, permiss�
 - Antes do PDF, a pessoa escolhe incluir observações (Sim/Não). A lista exibe cada venda e seu texto existente; é possível selecionar e ajustar o texto só para o documento. Essa escolha não altera vendas, notas originais ou totais.
 - O servidor recarrega os dados autorizados e recalcula os totais na exportação. IDs e observações alheios ao relatório são recusados. JSON limitado a 1 MB; cada observação, a 6.000 caracteres. Respostas privadas sem cache público.
 - Prévia e download usam o mesmo PDF em URL temporária local do navegador, revogada ao fechar. Não salva cópia nem observações do relatório no banco/Storage.
+- Na listagem, a seta segue o padrão de Vendas Cegonha e abre as informações completas da venda/frete. A OS abre dentro do fluxo, com prévia inline e ações separadas Visualizar / imprimir e Salvar PDF. O retorno preserva cliente, período e resultados. A consulta do relatório não oferece exclusão; as demais telas e autorizações não mudam.
 
 ## Financeiro e resultados
 
