@@ -11,6 +11,7 @@ import { asObject } from "@/lib/server/validation";
 type RouteContext = { params: Promise<{ id: string }> };
 
 type FreightSnapshot = {
+  serviceSituation: import("@/lib/domain/fleet-client-report").FleetServiceSituation | null;
   sellerId: string | null;
   sellerCommissionOverrideCents: number | null;
   notes: string | null;
@@ -60,7 +61,7 @@ type FreightSnapshot = {
 
 async function freightSnapshot(id: string) {
   return queryFirst<FreightSnapshot>(
-    `select seller_id as sellerId,seller_commission_override_cents as sellerCommissionOverrideCents,notes,trip_id as tripId, yard_cost_cents as yardCostCents, pickup_cost_cents as pickupCostCents,
+    `select service_situation as serviceSituation,seller_id as sellerId,seller_commission_override_cents as sellerCommissionOverrideCents,notes,trip_id as tripId, yard_cost_cents as yardCostCents, pickup_cost_cents as pickupCostCents,
       delivery_cost_cents as deliveryCostCents, other_cost_cents as otherCostCents, insurance_cost_cents as insuranceCostCents, invoice_cost_cents as invoiceCostCents, icms_cost_cents as icmsCostCents, cte_mdfe_cost_cents as cteMdfeCostCents, actual_fuel_cost_cents as actualFuelCostCents, cargo_vehicles as cargoVehicles,
           fuel_liters_milli as fuelLitersMilli, fuel_pump_amount_cents as fuelPumpAmountCents,
       id, vehicle_id as vehicleId, vehicle_plate as vehiclePlate,
@@ -106,7 +107,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       db
         .prepare(
           `update fleet_freights set
-            notes = ?, seller_commission_override_cents = ?, vehicle_id = ?, vehicle_plate = ?, driver_id = ?, driver_name = ?,
+            service_situation = ?, notes = ?, seller_commission_override_cents = ?, vehicle_id = ?, vehicle_plate = ?, driver_id = ?, driver_name = ?,
             client_id = ?, client_name = ?, cargo_vehicle_model = ?, cargo_plate = ?,
             origin = ?, destination = ?, origin_location_type = ?, destination_location_type = ?, pickup_date = ?, delivery_date = ?,
             billing_date = ?, operational_status = ?, priority = ?,
@@ -118,7 +119,7 @@ export async function PATCH(request: Request, context: RouteContext) {
            where id = ?`,
         )
         .bind(
-          data.notes, commissionOverrideCents, vehicle.id,
+          data.serviceSituation, data.notes, commissionOverrideCents, vehicle.id,
           vehicle.plate,
           driver.id,
           driver.name,

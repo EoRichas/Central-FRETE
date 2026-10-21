@@ -1,4 +1,5 @@
 "use client";
+import { FLEET_RELATION_SITUATIONS } from '@/lib/domain/fleet-client-report';
 import { ORIGIN_LOCATION_TYPES, ORIGIN_LOCATION_TYPE_LABELS } from "@/lib/domain/operations";
 import { commissionCents } from "@/lib/domain/finance";
 import { ClientAutocomplete } from "@/components/client-autocomplete";
@@ -372,6 +373,7 @@ export function FreightModal({
         tollCents: moneyInputToCents(toll || "0"),
         driverCommissionCents: moneyInputToCents(driverCommission || "0"),
         ...(!editing ? {sellerId} : {}),
+        serviceSituation: financialOnly ? freight?.serviceSituation : form.get("serviceSituation"),
         notes: form.get("notes"),
         ...(canSeeCommission ? {sellerCommissionOverrideCents: commissionValue?.trim() ? moneyInputToCents(commissionValue) : null} : {}),
       };
@@ -621,6 +623,7 @@ export function FreightModal({
           </fieldset>
           <div className="section-divider">Operação e valores</div>
           <div className="form-grid four">
+            <Field label="Situação do serviço"><select name="serviceSituation" disabled={financialOnly} defaultValue={freight?.serviceSituation ?? ""} required><option value="">Selecione</option>{FLEET_RELATION_SITUATIONS.map(value => <option key={value} value={value}>{value}</option>)}</select></Field>
             <Field label="Status operacional">
               <select
                 name="operationalStatus"

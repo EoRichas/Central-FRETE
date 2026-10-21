@@ -8,6 +8,7 @@ import type { ServiceOrderReport } from '@/lib/domain/service-order';
 export function ServiceOrderScreen({id, source = "sale", onBack}: {id:string; source?: "sale" | "fleet"; onBack?: () => void}) {
   const endpoint = source === "fleet" ? `/api/fleet/freights/${id}/service-order` : `/api/sales/${id}/service-order`;
   const api = useApi<ServiceOrderReport>(endpoint);
+  const [includeObservations,setIncludeObservations] = useState(false);
   const [busy,setBusy] = useState(false);
   const [error,setError] = useState('');
   async function issue() {
@@ -19,12 +20,14 @@ export function ServiceOrderScreen({id, source = "sale", onBack}: {id:string; so
   if(api.loading) return <LoadingState label="Carregando OS…" />;
   if(api.error) return <ErrorState message={api.error} retry={api.refresh} />;
   const report=api.data;
-  const pdf=`${endpoint}?format=pdf`;
+  const relation = source === "fleet" || Boolean(report?.latest?.snapshot?.fleetRelation);
+  const pdf=`${endpoint}?format=pdf${relation && includeObservations ? "&observations=1" : relation ? "&observations=0" : ""}`;
   return <>
     <PageHeader eyebrow="Documento da venda" title="Ordem de Serviço" description="Visualize, imprima ou salve a OS desta venda." actions={onBack ? <button type="button" className="button secondary" onClick={onBack}>Voltar à venda</button> : <Link className="button secondary" href={source === "fleet" ? "/frota" : `/vendas/${id}`}>{source === "fleet" ? "Voltar à Frota" : "Voltar à venda"}</Link>} />
     <section className="panel detail-card form-stack">
       {error && <p className="form-error" role="alert">{error}</p>}
       {report?.stale && <p className="form-error" role="status">Os dados da venda foram alterados. Atualize a OS antes de enviá-la.</p>}
+      {relation && <label className="fleet-check-field"><input type="checkbox" checked={includeObservations} onChange={e => setIncludeObservations(e.target.checked)} /> Incluir observações da venda</label>}
       <div className="order-actions">
         {(!report?.latest || report.stale) && <button className="button primary" disabled={busy} onClick={issue}>{busy ? 'Gerando…' : report?.latest ? 'Atualizar OS' : 'Gerar OS'}</button>}
         {report?.latest && <>

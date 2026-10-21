@@ -1,3 +1,4 @@
+import { renderFleetOrderRelation } from './fleet-order-relation';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
@@ -12,7 +13,8 @@ const methods: Record<string,string> = { BOLETO:'Boleto bancário', DINHEIRO:'Di
 // Coordinates refer to the supplied portrait letterhead. The second reference is a footer detail.
 export const SERVICE_ORDER_LAYOUT = { width:595.28, height:841.89, left:42, contentWidth:511.28, top:582, bottom:216 } as const;
 
-export async function renderServiceOrderPdf(order: ServiceOrderVersion): Promise<Uint8Array> {
+export async function renderServiceOrderPdf(order: ServiceOrderVersion, includeObservations = true): Promise<Uint8Array> {
+  if (order.snapshot.fleetRelation) return renderFleetOrderRelation(order, includeObservations);
   if (order.snapshot.schemaVersion !== 3) return renderLegacyOrder(order);
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);

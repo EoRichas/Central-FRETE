@@ -1,3 +1,4 @@
+import { parseServiceSituation } from '@/lib/server/fleet-service-situation';
 import { resolveSaleSeller, saleForViewer, saleCommissionOverride } from "@/lib/server/seller-commission";
 import { validateSaleClient } from "@/lib/server/registry-validation";
 import { roleCan } from "@/lib/domain/permissions";
@@ -164,6 +165,7 @@ export async function POST(request: Request) {
     const sellerName = seller.name, sellerId = seller.id, commissionBasisPoints = seller.commissionBasisPoints;
     const linkedCommission = cargo.fleetFreightId ? await queryFirst<{amount: number | null}>("select seller_commission_override_cents as amount from fleet_freights where id=?", [cargo.fleetFreightId]) : null;
     const commissionOverrideCents = saleCommissionOverride(user, payload.commissionOverrideCents, linkedCommission?.amount ?? null, sellerId);
+    const serviceSituation = saleChannel === 'FROTA' ? parseServiceSituation(payload.serviceSituation) : null;
     const costsPending = costs.some((cost) => !cost.confirmed);
     const db = await getD1();
     const statements: D1PreparedStatement[] = [
@@ -299,7 +301,7 @@ export async function POST(request: Request) {
           user.id,
           user.email,
           JSON.stringify({
-            numbering: "AUTOMATIC_GLOBAL", saleChannel, billingDate, actorRole: user.role, fleetFreightId: cargo.fleetFreightId,
+            numbering: "AUTOMATIC_GLOBAL", serviceSituation, saleChannel, billingDate, actorRole: user.role, fleetFreightId: cargo.fleetFreightId,
             freightAmountCents,
             commissionBasisPoints, commissionOverrideCents,
             costCount: costs.length,
@@ -310,6 +312,8 @@ export async function POST(request: Request) {
         ),
     );
 
+    statements.push(db.prepare('update freight_sales set service_situation=? where id=?').bind(serviceSituation,saleId));
+    if (cargo.fleetFreightId && payload.serviceSituation !== undefined) statements.push(db.prepare('update fleet_freights set service_situation=? where id=?').bind(serviceSituation,cargo.fleetFreightId));
     const result = await db.batch<{ saleNumber: string }>(statements);
     return Response.json({ id: saleId, saleNumber: result[0].results[0].saleNumber }, { status: 201 });
   } catch (error) {

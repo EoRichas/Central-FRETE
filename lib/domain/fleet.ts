@@ -78,6 +78,7 @@ export type FleetDriver = {
 };
 
 export type FleetFreightBase = {
+  serviceSituation?: import('@/lib/domain/fleet-client-report').FleetServiceSituation | null;
   originLocationType?: import("@/lib/domain/operations").OriginLocationType | null;
   destinationLocationType?: import("@/lib/domain/operations").OriginLocationType | null;
 

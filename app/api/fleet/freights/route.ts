@@ -65,7 +65,7 @@ export async function POST(request: Request) {
           data.routeDistanceMeters, data.odometerStartMeters, data.odometerEndMeters,
           data.insuranceCostCents, data.invoiceCostCents, data.icmsCostCents, data.cteMdfeCostCents,
         ),
-      db.prepare("update fleet_freights set notes=?,seller_commission_override_cents=? where id=?").bind(data.notes,commissionOverrideCents,id),
+      db.prepare("update fleet_freights set service_situation=?,notes=?,seller_commission_override_cents=? where id=?").bind(data.serviceSituation,data.notes,commissionOverrideCents,id),
       db
         .prepare(
           `insert into audit_logs (
