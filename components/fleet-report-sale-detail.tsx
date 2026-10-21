@@ -6,16 +6,17 @@ import type { FleetFreight } from '@/lib/domain/fleet';
 import { roleCan } from '@/lib/domain/permissions';
 import { FleetFreightDetail } from './fleet-freight-detail';
 import { SaleDetailScreen } from './sale-detail-screen';
+import type { OrderObservationContext } from './order-observations-dialog';
 import { ServiceOrderScreen } from './service-order-screen';
 import { ErrorState, LoadingState, PageHeader } from './ui';
 import { useApi } from './use-api';
 
 /** Report navigation stays local so client, period and report results survive. */
-export function FleetReportSaleDetail({id, onBack}: {id: string; onBack: () => void}) {
+export function FleetReportSaleDetail({id, onBack, reportContext}: {id: string; onBack: () => void; reportContext?: OrderObservationContext}) {
   const [orderOpen, setOrderOpen] = useState(false);
   const source = id.startsWith('freight:') ? 'fleet' : 'sale';
   const resourceId = id.slice(source === 'fleet' ? 8 : 5);
-  if (orderOpen) return <ServiceOrderScreen id={resourceId} source={source} onBack={() => setOrderOpen(false)} />;
+  if (orderOpen) return <ServiceOrderScreen id={resourceId} source={source} reportContext={reportContext} onBack={() => setOrderOpen(false)} />;
   if (source === 'sale') return <SaleDetailScreen id={resourceId} onBack={onBack} onViewOrder={() => setOrderOpen(true)} hideDeleteActions />;
   return <ReportFreightDetail id={resourceId} onBack={onBack} onViewOrder={() => setOrderOpen(true)} />;
 }

@@ -1734,6 +1734,16 @@ test('relatório do cliente usa criação, isola IDs e vendedores, não duplica 
  assert.equal((await api.POST(await request(path,'admin','POST',{includeObservations:true,observations:[{saleId:'freight:client-report-foreign',text:'Outra venda'}]}))).status,400);
  assert.equal((await api.POST(await request(path,'admin','POST',{includeObservations:true,observations:[{saleId:'freight:client-report-start',text:'A'.repeat(6001)}]}))).status,400);
  const exportOwn=await api.POST(await request(path,'seller','POST',{includeObservations:false})); assert.equal(exportOwn.status,200,await exportOwn.clone().text());
+ const singlePath=path+'&rowId=freight:client-report-start';
+ const single=await (await api.GET(await request(singlePath))).json(); assert.equal(single.report.rows.length,1);assert.equal(single.report.totals.amountCents,10000);
+ assert.equal((await api.GET(await request(path+'&rowId=freight:client-report-end','seller'))).status,404);
+ assert.equal((await api.GET(await request(path+'&rowId=freight:client-report-foreign'))).status,404);
+ assert.equal((await api.POST(await request(singlePath,'admin','POST',{includeObservations:true,observations:[{saleId:'freight:client-report-end',text:'Outra venda do cliente'}]}))).status,400);
+ const edited=await api.POST(await request(singlePath,'admin','POST',{includeObservations:true,observations:[{saleId:'freight:client-report-start',text:'TEXTO EDITADO SOMENTE NO PDF'}]}));assert.equal(edited.status,200,await edited.clone().text());assert.match(edited.headers.get('content-disposition')!,/OS-Central-/);
+ const all=await api.POST(await request(path,'admin','POST',{includeObservations:true,observations:[{saleId:'freight:client-report-start',text:'TEXTO EDITADO SOMENTE NO PDF'}]}));assert.equal(all.status,200,await all.clone().text());
+ if(process.env.CENTRAL_QA_OUTPUT){const {mkdir,writeFile}=await import('node:fs/promises');await mkdir(process.env.CENTRAL_QA_OUTPUT,{recursive:true});await writeFile(`${process.env.CENTRAL_QA_OUTPUT}/os-observacao-editada.pdf`,new Uint8Array(await edited.arrayBuffer()));await writeFile(`${process.env.CENTRAL_QA_OUTPUT}/relacao-observacoes-selecionadas.pdf`,new Uint8Array(await all.arrayBuffer()));}
+ assert.equal((await queryFirst('select notes from fleet_freights where id=?',['client-report-start']) as {notes:string}).notes,'OBS ORIGINAL');
+
 
 });
 
