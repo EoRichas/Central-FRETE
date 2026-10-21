@@ -1,9 +1,12 @@
 "use client";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useContext, useEffect, useRef, useState, type FormEvent } from "react";
+import { CurrentUserContext } from './current-user-context';
+import { latestIncomingMessage, markSupportRead } from '@/lib/client/support-notifications';
 import styles from "./support-workspace.module.css";
 type Message={id:string;body:string;author_label:string;created_at:string};
 type Detail={chat:{id:string;recipient_name:string};messages:Message[]};
 export function DirectSupportChat({endpoint,id,onEnded}:{endpoint:string;id:string;onEnded:()=>void}) {
+  const currentUser = useContext(CurrentUserContext)?.user;
   const [detail,setDetail]=useState<Detail|null>(null),[message,setMessage]=useState(""),[error,setError]=useState(""),[busy,setBusy]=useState(false);
   const box=useRef<HTMLDivElement>(null),messageId=useRef(""),ended=useRef(onEnded);
   useEffect(()=>{ended.current=onEnded;},[onEnded]);
@@ -26,7 +29,19 @@ export function DirectSupportChat({endpoint,id,onEnded}:{endpoint:string;id:stri
     return()=>{controller.abort();clearInterval(timer);document.removeEventListener("visibilitychange",visible);};
   },[endpoint,id]);
   const nearBottom=useRef(true);
-  useEffect(()=>{if(nearBottom.current&&box.current)box.current.scrollTop=box.current.scrollHeight;},[detail?.messages]);
+  function acknowledge() {
+    const messageId = detail && latestIncomingMessage(detail.messages);
+    if (currentUser && messageId && nearBottom.current && document.visibilityState === 'visible') markSupportRead(currentUser.id, id, messageId);
+  }
+  useEffect(()=>{
+    if(nearBottom.current&&box.current)box.current.scrollTop=box.current.scrollHeight;
+    const messageId = detail && latestIncomingMessage(detail.messages);
+    const mark = () => { if (currentUser && messageId && nearBottom.current && document.visibilityState === 'visible') markSupportRead(currentUser.id, id, messageId); };
+    // A poll in a background tab must not acknowledge a message as read.
+    const frame = requestAnimationFrame(mark);
+    document.addEventListener('visibilitychange', mark);
+    return () => { cancelAnimationFrame(frame); document.removeEventListener('visibilitychange', mark); };
+  },[detail, currentUser, id]);
   async function reply(event:FormEvent){
     event.preventDefault();if(busy||!message.trim())return;
     messageId.current ||= crypto.randomUUID();const sent=message;setBusy(true);setError("");
@@ -44,7 +59,7 @@ export function DirectSupportChat({endpoint,id,onEnded}:{endpoint:string;id:stri
   return <section className={styles.conversation} aria-label="Chat direto com o suporte">
     <header><span className={styles.eyebrow}>CHAT DIRETO</span><h2>Conversa com o suporte</h2><p className={styles.hint}>Quando o suporte encerrar, esta conversa e suas mensagens serão apagadas.</p></header>
     {error&&<p role="alert" className={styles.error}>{error}</p>}
-    <div ref={box} className={`${styles.messages} ${styles.directMessages}`} role="log" aria-live="polite" onScroll={()=>{const b=box.current;if(b)nearBottom.current=b.scrollHeight-b.scrollTop-b.clientHeight<80;}}>
+    <div ref={box} className={`${styles.messages} ${styles.directMessages}`} role="log" aria-live="polite" onScroll={()=>{const b=box.current;if(b)nearBottom.current=b.scrollHeight-b.scrollTop-b.clientHeight<80;acknowledge();}}>
       {!detail?<p role="status">Carregando chat…</p>:detail.messages.length?detail.messages.map(m=><article key={m.id} className={styles.message}><header><strong>{m.author_label}</strong><time>{new Date(m.created_at).toLocaleString("pt-BR")}</time></header><p>{m.body}</p></article>):<p className={styles.hint}>O suporte abriu uma conversa com você. Escreva sua mensagem abaixo.</p>}
       {detail&&detail.messages.length>=200&&<p className={styles.hint}>Exibindo as 200 mensagens mais recentes.</p>}
     </div>

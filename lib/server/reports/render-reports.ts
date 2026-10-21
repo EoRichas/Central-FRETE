@@ -1,4 +1,4 @@
-import type { SalesReport } from '@/lib/domain/reports';
+import { partialResultMessage, type SalesReport } from '@/lib/domain/reports';
 import { calculateMonthlyResult, type MonthlySource, type MonthlyClosing } from '@/lib/domain/fleet-results';
 import { competencyLabel, formatDate, formatMoney, formatPercent } from '@/lib/format';
 import { ReportPdf, reportColors as colors, type ReportColumn } from './pdf-layout';
@@ -23,7 +23,7 @@ export async function renderSalesReportPdf(report:SalesReport,period:string,chan
  {label:'MARGEM',value:formatMoney(t.margin),detail:`${formatPercent(t.marginBps)} sobre a receita`},
  ...(showCommission?[{label:'COMISSÕES',value:formatMoney(report.commissions),detail:'Percentuais registrados nas vendas'}]:[{label:'VENDAS',value:String(report.sales.length),detail:'Registros selecionados'}])]);
  p.note('Base: data da venda na Cegonha e nas vendas Frota sem vínculo; data de coleta nos fretes da Frota. Vendas Frota vinculadas não são somadas novamente.');
- if(report.pendingCosts)p.note(`Resultado parcial: ${report.pendingCosts} registro(s) com custos pendentes ou combustível estimado.`);
+ if(report.pendingCosts)p.note(partialResultMessage(report));
  p.section('01  Comparativo por vendedor');
  const sellerColumns=showCommission?cols(['Vendedor','Vendas','Receita (R$)','Custo (R$)','Margem (R$)','Comissão (R$)'],[224,50,125,125,125,p.width-649]):cols(['Vendedor','Vendas','Receita (R$)','Custo (R$)','Margem (R$)'],[249,65,155,155,p.width-624]);
  p.table(sellerColumns,[...report.sellers.map(r=>[r.name,String(r.sales),num(r.freight),num(r.cost),num(r.margin),...(showCommission?[num(r.commission??0)]:[])]),['TOTAL',String(report.sales.length),num(t.freight),num(t.cost),num(t.margin),...(showCommission?[num(report.commissions)]:[])]],{total:true});

@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import type { ReportSale } from "@/lib/domain/reports";
-import type { SalesReport } from "@/lib/domain/reports";
+import { partialResultMessage, type SalesReport } from "@/lib/domain/reports";
 import { PdfDownloadButton } from "@/components/pdf-download-button";
 import {
   formatDate,
@@ -69,7 +69,7 @@ export function GeneralSalesScreen() {
             <span>Central Express</span>
             <h1>Vendas Geral</h1>
           </div>
-          {Boolean(api.data?.report.pendingCosts) && <p className="form-error" role="status">Resultado parcial: {api.data?.report.pendingCosts} registro(s) com custos pendentes ou combustível estimado.</p>}
+          {Boolean(api.data?.report.pendingCosts) && <p className="form-error" role="status">{api.data && partialResultMessage(api.data.report)}</p>}
           <section className="kpi-grid report-kpis">
             <article className="kpi-card">
               <span>Receita das vendas</span>

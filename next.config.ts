@@ -15,6 +15,7 @@ const nextConfig: NextConfig = {
     ]}];
   },
   outputFileTracingIncludes: {
+    '/api/fleet/client-report': ['./public/central-express-logo.png', './node_modules/@fontsource/noto-sans/files/noto-sans-latin-{400,700}-normal.woff'],
     '/api/sales/*/service-order': ['./public/service-order-background-portrait.pdf', './node_modules/@fontsource/noto-sans/files/noto-sans-latin-{400,700}-normal.woff'],
   },
 };
