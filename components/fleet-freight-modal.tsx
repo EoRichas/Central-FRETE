@@ -91,15 +91,15 @@ export function FreightModal({
   const [routeDistanceMeters, setRouteDistanceMeters] = useState(
     freight?.routeDistanceMeters ?? null,
   );
-  const [kmStart, setKmStart] = useState(
+  const kmStart = (
     freight?.odometerStartMeters == null
       ? ""
-      : distanceToInput(freight.odometerStartMeters),
+      : distanceToInput(freight.odometerStartMeters)
   );
-  const [kmEnd, setKmEnd] = useState(
+  const kmEnd = (
     freight?.odometerEndMeters == null
       ? ""
-      : distanceToInput(freight.odometerEndMeters),
+      : distanceToInput(freight.odometerEndMeters)
   );
   const routeSequence = useRef(0);
   const hasOdometer = Boolean(kmStart.trim() && kmEnd.trim());
@@ -179,14 +179,6 @@ export function FreightModal({
       freight?.cargoPlate ?? null,
     ),
   );
-  const [fuelLiters, setFuelLiters] = useState(
-    freight?.fuelLitersMilli == null
-      ? ""
-      : String(freight.fuelLitersMilli / 1000).replace(".", ","),
-  );
-  const [pumpAmount, setPumpAmount] = useState(
-    centsToInput(freight?.fuelPumpAmountCents),
-  );
   const [yardCost, setYardCost] = useState(
     centsToInput(freight?.yardCostCents),
   );
@@ -201,11 +193,10 @@ export function FreightModal({
   );
   const [insuranceCostCents, setInsuranceCostCents] = useState(centsToInput(freight?.insuranceCostCents));
   const [invoiceCostCents, setInvoiceCostCents] = useState(centsToInput(freight?.invoiceCostCents));
-  const [icmsCostCents, setIcmsCostCents] = useState(centsToInput(freight?.icmsCostCents));
+  const icmsCostCents = centsToInput(freight?.icmsCostCents);
+  const [damagesCostCents, setDamagesCostCents] = useState(centsToInput(freight?.damagesCostCents));
   const [cteMdfeCostCents, setCteMdfeCostCents] = useState(centsToInput(freight?.cteMdfeCostCents));
-  const [actualFuel, setActualFuel] = useState(
-    centsToInput(freight?.actualFuelCostCents),
-  );
+  const actualFuel = centsToInput(freight?.actualFuelCostCents);
   const [toll, setToll] = useState(centsToInput(freight?.tollCents));
   const [driverCommission, setDriverCommission] = useState(
     centsToInput(freight?.driverCommissionCents),
@@ -287,6 +278,7 @@ export function FreightModal({
           insuranceCostCents: moneyInputToCents(insuranceCostCents || "0"),
           invoiceCostCents: moneyInputToCents(invoiceCostCents || "0"),
           icmsCostCents: moneyInputToCents(icmsCostCents || "0"),
+          damagesCostCents: moneyInputToCents(damagesCostCents || "0"),
           cteMdfeCostCents: moneyInputToCents(cteMdfeCostCents || "0"),
           actualFuelCostCents: fuelInputToInteger(
             actualFuel,
@@ -332,6 +324,7 @@ export function FreightModal({
         insuranceCostCents: moneyInputToCents(insuranceCostCents || "0"),
         invoiceCostCents: moneyInputToCents(invoiceCostCents || "0"),
         icmsCostCents: moneyInputToCents(icmsCostCents || "0"),
+        damagesCostCents: moneyInputToCents(damagesCostCents || "0"),
         cteMdfeCostCents: moneyInputToCents(cteMdfeCostCents || "0"),
         actualFuelCostCents: fuelInputToInteger(
           actualFuel,
@@ -341,12 +334,8 @@ export function FreightModal({
         clientId: financialOnly ? freight!.clientId ?? null : client?.id ?? null,
         clientName: financialOnly ? freight!.clientName : client?.legalName ?? "",
         cargoVehicles,
-        fuelLitersMilli: fuelInputToInteger(
-          fuelLiters,
-          "Litros abastecidos",
-          3,
-        ),
-        fuelPumpAmountCents: fuelInputToInteger(pumpAmount, "Valor bomba", 2),
+        fuelLitersMilli: freight?.fuelLitersMilli ?? null,
+        fuelPumpAmountCents: freight?.fuelPumpAmountCents ?? null,
         originCep: financialOnly ? freight!.originCep : originCep,
         destinationCep: financialOnly
           ? freight!.destinationCep
@@ -410,7 +399,7 @@ export function FreightModal({
       wide
       onClose={onClose}
       title={editing ? "Editar frete da frota" : "Novo frete da frota"}
-      description="Cadastre os veículos da carga e os custos desta operação. O resultado utiliza o combustível realizado quando informado."
+      description="Cadastre os veículos da carga e os custos desta operação. O combustível é estimado pela distância e pelos parâmetros da Frota."
     >
       <form className="modal-body form-stack" onSubmit={submit}>
         <fieldset
@@ -428,8 +417,7 @@ export function FreightModal({
             {tripId && (
               <p className="fleet-update-note">
                 Operação vinculada a uma viagem histórica. Seus custos
-                compartilhados continuam preservados. O combustível pago
-                substitui somente a parcela deste frete.
+                compartilhados continuam preservados.
               </p>
             )}
             <div className="form-grid three">
@@ -535,46 +523,6 @@ export function FreightModal({
                 </strong>
               </p>
             )}
-            <div className="form-grid two">
-              <Field label="KM inicial">
-                <input
-                  inputMode="decimal"
-                  value={kmStart}
-                  onChange={(e) => { if (kmEnd.trim()) { ++routeSequence.current; setRouting(false); } setKmStart(e.target.value); }}
-                  placeholder="125.300"
-                />
-              </Field>
-              <Field label="KM final">
-                <input
-                  inputMode="decimal"
-                  value={kmEnd}
-                  onChange={(e) => { if (kmStart.trim()) { ++routeSequence.current; setRouting(false); } setKmEnd(e.target.value); }}
-                  placeholder="125.795"
-                />
-              </Field>
-            </div>
-            {kmStart.trim() &&
-              kmEnd.trim() &&
-              (() => {
-                try {
-                  return (
-                    <p role="status">
-                      <strong>
-                        Distância realizada:{" "}
-                        {formatDistance(distanceValues().distanceMeters)}
-                      </strong>
-                    </p>
-                  );
-                } catch (error) {
-                  return (
-                    <p role="alert" className="form-error">
-                      {error instanceof Error
-                        ? error.message
-                        : "Quilometragem inválida."}
-                    </p>
-                  );
-                }
-              })()}
             <div className="form-grid two">
               <Field label="Origem">
                 <input
@@ -742,40 +690,8 @@ export function FreightModal({
           <div className="form-grid four">
             <Field label="Seguro (R$)"><input value={insuranceCostCents} onChange={e => setInsuranceCostCents(e.target.value)} inputMode="decimal" placeholder="0,00" /></Field>
             <Field label="Nota Fiscal (R$)"><input value={invoiceCostCents} onChange={e => setInvoiceCostCents(e.target.value)} inputMode="decimal" placeholder="0,00" /></Field>
-            <Field label="ICMS (R$)"><input value={icmsCostCents} onChange={e => setIcmsCostCents(e.target.value)} inputMode="decimal" placeholder="0,00" /></Field>
             <Field label="CTE/MDF (R$)"><input value={cteMdfeCostCents} onChange={e => setCteMdfeCostCents(e.target.value)} inputMode="decimal" placeholder="0,00" /></Field>
-          </div>
-          <div className="form-grid three">
-            <Field label="Litros abastecidos" hint="Até 3 casas decimais.">
-              <input
-                value={fuelLiters}
-                onChange={(e) => setFuelLiters(e.target.value)}
-                inputMode="decimal"
-                placeholder="0,000"
-              />
-            </Field>
-            <Field
-              label="Valor bomba (R$)"
-              hint="Valor informado na bomba, separado do valor efetivamente pago."
-            >
-              <input
-                value={pumpAmount}
-                onChange={(e) => setPumpAmount(e.target.value)}
-                inputMode="decimal"
-                placeholder="0,00"
-              />
-            </Field>
-            <Field
-              label="Valor pago combustível (R$)"
-              hint="Custo real. Em branco mantém a estimativa ou parcela histórica; zero é um valor realizado."
-            >
-              <input
-                value={actualFuel}
-                onChange={(e) => setActualFuel(e.target.value)}
-                inputMode="decimal"
-                placeholder="Ainda não apurado"
-              />
-            </Field>
+            <Field label="Avarias (R$)"><input value={damagesCostCents} onChange={e => setDamagesCostCents(e.target.value)} inputMode="decimal" placeholder="0,00" /></Field>
           </div>
           <Field label="Observações" hint="Anotações sobre despesas à parte. Para incluir um valor no resultado, registre-o no custo correspondente."><textarea name="notes" rows={4} maxLength={5000} defaultValue={freight?.notes ?? ''} /></Field>
           {canSeeCommission && <Field label="Valor da comissão (R$)" hint="Preenchido automaticamente. Altere o valor se houver uma comissão combinada."><input inputMode="decimal" value={commissionValue ?? centsToInput(calculatedCommission ?? 0)} onChange={e=>setCommissionValue(e.target.value)} onBlur={()=>{if (!commissionValue?.trim()) setCommissionValue(null);}} required /></Field>}
@@ -817,7 +733,7 @@ export function FreightModal({
                 O resultado operacional desconta combustível e pedágio.{" "}
                 {tripId
                   ? "Custos históricos compartilhados são distribuídos entre os fretes vinculados, sem duplicação."
-                  : "Sem valor pago informado, o combustível exibido é estimado."}
+                  : "O combustível é estimado pela distância. Valores realizados de registros anteriores são preservados."}
               </p>
             </>
           )}

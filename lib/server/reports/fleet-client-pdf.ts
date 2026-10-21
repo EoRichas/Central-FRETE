@@ -47,7 +47,7 @@ export async function renderFleetClientPdf(report: FleetClientReport, observatio
     rect(0, H - 108, W, 108, navy); rect(M, H - 82, 3, 59, rgb(.8, .12, .16));
     text('CENTRAL EXPRESS', M + 15, H - 38, 19, true, white);
     text('TRANSPORTE DE VEÍCULOS', M + 15, H - 54, 8, false, white);
-    text(orderNumber ? `OS ${orderNumber} | RELAÇÃO DE SERVIÇOS` : 'OS | RELAÇÃO DE SERVIÇOS', M + 15, H - 81, 11, true, white);
+    text(orderNumber ? `OS ${orderNumber} | RELAÇÃO DE SERVIÇOS` : 'RELATÓRIO DE VENDAS | RELAÇÃO DE SERVIÇOS', M + 15, H - 81, 11, true, white);
     const logoSize = logo.scale(Math.min(88 / logo.width, 77 / logo.height));
     page.drawImage(logo, {x: W - M - logoSize.width, y: H - 92, ...logoSize});
     y = H - 133;
@@ -121,6 +121,6 @@ export async function renderFleetClientPdf(report: FleetClientReport, observatio
     text('CENTRAL EXPRESS | TRANSPORTE DE VEÍCULOS', M, 21, 7, true, navy);
     text(`Página ${i + 1} de ${pages.length}`, W - M - 70, 21, 7, false, muted);
   });
-  doc.setTitle(`OS - Relação de serviços - ${report.client.name}`); doc.setAuthor('Central Express');
+  doc.setTitle(`${orderNumber ? `OS ${orderNumber}` : 'Relatório de vendas'} - Relação de serviços - ${report.client.name}`); doc.setAuthor('Central Express');
   return doc.save();
 }

@@ -9,7 +9,7 @@ type SourceRow = {
   id: string; saleNumber: string; createdAt: string; clientId: string; clientName: string;
   vehicles: CargoVehicle[] | null; vehicle: string | null; plate: string | null;
   driverName: string | null; serviceSituation: FleetClientReportRow["serviceSituation"]; situation: string; departureDate: string | null;
-  amountCents: number; paidStatus: string | null; paidAt: string | null; notes: string | null;
+  amountCents: number; paidStatus: string | null; paidAt: string | null; notes: string | null; orderObservation: string | null; orderIncludeObservation: boolean | null;
 };
 type Receipt = {saleId: string; type: string; amountCents: number; occurredAt: string};
 const receiptDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : creationDate(value);
@@ -41,7 +41,7 @@ export async function loadFleetClientReport(user: CurrentUser, params: URLSearch
       f.client_id as clientId,c.legal_name as clientName,f.cargo_vehicles as vehicles,
       f.cargo_vehicle_model as vehicle,f.cargo_plate as plate,f.driver_name as driverName,
       f.service_situation as serviceSituation,f.operational_status as situation,f.pickup_date as departureDate,
-      f.freight_amount_cents as amountCents,f.payment_status as paidStatus,f.paid_at as paidAt,f.notes
+      f.freight_amount_cents as amountCents,f.payment_status as paidStatus,f.paid_at as paidAt,f.notes,f.order_observation as orderObservation,f.order_include_observation as orderIncludeObservation
       from fleet_freights f join clients c on c.id=f.client_id
       where f.client_id=? and ${period('f')} ${own ? 'and f.seller_id=?' : ''}
       order by f.created_at,f.id limit 2001`, own ? [clientId, from, to, user.id] : [clientId, from, to]),
@@ -50,7 +50,7 @@ export async function loadFleetClientReport(user: CurrentUser, params: URLSearch
       s.client_id as clientId,c.legal_name as clientName,s.cargo_vehicles as vehicles,
       s.vehicle,s.plate,null::text as driverName,s.service_situation as serviceSituation,s.operational_status as situation,
       null::text as departureDate,s.freight_amount_cents as amountCents,
-      null::text as paidStatus,null::text as paidAt,s.notes
+      null::text as paidStatus,null::text as paidAt,s.notes,s.order_observation as orderObservation,s.order_include_observation as orderIncludeObservation
       from freight_sales s join clients c on c.id=s.client_id
       where s.sale_channel='FROTA' and s.fleet_freight_id is null and s.client_id=? and ${period('s')}
       ${own ? 'and s.seller_id=?' : ''} order by s.created_at,s.id limit 2001`, own ? [clientId, from, to, user.id] : [clientId, from, to]),
@@ -67,7 +67,7 @@ export async function loadFleetClientReport(user: CurrentUser, params: URLSearch
       departureDate: f.departureDate, amountCents: f.amountCents,
       receivedCents: f.paidStatus === 'PAGO' ? f.amountCents : 0,
       receivedDates: f.paidStatus === 'PAGO' && f.paidAt ? [receiptDate(f.paidAt)] : [],
-      paid: f.paidStatus === 'PAGO' ? 'Sim' : 'Não', notes: f.notes ?? '',
+      paid: f.paidStatus === 'PAGO' ? 'Sim' : 'Não', notes: f.notes ?? '', orderObservation: f.orderObservation, orderIncludeObservation: f.orderIncludeObservation,
     })),
     ...sales.map((s): FleetClientReportRow => {
       const payments = receipts.filter(p => p.saleId === s.id);
@@ -76,7 +76,7 @@ export async function loadFleetClientReport(user: CurrentUser, params: URLSearch
         vehicles: cargoVehiclesOrLegacy(s.vehicles, s.vehicle, s.plate), driverName: s.driverName, serviceSituation: s.serviceSituation, situation: s.situation,
         departureDate: s.departureDate, amountCents: s.amountCents, receivedCents,
         receivedDates: [...new Set(payments.filter(p => p.type !== 'ESTORNO').map(p => receiptDate(p.occurredAt)))],
-        paid: receivedCents >= s.amountCents ? 'Sim' : receivedCents > 0 ? 'Parcial' : 'Não', notes: s.notes ?? ''};
+        paid: receivedCents >= s.amountCents ? 'Sim' : receivedCents > 0 ? 'Parcial' : 'Não', notes: s.notes ?? '', orderObservation: s.orderObservation, orderIncludeObservation: s.orderIncludeObservation};
     }),
   ];
   const rowId = params.get('rowId')?.trim();
