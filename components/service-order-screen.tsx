@@ -27,7 +27,7 @@ export function ServiceOrderScreen({id, source = "sale", onBack}: {id:string; so
     <section className="panel detail-card form-stack">
       {error && <p className="form-error" role="alert">{error}</p>}
       {report?.stale && <p className="form-error" role="status">Os dados da venda foram alterados. Atualize a OS antes de enviá-la.</p>}
-      {relation && <label><input type="checkbox" checked={includeObservations} onChange={e => setIncludeObservations(e.target.checked)} /> Incluir observações da venda</label>}
+      {relation && <label className="fleet-check-field"><input type="checkbox" checked={includeObservations} onChange={e => setIncludeObservations(e.target.checked)} /> Incluir observações da venda</label>}
       <div className="order-actions">
         {(!report?.latest || report.stale) && <button className="button primary" disabled={busy} onClick={issue}>{busy ? 'Gerando…' : report?.latest ? 'Atualizar OS' : 'Gerar OS'}</button>}
         {report?.latest && <>
