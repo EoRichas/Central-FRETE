@@ -7,6 +7,7 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import ts from 'typescript';
 import * as operations from '../lib/domain/operations.ts';
 import * as permissions from '../lib/domain/permissions.ts';
+import * as clientReport from '../lib/domain/fleet-client-report.ts';
 const require = createRequire(import.meta.url);
 
 function compile(file, overrides) {
@@ -58,12 +59,13 @@ test('detalhe do relatório abre a OS correta e retorna à mesma venda, sem excl
   }
 });
 
-test('seta abre informações e o retorno preserva cliente, período e exportação do relatório', () => {
+test('seta preserva filtros; preparar relação envia o tipo escolhido e abre prévia sem download', async () => {
   const state = hooks(['client', '2026-10-01', '2026-10-31', 'clientId=client&from=2026-10-01&to=2026-10-31']);
   const FleetReportSaleDetail = () => null;
   const {FleetClientReportPanel} = compile('components/fleet-client-report.tsx', {
     react: state.react, './fleet-report-sale-detail': {FleetReportSaleDetail}, './icons': {Icons: new Proxy({}, {get: () => icon})}, './ui': ui,
     './fleet-client-report.module.css': {default: {}}, '@/lib/format': format,
+    '@/lib/domain/fleet-client-report': clientReport,
     '@/lib/domain/dates': {currentCompetency: () => '2026-10', todaySaoPaulo: () => '2026-10-21'},
     './use-api': {useApi: () => ({loading: false, data: {clients: [{id: 'client', name: 'CLIENTE'}], report: {client: {name: 'CLIENTE'}, from: '2026-10-01', to: '2026-10-31', totals: {sales: 1, vehicles: 1, amountCents: 10000, receivedCents: 0, balanceCents: 10000}, rows: [{id: 'freight:operation', saleNumber: '201', vehicles: [], receivedDates: [], notes: ''}]}}})},
   });
@@ -77,6 +79,25 @@ test('seta abre informações e o retorno preserva cliente, período e exportaç
   assert.equal(find(tree, n => n.type === 'input' && n.props.min).props.value, '2026-10-31');
   assert.ok(find(tree, n => n.type === 'button' && n.props.children === 'Gerar PDF para o cliente'));
   assert.equal(state.values[3], 'clientId=client&from=2026-10-01&to=2026-10-31');
+  find(tree, n => n.type === 'button' && n.props.children === 'Gerar PDF para o cliente').props.onClick();
+  tree = render();
+  const service = find(tree, n => n.type === 'select' && n.props.disabled === false);
+  assert.equal(service.props.required, true); assert.equal(service.props.value, '');
+  service.props.onChange({target: {value: 'ENTREGA'}}); tree = render();
+  const original = globalThis.fetch; let payload;
+  globalThis.fetch = async (url, options) => {
+    assert.equal(url, '/api/fleet/client-report?clientId=client&from=2026-10-01&to=2026-10-31');
+    payload = JSON.parse(options.body);
+    return new Response(new Blob(['%PDF'], {type: 'application/pdf'}));
+  };
+  try {
+    await find(tree, n => n.type === 'form' && n.props.className === 'modal-body form-stack').props.onSubmit({preventDefault() {}});
+    assert.deepEqual(payload, {includeObservations: false, situations: [{saleId: 'freight:operation', situation: 'ENTREGA'}], observations: []});
+    tree = render();
+    assert.ok(find(tree, n => n.type === 'iframe' && n.props.title === 'Prévia da OS da relação'));
+    assert.ok(find(tree, n => n.type === 'a' && n.props.children === 'Salvar PDF'));
+    find(tree, n => n.props?.title === 'OS da relação').props.onClose();
+  } finally { globalThis.fetch = original; }
 });
 
 test('consulta comercial mantém informações e OS; excluir recebimento fica oculto só no relatório', () => {
