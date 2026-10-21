@@ -9,6 +9,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import type { CurrentUser, Role } from "@/lib/contracts";
 import { Icons } from "@/components/icons";
 import { TruckLoader } from "@/components/truck-loader";
+import { SupportNotification } from "@/components/support-notification";
 
 function roleLabel(role: Role) {
   return role === "GERENCIA" ? "PERFIL LEGADO" : role;
@@ -149,7 +150,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {visibleNavigation.map((item) => {
             const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
             const Icon = item.icon;
-            return <Link key={item.href} href={item.href} onClick={() => setMobileOpen(false)} className={active ? "active" : ""} aria-current={active ? "page" : undefined}><Icon /><span>{item.label}</span></Link>;
+            return <Link key={item.href} href={item.href} onClick={() => setMobileOpen(false)} className={active ? "active" : ""} aria-current={active ? "page" : undefined}><Icon /><span>{item.label}</span>{item.href === "/suporte" && user && <SupportNotification key={user.id} userId={user.id} />}</Link>;
           })}
         </nav>
         <div className="sidebar-user">

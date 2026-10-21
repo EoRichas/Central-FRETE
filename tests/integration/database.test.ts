@@ -1686,3 +1686,50 @@ test('papel restrito atende Frota e sessões sem DDL, bypass RLS ou alteração 
  const exposed=await pg.query("select * from information_schema.role_table_grants where grantee in ('anon','authenticated') and table_schema='public'");
  assert.equal(exposed.rows.length,0);
 });
+
+test('relatório do cliente usa criação, isola IDs e vendedores, não duplica vínculo e exporta PDF sem gravar observações', async () => {
+ const api = await import('../../app/api/fleet/client-report/route.ts');
+ await pg.exec(`insert into clients(id,type,legal_name,sale_channel) values ('client-report-a','PJ','CLIENTE HOMÔNIMO','FROTA'),('client-report-b','PJ','CLIENTE HOMÔNIMO','FROTA');
+ insert into fleet_freights(id,client_id,client_name,vehicle_plate,driver_name,origin,destination,pickup_date,operational_status,freight_amount_cents,distance_meters,seller_id,created_at,payment_status,paid_at,notes) values
+ ('client-report-start','client-report-a','CLIENTE HOMÔNIMO','AAA1A11','MOTORISTA','A','B','2088-03-10','EM_ROTA',10000,10000,'seller','2089-01-01T03:00:00.000Z','PAGO','2089-01-05T15:00:00Z','OBS ORIGINAL'),
+ ('client-report-end','client-report-a','CLIENTE HOMÔNIMO','AAA1A11','MOTORISTA','A','B','2088-03-10','NO_PATIO',20000,10000,'admin','2089-01-02T02:59:59.000Z','EM_ABERTO',null,null),
+ ('client-report-before','client-report-a','CLIENTE HOMÔNIMO','AAA1A11','MOTORISTA','A','B','2089-01-01','NO_PATIO',900000,10000,'seller','2089-01-01T02:59:59.000Z','EM_ABERTO',null,null),
+ ('client-report-after','client-report-a','CLIENTE HOMÔNIMO','AAA1A11','MOTORISTA','A','B','2089-01-01','NO_PATIO',900000,10000,'seller','2089-01-02T03:00:00.000Z','EM_ABERTO',null,null),
+ ('client-report-foreign','client-report-b','CLIENTE HOMÔNIMO','AAA1A11','MOTORISTA','A','B','2088-03-10','NO_PATIO',900000,10000,'admin','2089-01-01T12:00:00.000Z','EM_ABERTO',null,null);
+ insert into freight_sales(id,sale_channel,client_id,seller_id,seller_name,sale_date,competency,origin,destination,financial_due_date,operational_status,freight_amount_cents,commission_basis_points,created_by,created_at,notes,fleet_freight_id) values
+ ('client-report-commercial','FROTA','client-report-a','seller','SELLER','2088-03-10','2088-03','A','B','2089-01-31','CONFIRMAR',30000,700,'seller','2089-01-01T12:00:00Z','OBS COMERCIAL',null),
+ ('client-report-cegonha','CEGONHA','client-report-a','seller','SELLER','2088-03-10','2088-03','A','B','2089-01-31','CONFIRMAR',900000,700,'seller','2089-01-01T12:00:00Z','OBS CEGONHA',null),
+ ('client-report-mirror','FROTA','client-report-a','seller','SELLER','2088-03-10','2088-03','A','B','2089-01-31','CONFIRMAR',10000,700,'seller','2089-01-01T12:00:00Z','OBS ESPELHO','client-report-start');
+ insert into payment_transactions(id,sale_id,type,status,amount_cents,occurred_at,payment_method,idempotency_key,created_by) values
+ ('client-report-p1','client-report-commercial','RECEBIMENTO','CONFIRMADO',10000,'2089-01-10','PIX','client-report-p1','admin'),
+ ('client-report-p2','client-report-commercial','ADIANTAMENTO','CONFIRMADO',5000,'2089-01-11T15:00:00Z','TRANSFERENCIA','client-report-p2','admin'),
+ ('client-report-refund','client-report-commercial','ESTORNO','CONFIRMADO',2000,'2089-01-12T15:00:00Z','PIX','client-report-refund','admin'),
+ ('client-report-pending','client-report-commercial','RECEBIMENTO','PENDENTE',50000,'2089-01-13','PIX','client-report-pending','admin'),
+ ('client-report-cancelled','client-report-commercial','RECEBIMENTO','CANCELADO',50000,'2089-01-13','PIX','client-report-cancelled','admin');`);
+ const path='/api/fleet/client-report?clientId=client-report-a&from=2089-01-01&to=2089-01-01';
+ assert.equal((await api.GET(await request(path,'missing'))).status,401);
+ const response=await api.GET(await request(path)); assert.equal(response.status,200,await response.clone().text());
+ const {report}=await response.json();
+ assert.equal(report.rows.length,3); assert.equal(report.totals.amountCents,60000); assert.equal(report.totals.receivedCents,23000); assert.equal(report.totals.balanceCents,37000);
+ assert.equal(report.rows.find((r:{id:string})=>r.id==='freight:client-report-start').paid,'Sim');
+ const commercial=report.rows.find((r:{id:string})=>r.id==='sale:client-report-commercial');
+ assert.equal(commercial.paid,'Parcial'); assert.deepEqual(commercial.receivedDates,['2089-01-10','2089-01-11']);
+ assert.equal(commercial.departureDate,null); assert.equal(report.rows.some((r:{id:string})=>r.id.includes('mirror')||r.id.includes('cegonha')),false);
+ assert.equal(JSON.stringify(report).includes('commission'),false);
+ const own=await (await api.GET(await request(path,'seller'))).json(); assert.equal(own.report.rows.length,2); assert.equal(own.report.totals.amountCents,40000);
+ assert.equal((await api.GET(await request(path.replace('client-report-a','client-report-b'),'seller'))).status,404);
+ assert.equal((await api.GET(await request(path.replace('from=2089-01-01','from=2089-02-30')))).status,400);
+ assert.equal((await api.GET(await request(path.replace('to=2089-01-01','to=2088-12-31')))).status,400);
+ const initial=await (await api.GET(await request('/api/fleet/client-report'))).json(); assert.equal(initial.report,null);
+ await pg.exec('SET ROLE central_app');
+ try {
+  const restricted=await api.GET(await request(path)); assert.equal(restricted.status,200,await restricted.clone().text());
+  assert.equal((await restricted.json()).report.totals.amountCents,60000);
+ } finally { await pg.exec('RESET ROLE'); }
+ const pdf=await api.POST(await request(path,'admin','POST',{includeObservations:true,observations:[{saleId:'freight:client-report-start',text:'AJUSTE SÓ NO PDF'}]}));
+ assert.equal(pdf.status,200,await pdf.clone().text()); assert.match(pdf.headers.get('content-type')!,/application\/pdf/); assert.equal(Buffer.from(await pdf.arrayBuffer()).subarray(0,4).toString(),'%PDF');
+ assert.equal((await queryFirst('select notes from fleet_freights where id=?',['client-report-start']) as {notes:string}).notes,'OBS ORIGINAL');
+ const foreign=await api.POST(await request(path,'seller','POST',{includeObservations:true,observations:[{saleId:'freight:client-report-end',text:'Não autorizado'}]})); assert.equal(foreign.status,400);
+ assert.equal((await api.POST(await request(path,'admin','POST',{includeObservations:true,observations:[{saleId:'freight:client-report-foreign',text:'Outra venda'}]}))).status,400);
+ assert.equal((await api.POST(await request(path,'admin','POST',{includeObservations:true,observations:[{saleId:'freight:client-report-start',text:'A'.repeat(6001)}]}))).status,400);
+});

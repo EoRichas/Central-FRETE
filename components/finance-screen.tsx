@@ -2,12 +2,11 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import type { SalesReport } from "@/lib/domain/reports";
+import { partialResultMessage, type SalesReport } from "@/lib/domain/reports";
 import type { FleetFreight } from "@/lib/domain/fleet";
 import { FleetFreightDetail } from "@/components/fleet-freight-detail";
 import { Modal } from "@/components/ui";
 import { currentCompetency } from "@/lib/domain/dates";
-import { costCategoryLabel } from "@/lib/domain/operations";
 import { formatDate, formatMoney, formatPercent } from "@/lib/format";
 import { Icons } from "@/components/icons";
 import {
@@ -73,7 +72,7 @@ export function FinanceScreen() {
       )}
       {sales.length > 0 && (
         <>
-          {api.data?.report.pendingCosts ? <p className="fleet-update-note">{api.data.report.pendingCosts} venda(s) com custos pendentes ou combustível estimado.</p> : null}
+          {api.data?.report.pendingCosts ? <p className="fleet-update-note">{partialResultMessage(api.data.report)}</p> : null}
           <section className="receivable-summary large finance-three-metrics">
             <div>
               <span>Valor total dos fretes</span>
@@ -96,7 +95,6 @@ export function FinanceScreen() {
                     <th>Venda</th>
                     <th>Canal</th><th>Data</th>
                     <th>Vendedor(a)</th>
-                    <th>Rota</th>
                     <th>Valor do frete</th>
                     {showCommission && <th>Comissão</th>}
                     <th>Custos da venda</th>
@@ -105,12 +103,6 @@ export function FinanceScreen() {
                 </thead>
                 <tbody>
                   {sales.map((sale) => {
-                    const details = sale.costs
-                      .map(
-                        (cost) =>
-                          `${costCategoryLabel(cost.category)} ${formatMoney(cost.amountCents)}`,
-                      )
-                      .join(" · ") || "SEM OUTRAS DESPESAS";
                     return (
                       <tr key={sale.id}>
                         <td data-label="Venda">
@@ -119,7 +111,6 @@ export function FinanceScreen() {
                         </td>
                         <td data-label="Canal">{sale.saleChannel === "FROTA" ? "Frota" : "Cegonha"}</td><td data-label="Data">{formatDate(sale.saleDate)}</td>
                         <td data-label="Vendedor(a)"><strong>{sale.sellerName}</strong></td>
-                        <td data-label="Rota">{sale.origin} → {sale.destination}</td>
                         <td data-label="Valor do frete"><strong>{formatMoney(sale.freightAmountCents)}</strong></td>
                         {showCommission && <td data-label="Comissão">
                           <strong>{formatMoney(sale.financial.commissionCents)}</strong>
@@ -127,7 +118,6 @@ export function FinanceScreen() {
                         </td>}
                         <td data-label="Custos da venda">
                           <strong>{formatMoney(sale.financial.transportCostCents)}</strong>
-                          <small title={details}>{details}</small>
                         </td>
                         <td>{sale.id.startsWith("freight:") ? <button className="table-action" onClick={()=>setSelectedFreight(sale.id.slice(8))} aria-label={`Abrir frete ${sale.saleNumber}`}><Icons.chevron /></button> : <Link className="table-action" href={`/vendas/${sale.id}`} aria-label={`Abrir venda ${sale.saleNumber}`}><Icons.chevron /></Link>}</td>
                       </tr>
