@@ -125,6 +125,7 @@ export type SaleRecord = {
   financialDueDate: string;
   operationalStatus: string;
   legacyOperationalStatus: string | null;
+  serviceSituation?: import('@/lib/domain/fleet-client-report').FleetServiceSituation | null;
   notes: string | null;
   freightAmountCents: number;
   commissionBasisPoints: number;

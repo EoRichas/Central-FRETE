@@ -1,5 +1,6 @@
 "use client";
 
+import { FLEET_RELATION_SITUATIONS } from '@/lib/domain/fleet-client-report';
 import { roleCan } from "@/lib/domain/permissions";
 import type { SaleChannel } from "@/lib/domain/sales";
 import { CargoVehiclesEditor } from "@/components/cargo-vehicles-editor";
@@ -234,6 +235,7 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
         deliveryDeadline: destinationArrivalDate || null,
         financialDueDate: form.get("financialDueDate"),
         operationalStatus: isAdmin ? form.get("operationalStatus") : "CONFIRMAR",
+        serviceSituation: saleChannel === "FROTA" ? form.get("serviceSituation") : undefined,
         notes: form.get("notes"),
         ...(canSeeCommission ? {commissionOverrideCents: commissionValue?.trim() ? moneyInputToCents(commissionValue) : null} : {}),
         freightAmountCents: moneyInputToCents(freightValue),
@@ -322,6 +324,7 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
               {saleChannel === "FROTA" && <Field label="Data do faturamento" hint={fleetFreightId ? "No faturamento, prevalece a data da operação vinculada." : "Preencha quando a venda for faturada."}><input name="billingDate" type="date" defaultValue={initialSale?.billingDate ?? ""}/></Field>}
               <Field label="Data da venda"><input name="saleDate" type="date" defaultValue={initialSale?.saleDate ?? today} required /></Field>
               {isAdmin && <Field label="Vendedor"><select value={sellerId} onChange={e=>setSellerId(e.target.value)} required><option value="">Selecione um vendedor</option>{initialSale && !sellersApi.data?.sellers.some(s=>s.id===initialSale.sellerId) && <option value={initialSale.sellerId ?? 'historical'}>{initialSale.sellerName} (histórico)</option>}{sellersApi.data?.sellers.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select>{sellersApi.error && <span role="alert">{sellersApi.error}</span>}</Field>}
+              {saleChannel === "FROTA" && <Field label="Situação do serviço"><select name="serviceSituation" defaultValue={initialSale?.serviceSituation ?? ""} required><option value="">Selecione</option>{FLEET_RELATION_SITUATIONS.map(value => <option key={value} value={value}>{value}</option>)}</select></Field>}
               {isAdmin && <Field label="Status operacional"><select name="operationalStatus" defaultValue={initialSale?.operationalStatus ?? "CONFIRMAR"}>{OPERATIONAL_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></Field>}
               <Field label="Prestador inicial"><input name="initialProviderName" defaultValue={initialSale?.initialProviderName ?? ""} /></Field>
               <Field label="Prazo operacional (dias)"><input type="number" min={1} max={365} inputMode="numeric" value={operationalDeadlineDays} onChange={(event) => { const value = event.target.value; setOperationalDeadlineDays(value); const calculated = calculateDestinationArrivalDate(originYardEntryDate, value); if (calculated) setDestinationArrivalDate(calculated); }} /></Field>

@@ -59,7 +59,7 @@ test('detalhe do relatório abre a OS correta e retorna à mesma venda, sem excl
   }
 });
 
-test('seta preserva filtros; preparar relação envia o tipo escolhido e abre prévia sem download', async () => {
+test('seta preserva filtros; preparar relação usa a situação salva e abre prévia sem download', async () => {
   const state = hooks(['client', '2026-10-01', '2026-10-31', 'clientId=client&from=2026-10-01&to=2026-10-31']);
   const FleetReportSaleDetail = () => null;
   const {FleetClientReportPanel} = compile('components/fleet-client-report.tsx', {
@@ -77,13 +77,10 @@ test('seta preserva filtros; preparar relação envia o tipo escolhido e abre pr
   assert.equal(find(tree, n => n.type === 'select').props.value, 'client');
   assert.equal(find(tree, n => n.type === 'input' && n.props.max).props.value, '2026-10-01');
   assert.equal(find(tree, n => n.type === 'input' && n.props.min).props.value, '2026-10-31');
-  assert.ok(find(tree, n => n.type === 'button' && n.props.children === 'Gerar PDF para o cliente'));
+  assert.ok(find(tree, n => n.type === 'button' && n.props.children === 'Gerar PDF da relação'));
   assert.equal(state.values[3], 'clientId=client&from=2026-10-01&to=2026-10-31');
-  find(tree, n => n.type === 'button' && n.props.children === 'Gerar PDF para o cliente').props.onClick();
+  find(tree, n => n.type === 'button' && n.props.children === 'Gerar PDF da relação').props.onClick();
   tree = render();
-  const service = find(tree, n => n.type === 'select' && n.props.disabled === false);
-  assert.equal(service.props.required, true); assert.equal(service.props.value, '');
-  service.props.onChange({target: {value: 'ENTREGA'}}); tree = render();
   const original = globalThis.fetch; let payload;
   globalThis.fetch = async (url, options) => {
     assert.equal(url, '/api/fleet/client-report?clientId=client&from=2026-10-01&to=2026-10-31');
@@ -92,7 +89,7 @@ test('seta preserva filtros; preparar relação envia o tipo escolhido e abre pr
   };
   try {
     await find(tree, n => n.type === 'form' && n.props.className === 'modal-body form-stack').props.onSubmit({preventDefault() {}});
-    assert.deepEqual(payload, {includeObservations: false, situations: [{saleId: 'freight:operation', situation: 'ENTREGA'}], observations: []});
+    assert.deepEqual(payload, {includeObservations: false, observations: []});
     tree = render();
     assert.ok(find(tree, n => n.type === 'iframe' && n.props.title === 'Prévia da OS da relação'));
     assert.ok(find(tree, n => n.type === 'a' && n.props.children === 'Salvar PDF'));
@@ -129,9 +126,34 @@ test('OS abre prévia inline, com impressão e download separados e sem emissão
     const html = renderToStaticMarkup(React.createElement(ServiceOrderScreen, {id: 'record', source, onBack: () => {}}));
     const endpoint = source === 'fleet' ? '/api/fleet/freights/record/service-order' : '/api/sales/record/service-order';
     assert.deepEqual(endpoints, [endpoint]);
-    assert.ok(html.includes(`src="${endpoint}?format=pdf"`));
-    assert.ok(html.includes(`href="${endpoint}?format=pdf&amp;download=1"`));
+    assert.ok(html.includes(`src="${endpoint}?format=pdf${source === 'fleet' ? '&amp;observations=0' : ''}"`));
+    assert.ok(html.includes(`href="${endpoint}?format=pdf${source === 'fleet' ? '&amp;observations=0' : ''}&amp;download=1"`));
     assert.ok(html.includes('Visualizar / imprimir')); assert.ok(html.includes('Salvar PDF')); assert.ok(html.includes('Voltar à venda'));
     assert.equal(mutations, 0);
   }
+});
+
+test('Novo frete aparece só em Fretes e a explicação abre e fecha em modal', () => {
+  const state=hooks(); state.react.useMemo=fn=>fn();
+  const noOp=()=>null, mod=new Proxy({}, {get:()=>noOp});
+  const source=readFileSync(new URL('../components/fleet-screen.tsx',import.meta.url),'utf8');
+  const overrides=Object.fromEntries([...source.matchAll(/from\s+["']([^"']+)["']/g)].map(m=>[m[1],mod]));
+  Object.assign(overrides,{
+    react:state.react,'@/components/ui':ui,'@/lib/format':format,
+    '@/lib/domain/permissions':permissions,'@/lib/domain/cargo-vehicles':{cargoVehiclesOrLegacy:()=>[]},
+    '@/lib/domain/dates':{currentCompetency:()=>'2026-10'},'@/components/icons':{Icons:new Proxy({},{get:()=>icon})},
+    '@/lib/domain/fleet':{FLEET_OPERATIONAL_STATUSES:[],FLEET_PRIORITIES:[]},
+    '@/components/use-transient-message':{useTransientMessage:()=>[null,()=>{}]},
+    '@/components/use-api':{useApi:url=>url==='/api/me'?{data:{user:{role:'ADMIN'}}}:{data:{fleet:{canEditFreights:true,freights:[],vehicles:[],drivers:[],summary:{},billing:{freights:[],drivers:[]}}}}},
+  });
+  const {FleetScreen}=compile('components/fleet-screen.tsx',overrides);
+  const inner=FleetScreen().type; const render=()=>{state.reset();return inner();};
+  const walk=(node,match)=>{if(!node||typeof node!=='object')return null;if(Array.isArray(node)){for(const child of node){const result=walk(child,match);if(result)return result;}return null;}return match(node)?node:walk(node.props?.children,match)||walk(node.props?.actions,match);};
+  const create=tree=>walk(tree,n=>n.type==='button'&&n.props.className?.includes('create-sale-action'));
+  let tree=render(); assert.equal(create(tree),null);
+  find(tree,n=>n.type==='button'&&n.props.children==='Como é calculado?').props.onClick();tree=render();
+  let modal=find(tree,n=>n.props?.title==='Como é calculado o resultado das operações?');assert.equal(modal.props.open,true);
+  find(modal,n=>n.type==='button'&&n.props.children==='Fechar').props.onClick();tree=render();
+  assert.equal(find(tree,n=>n.props?.title==='Como é calculado o resultado das operações?').props.open,false);
+  find(tree,n=>n.type==='button'&&n.props.children==='Ver todos').props.onClick();tree=render();assert.ok(create(tree));
 });

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { FLEET_RELATION_SITUATIONS, type FleetClientReportData } from '@/lib/domain/fleet-client-report';
+import type { FleetClientReportData } from '@/lib/domain/fleet-client-report';
 import { currentCompetency, todaySaoPaulo } from '@/lib/domain/dates';
 import { formatDate, formatMoney } from '@/lib/format';
 import { useApi } from './use-api';
@@ -19,7 +19,6 @@ export function FleetClientReportPanel() {
   const [choosing, setChoosing] = useState(false), [include, setInclude] = useState(false), [selected, setSelected] = useState<Record<string, boolean>>({}), [notes, setNotes] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [preview, setPreview] = useState<string | null>(null);
   const previewUrl = useRef<string | null>(null), generation = useRef(0);
-  const [situations, setSituations] = useState<Record<string, string>>({});
   useEffect(() => () => { generation.current++; if (previewUrl.current) URL.revokeObjectURL(previewUrl.current); }, []);
   function search(event: FormEvent) {
     event.preventDefault(); setError('');
@@ -27,7 +26,6 @@ export function FleetClientReportPanel() {
     if (next === query) api.refresh(); else setQuery(next);
   }
   function choose() {
-    setSituations(Object.fromEntries((report?.rows ?? []).map(row => [row.id, ''])));
     setSelected(Object.fromEntries((report?.rows ?? []).map(row => [row.id, Boolean(row.notes.trim())])));
     setNotes(Object.fromEntries((report?.rows ?? []).map(row => [row.id, row.notes])));
     setInclude(false); setError(''); setChoosing(true);
@@ -38,7 +36,6 @@ export function FleetClientReportPanel() {
     try {
       const response = await fetch(`/api/fleet/client-report?${query}`, {method: 'POST', credentials: 'same-origin', cache: 'no-store',
         headers: {'content-type': 'application/json'}, body: JSON.stringify({includeObservations: include,
-          situations: report?.rows.map(row => ({saleId: row.id, situation: situations[row.id] ?? ''})),
           observations: include ? report?.rows.filter(row => selected[row.id]).map(row => ({saleId: row.id, text: notes[row.id] ?? ''})) : []}),
         signal: AbortSignal.timeout(60000)});
       if (!response.ok) throw new Error((await response.json()).error || 'Não foi possível gerar o PDF.');
@@ -59,7 +56,7 @@ export function FleetClientReportPanel() {
       <button className="button primary" disabled={api.loading}>Consultar</button>
     </form>
     {api.loading ? <LoadingState label="Consultando vendas do Frota…" /> : api.error ? <ErrorState message={api.error} retry={api.refresh} /> : report ? <>
-      <div className={styles.heading}><div><h3>{report.client.name}</h3><p>{formatDate(report.from)} a {formatDate(report.to)} · {report.totals.sales} vendas · {report.totals.vehicles} veículos</p></div><button type="button" className="button secondary" disabled={!report.rows.length} onClick={choose}>Gerar PDF para o cliente</button></div>
+      <div className={styles.heading}><div><h3>{report.client.name}</h3><p>{formatDate(report.from)} a {formatDate(report.to)} · {report.totals.sales} vendas · {report.totals.vehicles} veículos</p></div><button type="button" className="button secondary" disabled={!report.rows.length} onClick={choose}>Gerar PDF da relação</button></div>
       <section className="receivable-summary large"><div><span>Total dos serviços</span><strong>{formatMoney(report.totals.amountCents)}</strong></div><div><span>Total recebido</span><strong>{formatMoney(report.totals.receivedCents)}</strong></div><div><span>Valor pendente</span><strong>{formatMoney(report.totals.balanceCents)}</strong></div></section>
       <p className="report-basis">Recebimento: valor das baixas e pagamentos confirmados, descontados os estornos. A forma de pagamento não altera o relatório. Datas ausentes não são estimadas.</p>
       {!report.rows.length ? <EmptyState title="Nenhuma venda neste período" description="Confira o cliente e as datas de criação selecionadas." /> : <div className="panel table-panel"><div className="responsive-table"><table className="sales-table"><thead><tr><th>Venda / criação</th><th>Veículo / placa</th><th>Motorista</th><th>Situação</th><th>Valor</th><th>Recebimento</th><th>Data de recebimento</th><th>Data de saída</th><th>Pago</th><th><span className="sr-only">Ações</span></th></tr></thead><tbody>
@@ -75,10 +72,8 @@ export function FleetClientReportPanel() {
         </tr>)}
       </tbody></table></div></div>}
     </> : <EmptyState title="Consulte as vendas de um cliente" description="Escolha o cliente e o intervalo de criação para visualizar o relatório e gerar o PDF." />}
-    <Modal open={choosing} onClose={() => { if (!busy) setChoosing(false); }} title="Preparar OS da relação" description="Escolha o tipo de serviço de cada venda e se deseja incluir observações na coluna Cliente / observação. Nenhuma venda ou total será retirado." wide>
+    <Modal open={choosing} onClose={() => { if (!busy) setChoosing(false); }} title="Incluir observações na relação?" description="A situação do serviço vem da venda. Escolha somente se deseja incluir observações na coluna Cliente / observação." wide>
       <form className="modal-body form-stack" onSubmit={generate}>
-        <div className={styles.observations}>{report?.rows.map(row => <div key={row.id}><label className="field"><span>Venda {row.saleNumber} · {row.vehicles.map(v => v.plate || v.model).join(', ')} · Situação do serviço</span><select required disabled={busy} value={situations[row.id] ?? ''} onChange={e => setSituations(s => ({...s, [row.id]: e.target.value}))}><option value="">Selecione</option>{FLEET_RELATION_SITUATIONS.map(s => <option key={s} value={s}>{s}</option>)}</select></label></div>)}</div>
-        <p className="report-basis">Entrega, Retira ou Embarque valem para este documento. O andamento cadastrado no frete permanece igual.</p>
         <fieldset className={styles.choices} disabled={busy}><legend>Incluir observações?</legend><label><input type="radio" name="includeNotes" checked={!include} onChange={() => setInclude(false)} />Não</label><label><input type="radio" name="includeNotes" checked={include} onChange={() => setInclude(true)} />Sim</label></fieldset>
         {include && <div className={styles.observations}>{report?.rows.map(row => <div key={row.id}><label className={styles.choice}><input type="checkbox" checked={Boolean(selected[row.id])} onChange={e => setSelected(s => ({...s, [row.id]: e.target.checked}))} disabled={busy} /><span>Venda {row.saleNumber} · {row.vehicles.map(v => v.plate || v.model).join(', ')}</span></label>
           <label className="field"><span>Observação da venda {row.saleNumber}</span><textarea rows={3} maxLength={6000} value={notes[row.id] ?? ''} disabled={busy || !selected[row.id]} onChange={e => setNotes(n => ({...n, [row.id]: e.target.value}))} placeholder={row.notes || 'Sem observação cadastrada. Se desejar, escreva para este relatório.'} /></label></div>)}<p className="report-basis">O texto existente pode ser ajustado para este PDF. As alterações não modificam a observação original da venda.</p></div>}

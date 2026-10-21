@@ -1,3 +1,4 @@
+import { parseServiceSituation } from '@/lib/server/fleet-service-situation';
 import { resolveSaleSeller, saleForViewer, saleCommissionOverride } from "@/lib/server/seller-commission";
 import { validateSaleClient } from "@/lib/server/registry-validation";
 import { drainStorageCleanup } from "@/lib/server/storage-cleanup";
@@ -268,6 +269,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const seller = await resolveSaleSeller(user, payload, sale);
     const sellerName = seller.name, sellerId = seller.id, commissionBasisPoints = seller.commissionBasisPoints;
     const commissionOverrideCents = saleCommissionOverride(user, payload.commissionOverrideCents, sale.commissionOverrideCents ?? null, sellerId);
+    const serviceSituation = sale.saleChannel === 'FROTA' ? parseServiceSituation(payload.serviceSituation === undefined ? sale.serviceSituation : payload.serviceSituation) : null;
     const costsPending = costs.some((cost) => !cost.confirmed);
     const db = await getD1();
     const statements: D1PreparedStatement[] = [
@@ -405,7 +407,7 @@ export async function PATCH(request: Request, context: RouteContext) {
             saleChannel: sale.saleChannel, fleetFreightId: sale.fleetFreightId,
             saleDate: sale.saleDate, billingDate: sale.billingDate ?? null,
             clientId: sale.clientId,
-            operationalStatus: sale.operationalStatus,
+            serviceSituation: sale.serviceSituation, operationalStatus: sale.operationalStatus,
             freightAmountCents: sale.freightAmountCents,
             commissionBasisPoints: sale.commissionBasisPoints, commissionOverrideCents: sale.commissionOverrideCents,
             costCount: sale.costs.length,
@@ -414,7 +416,7 @@ export async function PATCH(request: Request, context: RouteContext) {
             saleNumber, saleChannel: sale.saleChannel, fleetFreightId: cargo.fleetFreightId,
             saleDate, billingDate,
             clientId,
-            operationalStatus,
+            serviceSituation, operationalStatus,
             freightAmountCents,
             commissionBasisPoints, commissionOverrideCents,
             costCount: costs.length,
@@ -423,6 +425,8 @@ export async function PATCH(request: Request, context: RouteContext) {
         ),
     );
 
+    statements.push(db.prepare('update freight_sales set service_situation=? where id=?').bind(serviceSituation,id));
+    if (cargo.fleetFreightId && payload.serviceSituation !== undefined) statements.push(db.prepare('update fleet_freights set service_situation=? where id=?').bind(serviceSituation,cargo.fleetFreightId));
     await db.batch(statements);
     return Response.json({ id, updated: true });
   } catch (error) {

@@ -66,6 +66,7 @@ type FreightRow = {
   sellerName: string | null;
   sellerCommissionBasisPoints: number;
   sellerCommissionOverrideCents: number | null;
+  serviceSituation: FleetFreight["serviceSituation"];
   notes: string | null;
   createdBy: string | null;
   linkedFleetSaleId: string | null;
@@ -174,7 +175,7 @@ export async function loadFleetData(
          order by competency desc, id`,
       ),
       queryAll<FreightRow>(
-        `${scope} select seller_id as sellerId,seller_name as sellerName,seller_commission_basis_points as sellerCommissionBasisPoints,seller_commission_override_cents as sellerCommissionOverrideCents,notes,created_by as createdBy,trip_id as tripId, yard_cost_cents as yardCostCents, pickup_cost_cents as pickupCostCents,
+        `${scope} select service_situation as serviceSituation,seller_id as sellerId,seller_name as sellerName,seller_commission_basis_points as sellerCommissionBasisPoints,seller_commission_override_cents as sellerCommissionOverrideCents,notes,created_by as createdBy,trip_id as tripId, yard_cost_cents as yardCostCents, pickup_cost_cents as pickupCostCents,
           delivery_cost_cents as deliveryCostCents, other_cost_cents as otherCostCents, insurance_cost_cents as insuranceCostCents, invoice_cost_cents as invoiceCostCents, icms_cost_cents as icmsCostCents, cte_mdfe_cost_cents as cteMdfeCostCents, actual_fuel_cost_cents as actualFuelCostCents, cargo_vehicles as cargoVehicles,
           fuel_liters_milli as fuelLitersMilli, fuel_pump_amount_cents as fuelPumpAmountCents,
           id, sale_number as saleNumber, vehicle_id as vehicleId, vehicle_plate as vehiclePlate,

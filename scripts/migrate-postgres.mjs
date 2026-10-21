@@ -24,6 +24,7 @@ export async function migrateDatabase(configuration) {
     "015_fleet_numbers_and_orders.sql",
     "../supabase/migrations/20260928224007_user_phone_vehicle_deletion.sql",
     "016_fleet_monthly_scope.sql",
+    "017_fleet_service_situation.sql",
     "../supabase/migrations/20260929161711_registry_channels_addresses.sql",
     "../supabase/migrations/20260929175656_fleet_client_reference.sql",
     "../supabase/migrations/20260930164106_seller_commission_access.sql",

@@ -4,7 +4,6 @@ import { loadFleetClientReport } from '@/lib/server/fleet-client-report';
 import { renderFleetClientPdf, type ClientReportObservation } from '@/lib/server/reports/fleet-client-pdf';
 import { pdfResponse } from '@/lib/server/reports/pdf-layout';
 import { asObject } from '@/lib/server/validation';
-import { validateRelationSituations } from '@/lib/domain/fleet-client-report';
 
 export const runtime = 'nodejs';
 export async function GET(request: Request) {
@@ -27,9 +26,6 @@ export async function POST(request: Request) {
     const data = asObject(parsed);
     const {report} = await loadFleetClientReport(user, new URL(request.url).searchParams);
     if (!report?.rows.length) throw new ApiError(400, 'Selecione um cliente e um período com vendas.');
-    let situations;
-    try { situations = validateRelationSituations(report, data.situations); }
-    catch (error) { throw new ApiError(400, error instanceof Error ? error.message : 'Situações inválidas.'); }
     if (typeof data.includeObservations !== 'boolean') throw new ApiError(400, 'Escolha se deseja incluir observações.');
     const observations: ClientReportObservation[] = [];
     if (data.includeObservations) {
@@ -43,6 +39,6 @@ export async function POST(request: Request) {
         if (item.text.trim()) observations.push({saleId: item.saleId, text: item.text.trim()});
       }
     }
-    return pdfResponse(await renderFleetClientPdf(report, observations, situations), `Relatorio-Vendas-Frota-${report.from}-${report.to}.pdf`);
+    return pdfResponse(await renderFleetClientPdf(report, observations), `Relatorio-Vendas-Frota-${report.from}-${report.to}.pdf`);
   } catch (error) { return jsonError(error); }
 }

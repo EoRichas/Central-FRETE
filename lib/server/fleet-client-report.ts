@@ -8,7 +8,7 @@ import { ApiError, queryAll } from './d1';
 type SourceRow = {
   id: string; saleNumber: string; createdAt: string; clientId: string; clientName: string;
   vehicles: CargoVehicle[] | null; vehicle: string | null; plate: string | null;
-  driverName: string | null; situation: string; departureDate: string | null;
+  driverName: string | null; serviceSituation: FleetClientReportRow["serviceSituation"]; situation: string; departureDate: string | null;
   amountCents: number; paidStatus: string | null; paidAt: string | null; notes: string | null;
 };
 type Receipt = {saleId: string; type: string; amountCents: number; occurredAt: string};
@@ -40,7 +40,7 @@ export async function loadFleetClientReport(user: CurrentUser, params: URLSearch
     queryAll<SourceRow>(`select f.id,f.sale_number as saleNumber,f.created_at as createdAt,
       f.client_id as clientId,c.legal_name as clientName,f.cargo_vehicles as vehicles,
       f.cargo_vehicle_model as vehicle,f.cargo_plate as plate,f.driver_name as driverName,
-      f.operational_status as situation,f.pickup_date as departureDate,
+      f.service_situation as serviceSituation,f.operational_status as situation,f.pickup_date as departureDate,
       f.freight_amount_cents as amountCents,f.payment_status as paidStatus,f.paid_at as paidAt,f.notes
       from fleet_freights f join clients c on c.id=f.client_id
       where f.client_id=? and ${period('f')} ${own ? 'and f.seller_id=?' : ''}
@@ -48,7 +48,7 @@ export async function loadFleetClientReport(user: CurrentUser, params: URLSearch
     // A linked commercial sale is represented by its operation, exactly once.
     queryAll<SourceRow>(`select s.id,s.sale_number as saleNumber,s.created_at as createdAt,
       s.client_id as clientId,c.legal_name as clientName,s.cargo_vehicles as vehicles,
-      s.vehicle,s.plate,null::text as driverName,s.operational_status as situation,
+      s.vehicle,s.plate,null::text as driverName,s.service_situation as serviceSituation,s.operational_status as situation,
       null::text as departureDate,s.freight_amount_cents as amountCents,
       null::text as paidStatus,null::text as paidAt,s.notes
       from freight_sales s join clients c on c.id=s.client_id
@@ -62,7 +62,7 @@ export async function loadFleetClientReport(user: CurrentUser, params: URLSearch
   const rows: FleetClientReportRow[] = [
     ...freights.map((f): FleetClientReportRow => ({
       id: `freight:${f.id}`, saleNumber: f.saleNumber, createdDate: creationDate(f.createdAt), clientId: f.clientId, clientName: f.clientName,
-      vehicles: cargoVehiclesOrLegacy(f.vehicles, f.vehicle, f.plate), driverName: f.driverName,
+      vehicles: cargoVehiclesOrLegacy(f.vehicles, f.vehicle, f.plate), driverName: f.driverName, serviceSituation: f.serviceSituation,
       situation: FLEET_OPERATIONAL_STATUS_LABELS[f.situation as FleetOperationalStatus] ?? f.situation,
       departureDate: f.departureDate, amountCents: f.amountCents,
       receivedCents: f.paidStatus === 'PAGO' ? f.amountCents : 0,
@@ -73,7 +73,7 @@ export async function loadFleetClientReport(user: CurrentUser, params: URLSearch
       const payments = receipts.filter(p => p.saleId === s.id);
       const receivedCents = Math.max(0, payments.reduce((sum, p) => sum + (p.type === 'ESTORNO' ? -p.amountCents : p.amountCents), 0));
       return {id: `sale:${s.id}`, saleNumber: s.saleNumber, createdDate: creationDate(s.createdAt), clientId: s.clientId, clientName: s.clientName,
-        vehicles: cargoVehiclesOrLegacy(s.vehicles, s.vehicle, s.plate), driverName: s.driverName, situation: s.situation,
+        vehicles: cargoVehiclesOrLegacy(s.vehicles, s.vehicle, s.plate), driverName: s.driverName, serviceSituation: s.serviceSituation, situation: s.situation,
         departureDate: s.departureDate, amountCents: s.amountCents, receivedCents,
         receivedDates: [...new Set(payments.filter(p => p.type !== 'ESTORNO').map(p => receiptDate(p.occurredAt)))],
         paid: receivedCents >= s.amountCents ? 'Sim' : receivedCents > 0 ? 'Parcial' : 'Não', notes: s.notes ?? ''};

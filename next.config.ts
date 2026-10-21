@@ -16,7 +16,8 @@ const nextConfig: NextConfig = {
   },
   outputFileTracingIncludes: {
     '/api/fleet/client-report': ['./public/central-express-logo.png', './node_modules/@fontsource/noto-sans/files/noto-sans-latin-{400,700}-normal.woff'],
-    '/api/sales/*/service-order': ['./public/service-order-background-portrait.pdf', './node_modules/@fontsource/noto-sans/files/noto-sans-latin-{400,700}-normal.woff'],
+    '/api/fleet/freights/*/service-order': ['./public/central-express-logo.png', './public/service-order-background-portrait.pdf', './node_modules/@fontsource/noto-sans/files/noto-sans-latin-{400,700}-normal.woff'],
+    '/api/sales/*/service-order': ['./public/central-express-logo.png', './public/service-order-background-portrait.pdf', './node_modules/@fontsource/noto-sans/files/noto-sans-latin-{400,700}-normal.woff'],
   },
 };
 

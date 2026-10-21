@@ -1,20 +1,7 @@
 import type { CargoVehicle } from './cargo-vehicles';
 
 export const FLEET_RELATION_SITUATIONS = ['ENTREGA', 'RETIRA', 'EMBARQUE'] as const;
-export type FleetRelationSituation = {saleId: string; situation: (typeof FLEET_RELATION_SITUATIONS)[number]};
-
-/** Document-only service type; never replaces the freight's operational status. */
-export function validateRelationSituations(report: FleetClientReport, value: unknown): FleetRelationSituation[] {
-  if (!Array.isArray(value) || value.length !== report.rows.length) throw new Error('Escolha Entrega, Retira ou Embarque para cada venda da relação.');
-  const allowed = new Set(report.rows.map(row => row.id)), seen = new Set<string>();
-  return value.map(item => {
-    if (!item || typeof item !== 'object' || typeof item.saleId !== 'string' || !allowed.has(item.saleId) || seen.has(item.saleId))
-      throw new Error('A situação deve pertencer a uma única venda deste relatório.');
-    if (!FLEET_RELATION_SITUATIONS.includes(item.situation)) throw new Error('A situação do serviço deve ser Entrega, Retira ou Embarque.');
-    seen.add(item.saleId);
-    return {saleId: item.saleId, situation: item.situation};
-  });
-}
+export type FleetServiceSituation = (typeof FLEET_RELATION_SITUATIONS)[number];
 
 export type FleetClientReportRow = {
   id: string;
@@ -24,6 +11,7 @@ export type FleetClientReportRow = {
   clientName: string;
   vehicles: CargoVehicle[];
   driverName: string | null;
+  serviceSituation?: FleetServiceSituation | null;
   situation: string;
   departureDate: string | null;
   amountCents: number;

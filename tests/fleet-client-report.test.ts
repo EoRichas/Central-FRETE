@@ -1,20 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildFleetClientReport, creationDate, reportObservations, validateRelationSituations, type FleetClientReportRow } from '../lib/domain/fleet-client-report.ts';
+import { buildFleetClientReport, creationDate, reportObservations, type FleetClientReportRow } from '../lib/domain/fleet-client-report.ts';
 import { buildSalesReport, consolidateReportSales, partialResultMessage, type ReportSale } from '../lib/domain/reports.ts';
 import { latestIncomingMessage, loadSupportNotifications, supportMessageUnread } from '../lib/client/support-notifications.ts';
 import type { FleetFreight } from '../lib/domain/fleet.ts';
 
 const row: FleetClientReportRow = {id: 'freight:one', saleNumber: '211', createdDate: '2026-10-01', clientId: 'one', clientName: 'Cliente', vehicles: [{model: 'A', plate: 'AAA1A11', identification: null}], driverName: 'Motorista', situation: 'Em rota', departureDate: '2026-09-20', amountCents: 10000, receivedCents: 5000, receivedDates: ['2026-10-02'], paid: 'Parcial', notes: 'Observação existente'};
-
-test('tipo do serviço exige uma escolha válida por venda autorizada e não altera o andamento', () => {
-  const report = buildFleetClientReport({id: 'one', name: 'Cliente'}, '2026-10-01', '2026-10-31', [row, {...row, id: 'sale:two'}]);
-  const valid = [{saleId: row.id, situation: 'ENTREGA'}, {saleId: 'sale:two', situation: 'EMBARQUE'}];
-  assert.deepEqual(validateRelationSituations(report, valid), valid);
-  assert.equal(validateRelationSituations(report, [{...valid[0], situation: 'RETIRA'}, valid[1]])[0].situation, 'RETIRA');
-  for (const value of [undefined, [], [valid[0]], [valid[0], valid[0]], [valid[0], {...valid[1], saleId: 'foreign'}], [valid[0], {...valid[1], situation: 'EM_ROTA'}], [valid[0], {...valid[1], situation: ''}]]) assert.throws(() => validateRelationSituations(report, value));
-  assert.equal(report.rows[0].situation, 'Em rota');
-});
 
 test('relatório usa criação em São Paulo, cliente por ID e inclui os dois limites', () => {
   assert.equal(creationDate('2026-10-01T02:59:59Z'), '2026-09-30');

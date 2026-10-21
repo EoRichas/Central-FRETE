@@ -11,7 +11,7 @@ export async function GET(request:Request, context:Context) {
   if(url.searchParams.get('format')!=='pdf') return Response.json(await orderReport(target.id,target.kind),{headers:{'Cache-Control':'no-store'}});
   const order=await readOrderVersion(target.id,undefined,target.kind);
   if(!order) throw new ApiError(404,'OS ainda não emitida.');
-  const bytes=await renderServiceOrderPdf(order);
+  const bytes=await renderServiceOrderPdf(order,url.searchParams.get('observations') !== '0');
   const filename=`OS-Central-${order.snapshot.saleNumber.replace(/[^a-zA-Z0-9-]/g,'_')}.pdf`;
   return new Response(new Uint8Array(bytes),{headers:{'Content-Type':'application/pdf','Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Content-Disposition':`${url.searchParams.get('download')==='1'?'attachment':'inline'}; filename="${filename}"`}});
  }catch(error){return jsonError(error);}

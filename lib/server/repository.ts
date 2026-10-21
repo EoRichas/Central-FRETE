@@ -108,7 +108,7 @@ export async function listSales(
       s.origin_yard_entry_date as originYardEntryDate,
       s.delivery_deadline as deliveryDeadline,
       s.financial_due_date as financialDueDate,
-      s.operational_status as operationalStatus,
+      case when f.id is not null then f.service_situation else s.service_situation end as serviceSituation,s.operational_status as operationalStatus,
       s.legacy_operational_status as legacyOperationalStatus,
       s.notes, s.freight_amount_cents as freightAmountCents,
       s.commission_basis_points as commissionBasisPoints, s.commission_override_cents as commissionOverrideCents,

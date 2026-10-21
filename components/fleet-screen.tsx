@@ -18,6 +18,7 @@ import {
   ErrorState,
   LoadingState,
   PageHeader,
+  Modal,
 } from "@/components/ui";
 import { apiMutation, useApi } from "@/components/use-api";
 import {
@@ -52,6 +53,7 @@ export function FleetScreen() {
 }
 
 function FleetOperationsScreen() {
+  const [calculationOpen, setCalculationOpen] = useState(false);
   const [selectedTab, setTab] = useState<FleetTab>("overview");
   const [periods, setPeriods] = useState<Record<FleetTab, string>>(() => {
     const month = currentCompetency();
@@ -189,7 +191,7 @@ function FleetOperationsScreen() {
               />
             </label>}
             {fleet?.freightOnly && <Link className="button secondary" href={`/vendas?canal=FROTA&competency=${competency}`}>Vendas Frota</Link>}
-            {fleet?.canEditFreights && (
+            {tab === "freights" && fleet?.canEditFreights && (
               <button className="button secondary create-sale-action" onClick={openNewFreight}>
                 <Icons.plus /> Novo frete
               </button>
@@ -265,7 +267,7 @@ function FleetOperationsScreen() {
                     Fretes por mês da coleta; inclui combustível estimado quando
                     não apurado.
                   </small>
-                  <details><summary>Como é calculado?</summary><p>Receita dos fretes coletados no mês ({formatMoney(fleet.summary.revenueCents)}) menos os custos das operações ({formatMoney(fleet.summary.totalCostCents)}). Inclui comissões, despesas diretas, combustível e pedágios. Não inclui custos fixos mensais, rateio por km ou vendas sem frete vinculado. O faturamento acima usa outra base: a data de faturamento.</p></details>
+                  <button type="button" className="button secondary" onClick={() => setCalculationOpen(true)}>Como é calculado?</button>
                 </article>
               </section>
               <section className="panel table-panel">
@@ -373,6 +375,9 @@ function FleetOperationsScreen() {
           onDelete={deleteFreight}
         />
       )}
+      <Modal open={calculationOpen} onClose={() => setCalculationOpen(false)} title="Como é calculado o resultado das operações?">
+        <div className="modal-body form-stack"><p>Receita dos fretes coletados no mês ({formatMoney(fleet?.summary.revenueCents ?? 0)}) menos os custos das operações ({formatMoney(fleet?.summary.totalCostCents ?? 0)}). Inclui comissões, despesas diretas, combustível e pedágios. Não inclui custos fixos mensais, rateio por km ou vendas sem frete vinculado. O faturamento usa outra base: a data de faturamento.</p><footer className="modal-actions"><button type="button" className="button secondary" onClick={() => setCalculationOpen(false)}>Fechar</button></footer></div>
+      </Modal>
       {vehicleModalOpen && (
         <VehicleModal
           canManage={fleet?.canManage ?? false}

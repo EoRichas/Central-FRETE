@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { PDFDocument, rgb, type PDFPage } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
-import { validateRelationSituations, type FleetClientReport, type FleetRelationSituation } from '@/lib/domain/fleet-client-report';
+import type { FleetClientReport } from '@/lib/domain/fleet-client-report';
 import { formatDate, formatMoney } from '@/lib/format';
 
 export type ClientReportObservation = {saleId: string; text: string};
@@ -11,8 +11,7 @@ const navy = rgb(.035, .09, .29), ink = rgb(.09, .14, .23), muted = rgb(.37, .44
 const green = rgb(.09, .4, .28), amber = rgb(.6, .36, .08);
 
 /** Customer relation: no cost, commission, margin or internal identity is exported. */
-export async function renderFleetClientPdf(report: FleetClientReport, observations: ClientReportObservation[], situations: FleetRelationSituation[]) {
-  const serviceTypes = new Map(validateRelationSituations(report, situations).map(item => [item.saleId, item.situation]));
+export async function renderFleetClientPdf(report: FleetClientReport, observations: ClientReportObservation[], orderNumber?: string) {
   const notes = new Map(observations.map(item => [item.saleId, item.text]));
   const doc = await PDFDocument.create(); doc.registerFontkit(fontkit);
   const [regularBytes, boldBytes, logoBytes] = await Promise.all([
@@ -48,7 +47,7 @@ export async function renderFleetClientPdf(report: FleetClientReport, observatio
     rect(0, H - 108, W, 108, navy); rect(M, H - 82, 3, 59, rgb(.8, .12, .16));
     text('CENTRAL EXPRESS', M + 15, H - 38, 19, true, white);
     text('TRANSPORTE DE VEÍCULOS', M + 15, H - 54, 8, false, white);
-    text('OS | RELAÇÃO DE SERVIÇOS', M + 15, H - 81, 11, true, white);
+    text(orderNumber ? `OS ${orderNumber} | RELAÇÃO DE SERVIÇOS` : 'OS | RELAÇÃO DE SERVIÇOS', M + 15, H - 81, 11, true, white);
     const logoSize = logo.scale(Math.min(88 / logo.width, 77 / logo.height));
     page.drawImage(logo, {x: W - M - logoSize.width, y: H - 92, ...logoSize});
     y = H - 133;
@@ -77,7 +76,7 @@ export async function renderFleetClientPdf(report: FleetClientReport, observatio
     const confirmation = `${payment}\n${row.receivedDates.length ? row.receivedDates.map(d => formatDate(d)).join(', ') : 'Data não informada'}\n${formatMoney(row.receivedCents)}`;
     // Only explicitly selected observations enter a customer document.
     const cells = [formatDate(row.createdDate), row.driverName || 'Não informado', row.clientName,
-      models || 'Não informado', plates || 'Não informada', serviceTypes.get(row.id)!,
+      models || 'Não informado', plates || 'Não informada', row.serviceSituation || 'Não informada',
       `${row.clientName}\n${notes.get(row.id) || 'Sem observação incluída.'}`, formatMoney(row.amountCents), confirmation];
     const lines = cells.map((cell, i) => wrap(cell, columns[i].width - 15, 7.3, i === 7));
     const count = Math.max(...lines.map(l => l.length));
@@ -115,7 +114,7 @@ export async function renderFleetClientPdf(report: FleetClientReport, observatio
     text(label, x + 11, y - 15, 6.5, true, muted); text(value, x + 11, y - 36, 12, true, navy);
   });
   y -= 70;
-  const basis = 'Data: criação da venda. Situação: tipo de serviço escolhido para esta relação. Pagamentos confirmados, descontados os estornos; datas ausentes não são estimadas.';
+  const basis = 'Data: criação da venda. Situação: tipo de serviço cadastrado na venda. Pagamentos confirmados, descontados os estornos; datas ausentes não são estimadas.';
   wrap(basis, WIDTH, 7).forEach((s, i) => text(s, M, y - i * 11, 7, false, muted));
   doc.getPages().forEach((p, i, pages) => {
     page = p; page.drawLine({start: {x: M, y: 34}, end: {x: W - M, y: 34}, color: line, thickness: .6});

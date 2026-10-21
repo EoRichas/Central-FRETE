@@ -1,3 +1,4 @@
+import { parseServiceSituation } from '@/lib/server/fleet-service-situation';
 import { ORIGIN_LOCATION_TYPES } from "@/lib/domain/operations";
 import { parseRegistryAddress, registryAddressText } from "@/lib/server/registry-validation";
 import { lower, upper, digits } from "@/lib/server/validation";
@@ -69,6 +70,7 @@ export function parseFleetFreightPayload(payload: Record<string, unknown>) {
   catch (error) { throw new ApiError(400, error instanceof Error ? error.message : "Distância inválida."); }
   return {
     ...distance,
+    serviceSituation: parseServiceSituation(payload.serviceSituation),
     notes: boundedText(payload.notes, "Observações", 5000),
     cargoVehicles,
     fuelLitersMilli: nullableInteger(payload.fuelLitersMilli, "Litros abastecidos", 1_000_000_000),

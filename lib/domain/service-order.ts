@@ -1,6 +1,7 @@
 import type { CargoVehicle } from './cargo-vehicles';
 import type { OriginLocationType } from './operations';
 type ServiceOrderFields = {
+  fleetRelation?: import('./fleet-client-report').FleetClientReportRow;
   issuer: { name: string; document: string | null; address: string | null; contact: string | null; contactSource?: 'USER' | 'SELLER' | 'CREATOR' };
   saleId: string; saleNumber: string; saleDate: string;
   clientEmail?: string | null; clientName: string | null; clientDocument: string | null; clientAddress: string | null;
