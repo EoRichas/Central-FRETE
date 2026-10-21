@@ -21,7 +21,7 @@ export function FleetClientReportPanel() {
     const next = new URLSearchParams({clientId, from, to}).toString();
     if (next === query) api.refresh(); else setQuery(next);
   }
-  if (viewingId) return <FleetReportSaleDetail key={viewingId} id={viewingId} reportContext={report ? {clientId: report.client.id, from: report.from, to: report.to} : undefined} onBack={() => setViewingId(null)} />;
+  if (viewingId) return <FleetReportSaleDetail key={viewingId} id={viewingId} onBack={() => setViewingId(null)} />;
   return <section className={styles.report} aria-label="Relatório de vendas por cliente">
     <header className="fleet-panel-header"><div><h2>Relatório de vendas</h2><p>Controle por cliente, exclusivamente das vendas do Frota. O período considera a data de criação em São Paulo.</p></div></header>
     <form className="filter-panel report-filters" onSubmit={search}>
