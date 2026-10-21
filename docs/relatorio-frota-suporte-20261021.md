@@ -46,3 +46,9 @@ Somente Central-FRETE. Não altera CZAR/EKON, Sup, os dados existentes, permiss�
 - PDF: uma página e documento longo, com renderização visual de páginas de tabela/observações e conferência de texto.
 - Lint dos arquivos alterados e build de produção. O lint global da base tem erro anterior em support-workspace.tsx (set-state-in-effect), fora deste diff.
 - Sem mudanças de schema ou dados. Reverter o commit do PR restaura a interface e APIs anteriores; marcadores locais de leitura podem permanecer sem efeito.
+
+## Observações dentro da OS
+
+- A relação deixa de oferecer o botão Gerar PDF da relação e seus modais de exportação; filtros, totais e acesso à venda permanecem.
+- Na OS individual da Frota, Adicionar Observação abre um modal que contém a opção já existente Incluir observações da venda. Fechar ou o fechamento padrão do modal retornam à prévia.
+- A escolha continua controlando a prévia, impressão e download, sem alterar a venda ou emitir uma OS automaticamente. Não requer migração. A OS da Cegonha mantém seu fluxo.

@@ -59,7 +59,7 @@ test('detalhe do relatório abre a OS correta e retorna à mesma venda, sem excl
   }
 });
 
-test('seta preserva filtros; preparar relação usa a situação salva e abre prévia sem download', async () => {
+test('relatório preserva filtros e acesso à venda sem botão ou modal de geração de PDF', () => {
   const state = hooks(['client', '2026-10-01', '2026-10-31', 'clientId=client&from=2026-10-01&to=2026-10-31']);
   const FleetReportSaleDetail = () => null;
   const {FleetClientReportPanel} = compile('components/fleet-client-report.tsx', {
@@ -77,24 +77,9 @@ test('seta preserva filtros; preparar relação usa a situação salva e abre pr
   assert.equal(find(tree, n => n.type === 'select').props.value, 'client');
   assert.equal(find(tree, n => n.type === 'input' && n.props.max).props.value, '2026-10-01');
   assert.equal(find(tree, n => n.type === 'input' && n.props.min).props.value, '2026-10-31');
-  assert.ok(find(tree, n => n.type === 'button' && n.props.children === 'Gerar PDF da relação'));
   assert.equal(state.values[3], 'clientId=client&from=2026-10-01&to=2026-10-31');
-  find(tree, n => n.type === 'button' && n.props.children === 'Gerar PDF da relação').props.onClick();
-  tree = render();
-  const original = globalThis.fetch; let payload;
-  globalThis.fetch = async (url, options) => {
-    assert.equal(url, '/api/fleet/client-report?clientId=client&from=2026-10-01&to=2026-10-31');
-    payload = JSON.parse(options.body);
-    return new Response(new Blob(['%PDF'], {type: 'application/pdf'}));
-  };
-  try {
-    await find(tree, n => n.type === 'form' && n.props.className === 'modal-body form-stack').props.onSubmit({preventDefault() {}});
-    assert.deepEqual(payload, {includeObservations: false, observations: []});
-    tree = render();
-    assert.ok(find(tree, n => n.type === 'iframe' && n.props.title === 'Prévia da OS da relação'));
-    assert.ok(find(tree, n => n.type === 'a' && n.props.children === 'Salvar PDF'));
-    find(tree, n => n.props?.title === 'OS da relação').props.onClose();
-  } finally { globalThis.fetch = original; }
+  assert.equal(find(tree, n => n.type === 'button' && n.props.children === 'Gerar PDF da relação'), null);
+  assert.equal(find(tree, n => n.type === ui.Modal), null);
 });
 
 test('consulta comercial mantém informações e OS; excluir recebimento fica oculto só no relatório', () => {
@@ -156,4 +141,28 @@ test('Novo frete aparece só em Fretes e a explicação abre e fecha em modal', 
   find(modal,n=>n.type==='button'&&n.props.children==='Fechar').props.onClick();tree=render();
   assert.equal(find(tree,n=>n.props?.title==='Como é calculado o resultado das operações?').props.open,false);
   find(tree,n=>n.type==='button'&&n.props.children==='Ver todos').props.onClick();tree=render();assert.ok(create(tree));
+});
+
+test('Adicionar Observação encapsula a opção na OS Frota e sincroniza prévia, impressão e download', () => {
+  for (const source of ['fleet','sale']) {
+    const state=hooks();let mutations=0;
+    const {ServiceOrderScreen}=compile('components/service-order-screen.tsx',{
+      react:state.react,'@/components/ui':ui,
+      'next/link':{__esModule:true,default:()=>null},
+      '@/components/use-api':{useApi:()=>({loading:false,data:{latest:{version:1,snapshot:{fleetRelation:{}}},stale:false}}),apiMutation:()=>{mutations++;}},
+    });
+    const render=()=>{state.reset();return ServiceOrderScreen({id:'record',source});};
+    let tree=render();
+    assert.equal(find(tree,n=>n.props?.title==='Adicionar Observação').props.open,false);
+    find(tree,n=>n.type==='button'&&n.props.children==='Adicionar Observação').props.onClick();tree=render();
+    const modal=find(tree,n=>n.props?.title==='Adicionar Observação');assert.equal(modal.props.open,true);
+    const checkbox=find(modal,n=>n.type==='input'&&n.props.type==='checkbox');assert.equal(checkbox.props.checked,false);
+    checkbox.props.onChange({target:{checked:true}});tree=render();
+    const endpoint=source==='fleet'?'/api/fleet/freights/record/service-order':'/api/sales/record/service-order';
+    assert.equal(find(tree,n=>n.type==='iframe').props.src,endpoint+'?format=pdf&observations=1');
+    assert.equal(find(tree,n=>n.type==='a'&&n.props.children==='Visualizar / imprimir').props.href,endpoint+'?format=pdf&observations=1');
+    assert.equal(find(tree,n=>n.type==='a'&&n.props.children==='Salvar PDF').props.href,endpoint+'?format=pdf&observations=1&download=1');
+    find(tree,n=>n.type==='button'&&n.props.children==='Fechar').props.onClick();tree=render();
+    assert.equal(find(tree,n=>n.props?.title==='Adicionar Observação').props.open,false);assert.equal(mutations,0);
+  }
 });
