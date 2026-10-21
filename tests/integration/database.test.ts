@@ -1726,10 +1726,18 @@ test('relatório do cliente usa criação, isola IDs e vendedores, não duplica 
   const restricted=await api.GET(await request(path)); assert.equal(restricted.status,200,await restricted.clone().text());
   assert.equal((await restricted.json()).report.totals.amountCents,60000);
  } finally { await pg.exec('RESET ROLE'); }
- const pdf=await api.POST(await request(path,'admin','POST',{includeObservations:true,observations:[{saleId:'freight:client-report-start',text:'AJUSTE SÓ NO PDF'}]}));
+ const situations=report.rows.map((r:{id:string},i:number)=>({saleId:r.id,situation:['ENTREGA','RETIRA','EMBARQUE'][i]}));
+ const ownSituations=own.report.rows.map((r:{id:string})=>({saleId:r.id,situation:'RETIRA'}));
+ const pdf=await api.POST(await request(path,'admin','POST',{situations,includeObservations:true,observations:[{saleId:'freight:client-report-start',text:'AJUSTE SÓ NO PDF'}]}));
  assert.equal(pdf.status,200,await pdf.clone().text()); assert.match(pdf.headers.get('content-type')!,/application\/pdf/); assert.equal(Buffer.from(await pdf.arrayBuffer()).subarray(0,4).toString(),'%PDF');
  assert.equal((await queryFirst('select notes from fleet_freights where id=?',['client-report-start']) as {notes:string}).notes,'OBS ORIGINAL');
- const foreign=await api.POST(await request(path,'seller','POST',{includeObservations:true,observations:[{saleId:'freight:client-report-end',text:'Não autorizado'}]})); assert.equal(foreign.status,400);
- assert.equal((await api.POST(await request(path,'admin','POST',{includeObservations:true,observations:[{saleId:'freight:client-report-foreign',text:'Outra venda'}]}))).status,400);
- assert.equal((await api.POST(await request(path,'admin','POST',{includeObservations:true,observations:[{saleId:'freight:client-report-start',text:'A'.repeat(6001)}]}))).status,400);
+ assert.equal((await queryFirst('select operational_status as status from fleet_freights where id=?',['client-report-start']) as {status:string}).status,'EM_ROTA');
+ const foreign=await api.POST(await request(path,'seller','POST',{situations:ownSituations,includeObservations:true,observations:[{saleId:'freight:client-report-end',text:'Não autorizado'}]})); assert.equal(foreign.status,400);
+ assert.equal((await api.POST(await request(path,'admin','POST',{situations,includeObservations:true,observations:[{saleId:'freight:client-report-foreign',text:'Outra venda'}]}))).status,400);
+ assert.equal((await api.POST(await request(path,'admin','POST',{situations,includeObservations:true,observations:[{saleId:'freight:client-report-start',text:'A'.repeat(6001)}]}))).status,400);
+ const exportOwn=await api.POST(await request(path,'seller','POST',{situations:ownSituations,includeObservations:false})); assert.equal(exportOwn.status,200,await exportOwn.clone().text());
+ for (const invalid of [undefined,[],[situations[0],situations[0],situations[2]],situations.map((s:{saleId:string;situation:string},i:number)=>i===0?{...s,saleId:'freight:client-report-foreign'}:s),situations.map((s:{saleId:string;situation:string},i:number)=>i===0?{...s,situation:'EM_ROTA'}:s)]) {
+  const rejected=await api.POST(await request(path,'admin','POST',{situations:invalid,includeObservations:false})); assert.equal(rejected.status,400);
+ }
+ assert.equal((await api.POST(await request(path,'seller','POST',{situations,includeObservations:false}))).status,400);
 });
