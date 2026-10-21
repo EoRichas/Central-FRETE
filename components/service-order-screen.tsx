@@ -2,13 +2,14 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { apiMutation, useApi } from '@/components/use-api';
-import { ErrorState, LoadingState, PageHeader } from '@/components/ui';
+import { ErrorState, LoadingState, PageHeader, Modal } from '@/components/ui';
 import type { ServiceOrderReport } from '@/lib/domain/service-order';
 
 export function ServiceOrderScreen({id, source = "sale", onBack}: {id:string; source?: "sale" | "fleet"; onBack?: () => void}) {
   const endpoint = source === "fleet" ? `/api/fleet/freights/${id}/service-order` : `/api/sales/${id}/service-order`;
   const api = useApi<ServiceOrderReport>(endpoint);
   const [includeObservations,setIncludeObservations] = useState(false);
+  const [observationsOpen,setObservationsOpen] = useState(false);
   const [busy,setBusy] = useState(false);
   const [error,setError] = useState('');
   async function issue() {
@@ -27,8 +28,8 @@ export function ServiceOrderScreen({id, source = "sale", onBack}: {id:string; so
     <section className="panel detail-card form-stack">
       {error && <p className="form-error" role="alert">{error}</p>}
       {report?.stale && <p className="form-error" role="status">Os dados da venda foram alterados. Atualize a OS antes de enviá-la.</p>}
-      {relation && <label className="fleet-check-field"><input type="checkbox" checked={includeObservations} onChange={e => setIncludeObservations(e.target.checked)} /> Incluir observações da venda</label>}
       <div className="order-actions">
+        {relation && <button type="button" className="button secondary" onClick={() => setObservationsOpen(true)}>Adicionar Observação</button>}
         {(!report?.latest || report.stale) && <button className="button primary" disabled={busy} onClick={issue}>{busy ? 'Gerando…' : report?.latest ? 'Atualizar OS' : 'Gerar OS'}</button>}
         {report?.latest && <>
           <a className="button secondary" href={pdf} target="_blank" rel="noreferrer">Visualizar / imprimir</a>
@@ -37,5 +38,11 @@ export function ServiceOrderScreen({id, source = "sale", onBack}: {id:string; so
       </div>
       {report?.latest ? <iframe className="order-preview" key={report.latest.version} title="Ordem de Serviço" src={pdf} /> : <p>Gere a OS para visualizar, imprimir ou salvar o documento.</p>}
     </section>
+    {relation && <Modal open={observationsOpen} onClose={() => setObservationsOpen(false)} title="Adicionar Observação">
+      <div className="modal-body form-stack">
+        <label className="fleet-check-field"><input type="checkbox" checked={includeObservations} onChange={e => setIncludeObservations(e.target.checked)} /> Incluir observações da venda</label>
+        <footer className="modal-actions"><button type="button" className="button secondary" onClick={() => setObservationsOpen(false)}>Fechar</button></footer>
+      </div>
+    </Modal>}
   </>;
 }
