@@ -48,12 +48,12 @@ test('detalhe do relatório abre a OS correta e retorna à mesma venda, sem excl
       '@/lib/domain/permissions': permissions, './use-api': {useApi: () => ({loading: false, data: null})},
     });
     let returned = 0;
-    const render = () => {state.reset(); return FleetReportSaleDetail({id, reportContext: {clientId:'client',from:'2026-10-01',to:'2026-10-31'}, onBack: () => returned++});};
+    const render = () => {state.reset(); return FleetReportSaleDetail({id, onBack: () => returned++});};
     let detail = render();
     assert.equal(detail.props.id, resourceId);
     if (source === 'sale') assert.equal(detail.props.hideDeleteActions, true);
     detail.props.onViewOrder();
-    const order = render(); assert.equal(order.type, ServiceOrderScreen); assert.equal(order.props.source, source); assert.equal(order.props.id, resourceId); assert.deepEqual(order.props.reportContext,{clientId:'client',from:'2026-10-01',to:'2026-10-31'});
+    const order = render(); assert.equal(order.type, ServiceOrderScreen); assert.equal(order.props.source, source); assert.equal(order.props.id, resourceId);
     order.props.onBack(); detail = render(); assert.equal(detail.props.id, resourceId);
     detail.props.onBack(); assert.equal(returned, 1);
   }
@@ -143,20 +143,20 @@ test('Novo frete aparece só em Fretes e a explicação abre e fecha em modal', 
   find(tree,n=>n.type==='button'&&n.props.children==='Ver todos').props.onClick();tree=render();assert.ok(create(tree));
 });
 
-test('Adicionar Observação recebe o filtro da relação ou limita a OS direta à venda e usa a prévia gerada', () => {
+test('Adicionar Observação limita a OS à venda atual, inclusive em vendas vinculadas, e usa a prévia gerada', () => {
   const OrderObservationsDialog=()=>null;
-  for (const context of [{clientId:'client',from:'2026-10-01',to:'2026-10-31'},undefined]) {
+  for (const [source,id,rowId,expected] of [['fleet','record','record','freight:record'],['sale','record','record','sale:record'],['sale','commercial','operation','freight:operation']]) {
     const state=hooks();let mutations=0;
     const {ServiceOrderScreen}=compile('components/service-order-screen.tsx',{
       react:state.react,'@/components/ui':ui,'./order-observations-dialog':{OrderObservationsDialog},
       'next/link':{__esModule:true,default:()=>null},
-      '@/components/use-api':{useApi:()=>({loading:false,data:{latest:{version:1,snapshot:{fleetRelation:{id:'record',clientId:'client',createdDate:'2026-10-09'}}},stale:false}}),apiMutation:()=>{mutations++;}},
+      '@/components/use-api':{useApi:()=>({loading:false,data:{latest:{version:1,snapshot:{fleetRelation:{id:rowId,clientId:'client',createdDate:'2026-10-09'}}},stale:false}}),apiMutation:()=>{mutations++;}},
     });
-    const render=()=>{state.reset();return ServiceOrderScreen({id:'record',source:'fleet',reportContext:context});};
+    const render=()=>{state.reset();return ServiceOrderScreen({id,source});};
     let tree=render();assert.equal(find(tree,n=>n.type===OrderObservationsDialog),null);
     find(tree,n=>n.type==='button'&&n.props.children==='Adicionar Observação').props.onClick();tree=render();
     const modal=find(tree,n=>n.type===OrderObservationsDialog);
-    assert.deepEqual(modal.props.context,context??{clientId:'client',from:'2026-10-09',to:'2026-10-09',rowId:'freight:record'});
+    assert.deepEqual(modal.props.context,{clientId:'client',from:'2026-10-09',to:'2026-10-09',rowId:expected});
     modal.props.onGenerated(new Blob(['%PDF'],{type:'application/pdf'}),'OS.pdf');tree=render();
     assert.equal(find(tree,n=>n.type===OrderObservationsDialog),null);
     const preview=find(tree,n=>n.type==='iframe').props.src;assert.ok(preview.startsWith('blob:'));
@@ -166,29 +166,47 @@ test('Adicionar Observação recebe o filtro da relação ou limita a OS direta 
   }
 });
 
-test('editor restaura Sim/Não, escolha e edição das notas por venda sem mudar notas ou totais originais', async () => {
-  const state=hooks();const calls=[];const generated=[];
-  const report={client:{id:'client',name:'CLIENTE'},from:'2026-10-01',to:'2026-10-31',totals:{amountCents:30000},rows:[
-    {id:'freight:a',saleNumber:'201',vehicles:[],notes:'TEXTO ORIGINAL'},
-    {id:'sale:b',saleNumber:'202',vehicles:[],notes:''},
-  ]};
-  const {OrderObservationForm}=compile('components/order-observations-dialog.tsx',{
-    react:state.react,'./ui':ui,'./fleet-client-report.module.css':{default:{}},'./use-api':{},'@/lib/format':format,
-  });
-  const render=()=>{state.reset();return OrderObservationForm({report,query:'clientId=client&from=2026-10-01&to=2026-10-31',single:false,onClose:()=>{},onGenerated:(...args)=>generated.push(args)});};
-  let tree=render();assert.equal(find(tree,n=>n.type==='textarea'),null);
-  find(tree,n=>n.type==='input'&&n.props.type==='radio'&&!n.props.checked).props.onChange();tree=render();
-  assert.equal(find(tree,n=>n.type==='textarea'&&n.props.value==='TEXTO ORIGINAL').props.maxLength,6000);
-  const boxes=tree.props.children[2].props.children[0].map(n=>find(n,x=>x.type==='input'&&x.props.type==='checkbox'));
-  boxes[0].props.onChange({target:{checked:false}});boxes[1].props.onChange({target:{checked:true}});tree=render();
-  find(tree,n=>n.type==='textarea'&&n.props.value==='').props.onChange({target:{value:'TEXTO SÓ PARA PDF'}});tree=render();
-  const original=globalThis.fetch;globalThis.fetch=async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});return new Response(new Blob(['%PDF'],{type:'application/pdf'}));};
-  try {
-    await tree.props.onSubmit({preventDefault(){}});
-    assert.deepEqual(calls[0].body,{includeObservations:true,observations:[{saleId:'sale:b',text:'TEXTO SÓ PARA PDF'}]});
-    assert.equal(generated[0][1],'Relatorio-Vendas-Frota-2026-10-01-2026-10-31.pdf');
-    tree=render();find(tree,n=>n.type==='input'&&n.props.type==='radio'&&!n.props.checked).props.onChange();tree=render();
-    await tree.props.onSubmit({preventDefault(){}});assert.deepEqual(calls[1].body,{includeObservations:false,observations:[]});
-    assert.equal(report.rows[0].notes,'TEXTO ORIGINAL');assert.equal(report.rows[1].notes,'');assert.equal(report.totals.amountCents,30000);
-  } finally {globalThis.fetch=original;}
+test('Sim libera diretamente a observação da venda aberta, com ou sem texto original, sem marcação', async () => {
+  for (const originalNote of ['', 'TEXTO ORIGINAL']) {
+    const state=hooks(), calls=[], generated=[];
+    const report={client:{id:'client',name:'CLIENTE'},from:'2026-10-09',to:'2026-10-09',totals:{amountCents:10000},rows:[
+      {id:'freight:234',saleNumber:'234',vehicles:[],notes:originalNote},
+    ]};
+    const {OrderObservationForm}=compile('components/order-observations-dialog.tsx',{
+      react:state.react,'./ui':ui,'./fleet-client-report.module.css':{default:{}},'./use-api':{},'@/lib/format':format,
+    });
+    const query='clientId=client&from=2026-10-09&to=2026-10-09&rowId=freight%3A234';
+    const render=()=>{state.reset();return OrderObservationForm({report,query,onClose:()=>{},onGenerated:(...args)=>generated.push(args)});};
+    let tree=render();assert.equal(find(tree,n=>n.type==='textarea'),null);
+    find(tree,n=>n.type==='input'&&n.props.type==='radio'&&!n.props.checked).props.onChange();tree=render();
+    assert.equal(find(tree,n=>n.type==='input'&&n.props.type==='checkbox'),null);
+    const textarea=find(tree,n=>n.type==='textarea');
+    assert.equal(textarea.props.value,originalNote);assert.equal(textarea.props.disabled,false);assert.equal(textarea.props.maxLength,6000);
+    textarea.props.onChange({target:{value:'TEXTO SÓ PARA PDF'}});tree=render();
+    const original=globalThis.fetch;globalThis.fetch=async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});return new Response(new Blob(['%PDF'],{type:'application/pdf'}));};
+    try {
+      await tree.props.onSubmit({preventDefault(){}});
+      assert.equal(calls[0].url,`/api/fleet/client-report?${query}`);
+      assert.deepEqual(calls[0].body,{includeObservations:true,observations:[{saleId:'freight:234',text:'TEXTO SÓ PARA PDF'}]});
+      assert.equal(generated[0][1],'OS-Central-234.pdf');
+      tree=render();find(tree,n=>n.type==='input'&&n.props.type==='radio'&&!n.props.checked).props.onChange();tree=render();
+      assert.equal(find(tree,n=>n.type==='textarea'),null);
+      await tree.props.onSubmit({preventDefault(){}});assert.deepEqual(calls[1].body,{includeObservations:false,observations:[]});
+      assert.equal(report.rows[0].notes,originalNote);assert.equal(report.totals.amountCents,10000);
+    } finally {globalThis.fetch=original;}
+  }
+});
+
+test('diálogo consulta somente a venda da OS e rejeita resposta com várias vendas', () => {
+  const context={clientId:'client',from:'2026-10-09',to:'2026-10-09',rowId:'freight:234'};
+  for (const rows of [[{id:'freight:234'}],[{id:'freight:225'},{id:'freight:234'}],[{id:'freight:225'}]]) {
+    const urls=[];
+    const {OrderObservationsDialog,OrderObservationForm}=compile('components/order-observations-dialog.tsx',{
+      './ui':ui,'./fleet-client-report.module.css':{default:{}},'@/lib/format':format,
+      './use-api':{useApi:url=>{urls.push(url);return {loading:false,data:{report:{rows}}};}},
+    });
+    const tree=OrderObservationsDialog({context,onClose:()=>{},onGenerated:()=>{}});
+    assert.equal(new URL(urls[0],'http://local').searchParams.get('rowId'),'freight:234');
+    assert.equal(Boolean(find(tree,n=>n.type===OrderObservationForm)),rows.length===1&&rows[0].id===context.rowId);
+  }
 });

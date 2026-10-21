@@ -3,10 +3,10 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { apiMutation, useApi } from '@/components/use-api';
 import { ErrorState, LoadingState, PageHeader } from '@/components/ui';
-import { OrderObservationsDialog, type OrderObservationContext } from './order-observations-dialog';
+import { OrderObservationsDialog } from './order-observations-dialog';
 import type { ServiceOrderReport } from '@/lib/domain/service-order';
 
-export function ServiceOrderScreen({id, source = "sale", onBack, reportContext}: {id:string; source?: "sale" | "fleet"; onBack?: () => void; reportContext?: OrderObservationContext}) {
+export function ServiceOrderScreen({id, source = "sale", onBack}: {id:string; source?: "sale" | "fleet"; onBack?: () => void}) {
   const endpoint = source === "fleet" ? `/api/fleet/freights/${id}/service-order` : `/api/sales/${id}/service-order`;
   const api = useApi<ServiceOrderReport>(endpoint);
   const [customPreview,setCustomPreview] = useState<{url: string; filename: string} | null>(null);
@@ -30,8 +30,8 @@ export function ServiceOrderScreen({id, source = "sale", onBack, reportContext}:
   const report=api.data;
   const relation = source === "fleet" || Boolean(report?.latest?.snapshot?.fleetRelation);
   const row = report?.latest?.snapshot?.fleetRelation;
-  const observationsContext = reportContext ?? (row ? {clientId: row.clientId, from: row.createdDate, to: row.createdDate,
-    rowId: `${source === 'fleet' || row.id !== id ? 'freight' : 'sale'}:${row.id}`} : undefined);
+  const observationsContext = row ? {clientId: row.clientId, from: row.createdDate, to: row.createdDate,
+    rowId: `${source === 'fleet' || row.id !== id ? 'freight' : 'sale'}:${row.id}`} : undefined;
   const pdf=customPreview?.url ?? `${endpoint}?format=pdf${relation ? "&observations=0" : ""}`;
   return <>
     <PageHeader eyebrow="Documento da venda" title="Ordem de Serviço" description="Visualize, imprima ou salve a OS desta venda." actions={onBack ? <button type="button" className="button secondary" onClick={onBack}>Voltar à venda</button> : <Link className="button secondary" href={source === "fleet" ? "/frota" : `/vendas/${id}`}>{source === "fleet" ? "Voltar à Frota" : "Voltar à venda"}</Link>} />
