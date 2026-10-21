@@ -47,10 +47,10 @@ const vehicles = [{id: "bdc", averageCostPerKmCents: rate}, {id: "other", averag
 test("1200 km mantém rateio visível, mas não o desconta do líquido", () => {
   assert.ok(Math.abs(rate / 100 - 1.0667225884564662) < 1e-12);
   const metrics = calculateFleetFreightMetrics(draft, DEFAULT_FLEET_PARAMETERS, rate);
-  assert.equal(metrics.fuelCostCents, 276750);
+  assert.equal(metrics.fuelCostCents, 223500);
   assert.equal(metrics.allocatedCostCents, 128007);
-  assert.equal(metrics.totalCostCents, 309750);
-  assert.equal(metrics.netRevenueCents, 230250);
+  assert.equal(metrics.totalCostCents, 256500);
+  assert.equal(metrics.netRevenueCents, 283500);
   assert.equal(metrics.costsConfigured, true);
   assert.deepEqual(calculateFleetFreightPreview({
     ...draft, distanceMeters: distanceInputToMeters(distanceToInput(draft.distanceMeters)),
@@ -60,7 +60,7 @@ test("1200 km mantém rateio visível, mas não o desconta do líquido", () => {
 test("51,1 km mantém rateio informativo fora do custo total", () => {
   const metrics = calculateFleetFreightMetrics({...draft, distanceMeters:51100, freightAmountCents:33000, tollCents:570, driverCommissionCents:1000}, DEFAULT_FLEET_PARAMETERS, rate);
   assert.equal(metrics.allocatedCostCents, 5451);
-  assert.equal(metrics.totalCostCents, 13355);
+  assert.equal(metrics.totalCostCents, 11087);
 });
 
 test("trocar placa altera o rateio exibido, mas não o líquido", () => {
@@ -86,6 +86,16 @@ test("placa sem base não bloqueia custo total ou margem", () => {
   assert.equal(missing.costsConfigured, true);
   assert.equal(missing.costPerKmCents, null);
   assert.equal(missing.allocatedCostCents, 0);
-  assert.equal(missing.totalCostCents, 309750);
-  assert.equal(missing.netRevenueCents, 230250);
+  assert.equal(missing.totalCostCents, 256500);
+  assert.equal(missing.netRevenueCents, 283500);
+});
+
+test("parâmetros padrão usam R$ 7,45 por litro, 4 km/l e descontam avarias como custo próprio", () => {
+  assert.equal(DEFAULT_FLEET_PARAMETERS.fuelPriceCents,745);
+  assert.equal(DEFAULT_FLEET_PARAMETERS.averageConsumptionMilliKmPerLiter,4000);
+  const plain=calculateFleetFreightMetrics({...draft,distanceMeters:400000},DEFAULT_FLEET_PARAMETERS,null);
+  const damaged=calculateFleetFreightMetrics({...draft,distanceMeters:400000,damagesCostCents:12345,icmsCostCents:500,cteMdfeCostCents:2000},DEFAULT_FLEET_PARAMETERS,null);
+  assert.equal(plain.estimatedFuelCostCents,74500);
+  assert.equal(damaged.directCostCents-plain.directCostCents,14845);
+  assert.equal(plain.netRevenueCents-damaged.netRevenueCents,14845);
 });

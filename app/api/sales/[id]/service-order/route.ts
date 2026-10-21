@@ -1,3 +1,4 @@
+import { orderWithSavedObservation } from '@/lib/server/fleet-order-observation';
 import { authorize } from '@/lib/server/auth';
 import { ApiError, jsonError } from '@/lib/server/d1';
 import { authorizeOrder, issueOrder, orderReport, readOrderVersion } from '@/lib/server/service-orders';
@@ -15,7 +16,9 @@ export async function GET(request: Request, context: Context) {
     if (version !== undefined && (!Number.isSafeInteger(version) || version < 1)) throw new ApiError(400,'Versão inválida.');
     const order = await readOrderVersion(id,version);
     if (!order) throw new ApiError(404,'OS ainda não emitida.');
-    const bytes = await renderServiceOrderPdf(order,url.searchParams.get('observations') !== '0');
+    const saved = version === undefined ? await orderWithSavedObservation(order,'sale',id) : {order,include:true};
+    const explicit = url.searchParams.get('observations');
+    const bytes = await renderServiceOrderPdf(explicit === null ? saved.order : order,explicit === null ? saved.include : explicit !== '0');
     const filename = `OS-Central-${order.snapshot.saleNumber.replace(/[^a-zA-Z0-9-]/g,'_')}.pdf`;
     return new Response(new Uint8Array(bytes),{headers:{'Content-Type':'application/pdf','Cache-Control':'private, no-store',
       'X-Content-Type-Options':'nosniff','Content-Disposition':`${url.searchParams.get('download') === '1' ? 'attachment' : 'inline'}; filename="${filename}"`}});

@@ -7,7 +7,7 @@ import { StatusBadge } from '@/components/ui';
 
 export function FleetFreightDetail({freight: f}: {freight: FleetFreight}) {
   const cargo=cargoVehiclesOrLegacy(f.cargoVehicles,f.cargoVehicleModel,f.cargoPlate);
-  const costs: [string,number][]=[['Motorista / comissão',f.driverCommissionCents],['Combustível',f.fuelCostCents],['Pedágio',f.tripId ? 0 : f.tollCents],['Custos compartilhados da viagem',f.sharedTransportCostCents],['Pátio / recebimento',f.yardCostCents??0],['Coleta',f.pickupCostCents??0],['Entrega',f.deliveryCostCents??0],['Seguro',f.insuranceCostCents??0],['Nota Fiscal',f.invoiceCostCents??0],['ICMS',f.icmsCostCents??0],['CTE/MDF',f.cteMdfeCostCents??0],['Outras despesas',f.otherCostCents??0]];
+  const costs: [string,number][]=[['Motorista / comissão',f.driverCommissionCents],['Combustível',f.fuelCostCents],['Pedágio',f.tripId ? 0 : f.tollCents],['Custos compartilhados da viagem',f.sharedTransportCostCents],['Pátio / recebimento',f.yardCostCents??0],['Coleta',f.pickupCostCents??0],['Entrega',f.deliveryCostCents??0],['Seguro',f.insuranceCostCents??0],['Nota Fiscal',f.invoiceCostCents??0],['CTE/MDF',f.cteMdfeCostCents??0],['Avarias',f.damagesCostCents??0],['ICMS anterior',f.icmsCostCents??0],['Outras despesas',f.otherCostCents??0]];
   if (f.sellerCommissionCents != null) costs.push(['Comissão do vendedor', f.sellerCommissionCents]);
   return <>
     <section className="detail-status-strip">

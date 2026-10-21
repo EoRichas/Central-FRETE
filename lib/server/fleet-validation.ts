@@ -81,6 +81,7 @@ export function parseFleetFreightPayload(payload: Record<string, unknown>) {
     deliveryCostCents: resultMoney(payload.deliveryCostCents ?? 0, "Entrega"),
     insuranceCostCents: resultMoney(payload.insuranceCostCents ?? 0, "Seguro"),
     invoiceCostCents: resultMoney(payload.invoiceCostCents ?? 0, "Nota Fiscal"),
+    damagesCostCents: resultMoney(payload.damagesCostCents ?? 0, "Avarias"),
     icmsCostCents: resultMoney(payload.icmsCostCents ?? 0, "ICMS"),
     cteMdfeCostCents: resultMoney(payload.cteMdfeCostCents ?? 0, "CTE/MDF"),
     otherCostCents: resultMoney(payload.otherCostCents ?? 0, "Outros custos diretos"),

@@ -23,9 +23,9 @@ export function OrderObservationsDialog({context, onClose, onGenerated}: Props) 
 export function OrderObservationForm({report, query, onClose, onGenerated}: {
   report: FleetClientReport; query: string; onClose: () => void; onGenerated: Props['onGenerated'];
 }) {
-  const [include, setInclude] = useState(false);
   const row = report.rows[0];
-  const [notes, setNotes] = useState(row.notes);
+  const [include, setInclude] = useState(row.orderIncludeObservation ?? false);
+  const [notes, setNotes] = useState(row.orderObservation ?? row.notes);
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
   const pending = useRef<AbortController | null>(null);
   useEffect(() => () => pending.current?.abort(), []);
@@ -51,7 +51,7 @@ export function OrderObservationForm({report, query, onClose, onGenerated}: {
     </fieldset>
     {include && <div className={styles.observations}><div>
       <label className="field"><span>Observação da venda {row.saleNumber}</span><textarea rows={3} maxLength={6000} value={notes} disabled={busy} onChange={e => setNotes(e.target.value)} placeholder={row.notes || 'Sem observação cadastrada. Se desejar, escreva para este PDF.'} /></label>
-    </div><p className="report-basis">Ajustes de texto valem somente para este PDF. As observações originais da venda e os totais permanecem iguais.</p></div>}
+    </div><p className="report-basis">Ao visualizar o PDF, esta observação será salva na OS e incluída no relatório de vendas. As anotações originais da venda permanecem iguais.</p></div>}
     {error && <p className="form-error" role="alert">{error}</p>}
     <footer className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>Cancelar</button><button className="button primary" disabled={busy}>{busy ? 'Gerando…' : 'Visualizar PDF'}</button></footer>
   </form>;

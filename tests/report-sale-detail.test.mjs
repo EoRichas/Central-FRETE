@@ -5,6 +5,9 @@ import {createRequire} from 'node:module';
 import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import ts from 'typescript';
+import * as fleetDomain from '../lib/domain/fleet.ts';
+import * as numberInput from '../lib/domain/number-input.ts';
+import * as fullFormat from '../lib/format.ts';
 import * as operations from '../lib/domain/operations.ts';
 import * as permissions from '../lib/domain/permissions.ts';
 import * as clientReport from '../lib/domain/fleet-client-report.ts';
@@ -59,7 +62,7 @@ test('detalhe do relatório abre a OS correta e retorna à mesma venda, sem excl
   }
 });
 
-test('relatório preserva filtros e acesso à venda sem botão ou modal de geração de PDF', () => {
+test('relatório preserva filtros e acesso à venda com retorno aos filtros e botão próprio de relatório', () => {
   const state = hooks(['client', '2026-10-01', '2026-10-31', 'clientId=client&from=2026-10-01&to=2026-10-31']);
   const FleetReportSaleDetail = () => null;
   const {FleetClientReportPanel} = compile('components/fleet-client-report.tsx', {
@@ -79,7 +82,8 @@ test('relatório preserva filtros e acesso à venda sem botão ou modal de gera�
   assert.equal(find(tree, n => n.type === 'input' && n.props.min).props.value, '2026-10-31');
   assert.equal(state.values[3], 'clientId=client&from=2026-10-01&to=2026-10-31');
   assert.equal(find(tree, n => n.type === 'button' && n.props.children === 'Gerar PDF da relação'), null);
-  assert.equal(find(tree, n => n.type === ui.Modal), null);
+  assert.equal(find(tree, n => n.type === ui.Modal).props.open, false);
+  assert.ok(find(tree,n=>n.type==='button'&&n.props.children==='Gerar relatório de vendas'));
 });
 
 test('consulta comercial mantém informações e OS; excluir recebimento fica oculto só no relatório', () => {
@@ -111,8 +115,8 @@ test('OS abre prévia inline, com impressão e download separados e sem emissão
     const html = renderToStaticMarkup(React.createElement(ServiceOrderScreen, {id: 'record', source, onBack: () => {}}));
     const endpoint = source === 'fleet' ? '/api/fleet/freights/record/service-order' : '/api/sales/record/service-order';
     assert.deepEqual(endpoints, [endpoint]);
-    assert.ok(html.includes(`src="${endpoint}?format=pdf${source === 'fleet' ? '&amp;observations=0' : ''}"`));
-    assert.ok(html.includes(`href="${endpoint}?format=pdf${source === 'fleet' ? '&amp;observations=0' : ''}&amp;download=1"`));
+    assert.ok(html.includes(`src="${endpoint}?format=pdf"`));
+    assert.ok(html.includes(`href="${endpoint}?format=pdf&amp;download=1"`));
     assert.ok(html.includes('Visualizar / imprimir')); assert.ok(html.includes('Salvar PDF')); assert.ok(html.includes('Voltar à venda'));
     assert.equal(mutations, 0);
   }
@@ -209,4 +213,67 @@ test('diálogo consulta somente a venda da OS e rejeita resposta com várias ven
     assert.equal(new URL(urls[0],'http://local').searchParams.get('rowId'),'freight:234');
     assert.equal(Boolean(find(tree,n=>n.type===OrderObservationForm)),rows.length===1&&rows[0].id===context.rowId);
   }
+});
+
+
+test('relatório gera prévia com todas as OS salvas pelo filtro consultado e permite imprimir ou salvar', async () => {
+  const state=hooks(['client','2026-10-01','2026-10-31','clientId=client&from=2026-10-01&to=2026-10-31']);
+  const report={client:{name:'CLIENTE'},from:'2026-10-01',to:'2026-10-31',totals:{sales:1,vehicles:1,amountCents:10000,receivedCents:0,balanceCents:10000},rows:[{id:'freight:234',saleNumber:'234',vehicles:[],receivedDates:[],notes:''}]};
+  const {FleetClientReportPanel}=compile('components/fleet-client-report.tsx',{
+    react:state.react,'./fleet-report-sale-detail':{FleetReportSaleDetail:()=>null},'./icons':{Icons:new Proxy({},{get:()=>icon})},'./ui':ui,
+    './fleet-client-report.module.css':{default:{}},'@/lib/format':format,'@/lib/domain/dates':{currentCompetency:()=>'2026-10',todaySaoPaulo:()=>'2026-10-21'},
+    './use-api':{useApi:()=>({data:{clients:[],report}})},
+  });
+  const render=()=>{state.reset();return FleetClientReportPanel();};let tree=render();const calls=[];
+  const original=globalThis.fetch;globalThis.fetch=async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});return new Response(new Blob(['%PDF'],{type:'application/pdf'}));};
+  try {
+    await find(tree,n=>n.type==='button'&&n.props.children==='Gerar relatório de vendas').props.onClick();tree=render();
+    assert.deepEqual(calls,[{url:'/api/fleet/client-report?clientId=client&from=2026-10-01&to=2026-10-31',body:{useOrderObservations:true}}]);
+    const modal=find(tree,n=>n.type===ui.Modal);assert.equal(modal.props.open,true);
+    const preview=find(modal,n=>n.type==='iframe').props.src;assert.ok(preview.startsWith('blob:'));
+    assert.equal(find(modal,n=>n.type==='a'&&n.props.children==='Visualizar / imprimir').props.href,preview);
+    assert.equal(find(modal,n=>n.type==='a'&&n.props.children==='Salvar PDF').props.download,'Relatorio-Vendas-Frota-2026-10-01-2026-10-31.pdf');
+    modal.props.onClose();tree=render();assert.equal(find(tree,n=>n.type===ui.Modal).props.open,false);
+    URL.revokeObjectURL(preview);
+  } finally {globalThis.fetch=original;}
+});
+
+test('observação salva na OS volta preenchida e habilitada ao reabrir', () => {
+  const state=hooks();const {OrderObservationForm}=compile('components/order-observations-dialog.tsx',{
+    react:state.react,'./ui':ui,'./fleet-client-report.module.css':{default:{}},'./use-api':{},'@/lib/format':format,
+  });
+  const tree=OrderObservationForm({report:{client:{name:'CLIENTE'},rows:[{id:'freight:234',saleNumber:'234',notes:'NOTA DA VENDA',orderObservation:'NOTA SALVA NA OS',orderIncludeObservation:true}]},query:'rowId=freight:234',onClose:()=>{},onGenerated:()=>{}});
+  const text=find(tree,n=>n.type==='textarea');assert.equal(text.props.value,'NOTA SALVA NA OS');assert.equal(text.props.disabled,false);
+});
+
+
+test('formulário Frota remove hodômetro e abastecimento, posiciona CTE e avarias e preserva valores antigos ao editar', async () => {
+  const state=hooks();const noOp=()=>null,mod=new Proxy({},{get:()=>noOp});
+  const source=readFileSync(new URL('../components/fleet-freight-modal.tsx',import.meta.url),'utf8');
+  const overrides=Object.fromEntries([...source.matchAll(/from\s+["']([^"']+)["']/g)].map(m=>[m[1],mod]));
+  const calls=[];
+  Object.assign(overrides,{
+    react:state.react,'@/components/ui':ui,'@/lib/format':fullFormat,'@/lib/domain/fleet':fleetDomain,'@/lib/domain/number-input':numberInput,
+    '@/lib/domain/operations':operations,'@/lib/domain/fleet-client-report':clientReport,'@/lib/domain/finance':{commissionCents:()=>0},
+    '@/lib/domain/dates':{todaySaoPaulo:()=>'2026-10-21'},'@/lib/domain/cargo-vehicles':{cargoVehiclesOrLegacy:()=>[{model:'CARRO',plate:'AAA1A11'}]},
+    '@/lib/domain/fleet-distance':{effectiveFleetDistance:v=>v.odometerEndMeters-v.odometerStartMeters},
+    '@/lib/domain/fuel-input':{fuelInputToInteger:v=>v?fullFormat.moneyInputToCents(v):null},
+    '@/components/use-api':{useApi:url=>({data:url==='/api/me'?{user:{id:'admin',role:'ADMIN'}}:{sellers:[]}}),apiMutation:async(url,options)=>{calls.push({url,...options});return {id:'234'};}},
+  });
+  const {FreightModal}=compile('components/fleet-freight-modal.tsx',overrides);
+  const freight={id:'234',vehicleId:'truck',driverId:'driver',clientName:'CLIENTE',distanceMeters:10000,odometerStartMeters:100000,odometerEndMeters:110000,
+    actualFuelCostCents:12345,fuelLitersMilli:25000,fuelPumpAmountCents:12400,icmsCostCents:1500,cteMdfeCostCents:2000,damagesCostCents:3000,
+    freightAmountCents:100000,tollCents:0,driverCommissionCents:0,pickupDate:'2026-10-21',operationalStatus:'EM_ROTA',priority:'NORMAL'};
+  const fleet={parameters:fleetDomain.DEFAULT_FLEET_PARAMETERS,vehicles:[{id:'truck',active:true}],drivers:[{id:'driver',active:true}],canEditFreights:true};
+  const tree=FreightModal({freight,fleet,onClose:()=>{},onSaved:()=>{},onDelete:()=>{}});
+  for(const label of ['KM inicial','KM final','Litros abastecidos','Valor bomba (R$)','Valor pago combustível (R$)','ICMS (R$)']) assert.equal(find(tree,n=>n.props?.label===label),null,label);
+  const cte=find(tree,n=>n.props?.label==='CTE/MDF (R$)'),damages=find(tree,n=>n.props?.label==='Avarias (R$)');
+  assert.ok(cte&&damages);assert.equal(find(cte,n=>n.type==='input').props.value,'20,00');assert.equal(find(damages,n=>n.type==='input').props.value,'30,00');
+  const fields=find(tree,n=>n.props?.className==='form-grid four'&&n.props.children[0]?.props.label==='Seguro (R$)');assert.deepEqual(fields.props.children.map(n=>n.props.label),['Seguro (R$)','Nota Fiscal (R$)','CTE/MDF (R$)','Avarias (R$)']);
+  const OriginalFormData=globalThis.FormData;globalThis.FormData=class {get(){return null;}};
+  try {
+    await find(tree,n=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{}});
+    assert.equal(calls.length,1);const body=JSON.parse(calls[0].body);
+    for(const field of ['actualFuelCostCents','fuelLitersMilli','fuelPumpAmountCents','icmsCostCents','cteMdfeCostCents','damagesCostCents','odometerStartMeters','odometerEndMeters']) assert.equal(body[field],freight[field],field);
+  } finally {globalThis.FormData=OriginalFormData;}
 });

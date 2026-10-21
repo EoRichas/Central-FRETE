@@ -11,7 +11,7 @@ test('OS da relação segue paisagem e pagina vendas, nomes e observações exte
   const bytes = await renderFleetClientPdf(short, [{saleId: row.id, text: row.notes}]);
   const pdf = await PDFDocument.load(bytes);
   assert.equal(pdf.getPageCount(), 1); assert.ok(pdf.getPage(0).getWidth() > pdf.getPage(0).getHeight());
-  assert.match(pdf.getTitle()!, /OS - Relação de serviços/);
+  assert.match(pdf.getTitle()!, /Relatório de vendas - Relação de serviços/);
   const many = buildFleetClientReport({id: 'test', name: 'CLIENTE COM RAZÃO SOCIAL EXTENSA '.repeat(4)}, '2026-10-01', '2026-10-31', Array.from({length: 40}, (_, i) => ({...row, id: `freight:${i}`, saleNumber: String(201 + i), vehicles: [{model: 'DESCRIÇÃO DE VEÍCULO TRANSPORTADO '.repeat(3), plate: 'AAA1A11', identification: null}]})));
   const extended = await renderFleetClientPdf(many, [{saleId: many.rows[0].id, text: 'Observação com várias informações e condições para o cliente. '.repeat(90)}]);
   assert.ok((await PDFDocument.load(extended)).getPageCount() >= 5);

@@ -1,3 +1,4 @@
+import { saveFleetOrderObservation } from '@/lib/server/fleet-order-observation';
 import { authorize } from '@/lib/server/auth';
 import { ApiError, jsonError } from '@/lib/server/d1';
 import { loadFleetClientReport } from '@/lib/server/fleet-client-report';
@@ -24,11 +25,16 @@ export async function POST(request: Request) {
     let parsed: unknown;
     try { parsed = JSON.parse(Buffer.concat(chunks).toString()); } catch { throw new ApiError(400, 'Dados inválidos.'); }
     const data = asObject(parsed);
-    const {report} = await loadFleetClientReport(user, new URL(request.url).searchParams);
+    const params = new URL(request.url).searchParams;
+    const {report} = await loadFleetClientReport(user, params);
     if (!report?.rows.length) throw new ApiError(400, 'Selecione um cliente e um período com vendas.');
-    if (typeof data.includeObservations !== 'boolean') throw new ApiError(400, 'Escolha se deseja incluir observações.');
+    const savedNotes = data.useOrderObservations === true;
+    if (savedNotes && params.get('rowId')) throw new ApiError(400, 'Gere o relatório pelo cliente e período.');
+    if (!savedNotes && typeof data.includeObservations !== 'boolean') throw new ApiError(400, 'Escolha se deseja incluir observações.');
     const observations: ClientReportObservation[] = [];
-    if (data.includeObservations) {
+    if (savedNotes) {
+      for (const row of report.rows) if (row.orderIncludeObservation && row.orderObservation?.trim()) observations.push({saleId: row.id, text: row.orderObservation.trim()});
+    } else if (data.includeObservations) {
       if (!Array.isArray(data.observations) || data.observations.length > report.rows.length) throw new ApiError(400, 'Observações inválidas.');
       const seen = new Set<string>();
       for (const value of data.observations) {
@@ -39,8 +45,10 @@ export async function POST(request: Request) {
         if (item.text.trim()) observations.push({saleId: item.saleId, text: item.text.trim()});
       }
     }
-    const single = Boolean(new URL(request.url).searchParams.get('rowId')?.trim());
+    const single = Boolean(params.get('rowId')?.trim());
     const number = report.rows[0].saleNumber.replace(/[^a-zA-Z0-9-]/g, '_');
-    return pdfResponse(await renderFleetClientPdf(report, observations, single ? report.rows[0].saleNumber : undefined), single ? `OS-Central-${number}.pdf` : `Relatorio-Vendas-Frota-${report.from}-${report.to}.pdf`);
+    const bytes = await renderFleetClientPdf(report, observations, single ? report.rows[0].saleNumber : undefined);
+    if (single) await saveFleetOrderObservation(user, report.rows[0].id, data.includeObservations as boolean, data.includeObservations ? observations[0]?.text ?? '' : null);
+    return pdfResponse(bytes, single ? `OS-Central-${number}.pdf` : `Relatorio-Vendas-Frota-${report.from}-${report.to}.pdf`);
   } catch (error) { return jsonError(error); }
 }

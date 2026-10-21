@@ -33,6 +33,7 @@ export async function migrateDatabase(configuration) {
     "../supabase/migrations/20261005122915_security_sessions_and_login_limits.sql",
     "../supabase/migrations/20261014180528_negotiated_commissions_fleet_notes.sql",
     "../supabase/migrations/20261016133115_preserve_deleted_user_history.sql",
+    "../supabase/migrations/20261021201125_fleet_report_observations_damages_fuel.sql",
   ];
   const migrations = await Promise.all(
     migrationFiles.map((file) =>

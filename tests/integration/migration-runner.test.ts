@@ -17,9 +17,12 @@ test('runner aplica migration uma vez, gera 201/202 e não reabre scripts anuais
   assert.equal((await insert('second')).rows[0].sale_number,'202');
   await pg.exec("insert into freight_costs(id,sale_id,category,amount_cents,confirmed,payment_status) values('cte','first','CTE_MDFE',1000,0,'EM_ABERTO')");
   assert.equal((await pg.query("select column_name from information_schema.columns where table_name='fleet_freights' and column_name in ('insurance_cost_cents','invoice_cost_cents','icms_cost_cents','cte_mdfe_cost_cents')")).rows.length,4);
+  assert.deepEqual((await pg.query('select fuel_price_cents,average_consumption_milli_km_per_liter from fleet_settings')).rows,[{fuel_price_cents:745,average_consumption_milli_km_per_liter:4000}]);
+  await pg.exec('update fleet_settings set fuel_price_cents=800');
   const before=await pg.query('select * from central_schema_migrations order by name');
   await migrateDatabase({databaseUrl:'postgres://test:test@localhost/test',databaseHost:'local-test'});
   assert.deepEqual((await pg.query('select * from central_schema_migrations order by name')).rows,before.rows);
+  assert.equal((await pg.query<{fuel_price_cents:number}>('select fuel_price_cents from fleet_settings')).rows[0].fuel_price_cents,800);
   assert.equal((await insert('third','FROTA')).rows[0].sale_number,'203');
   assert.deepEqual((await pg.query("select confirmed,payment_status from freight_costs where id='cte'")).rows,[{confirmed:0,payment_status:'EM_ABERTO'}]);
  }finally{mock.restoreAll();await pg.close();}

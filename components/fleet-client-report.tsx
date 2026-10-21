@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { FleetClientReportData } from '@/lib/domain/fleet-client-report';
 import { currentCompetency, todaySaoPaulo } from '@/lib/domain/dates';
 import { formatDate, formatMoney } from '@/lib/format';
 import { useApi } from './use-api';
-import { EmptyState, ErrorState, LoadingState } from './ui';
+import { EmptyState, ErrorState, LoadingState, Modal } from './ui';
 import { FleetReportSaleDetail } from './fleet-report-sale-detail';
 import { Icons } from './icons';
 import styles from './fleet-client-report.module.css';
@@ -15,9 +15,28 @@ export function FleetClientReportPanel() {
   const [query, setQuery] = useState('');
   const api = useApi<FleetClientReportData>(`/api/fleet/client-report${query ? `?${query}` : ''}`);
   const report = api.data?.report;
+  const [pdf, setPdf] = useState<{url: string; filename: string} | null>(null);
+  const [generating, setGenerating] = useState(false), [pdfError, setPdfError] = useState('');
+  const previewUrl = useRef<string | null>(null), pending = useRef<AbortController | null>(null);
+  useEffect(() => () => { pending.current?.abort(); if (previewUrl.current) URL.revokeObjectURL(previewUrl.current); }, []);
+  function closePreview() { if (previewUrl.current) URL.revokeObjectURL(previewUrl.current); previewUrl.current = null; setPdf(null); }
+  async function generateReport() {
+    if (!report?.rows.length || pending.current) return;
+    const controller = new AbortController(); pending.current = controller; setGenerating(true); setPdfError('');
+    try {
+      const response = await fetch(`/api/fleet/client-report?${query}`, {method:'POST',credentials:'same-origin',cache:'no-store',headers:{'content-type':'application/json'},
+        signal:AbortSignal.any([controller.signal,AbortSignal.timeout(60000)]),body:JSON.stringify({useOrderObservations:true})});
+      if (!response.ok) throw new Error((await response.json()).error || 'Não foi possível gerar o relatório.');
+      const blob = await response.blob(); if (controller.signal.aborted) return;
+      closePreview(); const url = URL.createObjectURL(blob); previewUrl.current = url;
+      setPdf({url,filename:`Relatorio-Vendas-Frota-${report.from}-${report.to}.pdf`});
+    } catch (e) { if (!controller.signal.aborted) setPdfError(e instanceof Error ? e.message : 'Não foi possível gerar o relatório.'); }
+    finally { if (pending.current === controller) pending.current = null; if (!controller.signal.aborted) setGenerating(false); }
+  }
   const [viewingId, setViewingId] = useState<string | null>(null);
   function search(event: FormEvent) {
     event.preventDefault();
+    pending.current?.abort(); pending.current = null; setGenerating(false); setPdfError(''); closePreview();
     const next = new URLSearchParams({clientId, from, to}).toString();
     if (next === query) api.refresh(); else setQuery(next);
   }
@@ -31,7 +50,8 @@ export function FleetClientReportPanel() {
       <button className="button primary" disabled={api.loading}>Consultar</button>
     </form>
     {api.loading ? <LoadingState label="Consultando vendas do Frota…" /> : api.error ? <ErrorState message={api.error} retry={api.refresh} /> : report ? <>
-      <div className={styles.heading}><div><h3>{report.client.name}</h3><p>{formatDate(report.from)} a {formatDate(report.to)} · {report.totals.sales} vendas · {report.totals.vehicles} veículos</p></div></div>
+      <div className={styles.heading}><div><h3>{report.client.name}</h3><p>{formatDate(report.from)} a {formatDate(report.to)} · {report.totals.sales} vendas · {report.totals.vehicles} veículos</p></div><button type="button" className="button secondary" disabled={generating || !report.rows.length} onClick={generateReport}>{generating ? 'Gerando…' : 'Gerar relatório de vendas'}</button></div>
+      {pdfError && <p className="form-error" role="alert">{pdfError}</p>}
       <section className="receivable-summary large"><div><span>Total dos serviços</span><strong>{formatMoney(report.totals.amountCents)}</strong></div><div><span>Total recebido</span><strong>{formatMoney(report.totals.receivedCents)}</strong></div><div><span>Valor pendente</span><strong>{formatMoney(report.totals.balanceCents)}</strong></div></section>
       <p className="report-basis">Recebimento: valor das baixas e pagamentos confirmados, descontados os estornos. A forma de pagamento não altera o relatório. Datas ausentes não são estimadas.</p>
       {!report.rows.length ? <EmptyState title="Nenhuma venda neste período" description="Confira o cliente e as datas de criação selecionadas." /> : <div className="panel table-panel"><div className="responsive-table"><table className="sales-table"><thead><tr><th>Venda / criação</th><th>Veículo / placa</th><th>Motorista</th><th>Situação</th><th>Valor</th><th>Recebimento</th><th>Data de recebimento</th><th>Data de saída</th><th>Pago</th><th><span className="sr-only">Ações</span></th></tr></thead><tbody>
@@ -48,5 +68,8 @@ export function FleetClientReportPanel() {
       </tbody></table></div></div>}
     </> : <EmptyState title="Consulte as vendas de um cliente" description="Escolha o cliente e o intervalo de criação para visualizar o relatório." />}
 
+    <Modal open={Boolean(pdf)} onClose={closePreview} title="Relatório de vendas" description="Todos os serviços do cliente e período consultados, com as observações salvas nas OS individuais." wide>
+      {pdf && <div className="modal-body form-stack"><div className="order-actions"><a className="button secondary" href={pdf.url} target="_blank" rel="noreferrer">Visualizar / imprimir</a><a className="button secondary" href={pdf.url} download={pdf.filename}>Salvar PDF</a><button type="button" className="button secondary" onClick={closePreview}>Fechar</button></div><iframe className="order-preview" title="Relatório de vendas" src={pdf.url} /></div>}
+    </Modal>
   </section>;
 }

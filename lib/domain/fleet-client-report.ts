@@ -19,6 +19,8 @@ export type FleetClientReportRow = {
   receivedDates: string[];
   paid: 'Sim' | 'Não' | 'Parcial';
   notes: string;
+  orderObservation?: string | null;
+  orderIncludeObservation?: boolean | null;
 };
 
 export type FleetClientReport = {

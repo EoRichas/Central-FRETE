@@ -25,6 +25,7 @@ type FreightSnapshot = {
   otherCostCents: number;
   insuranceCostCents: number;
   invoiceCostCents: number;
+  damagesCostCents: number;
   icmsCostCents: number;
   cteMdfeCostCents: number;
 
@@ -62,7 +63,7 @@ type FreightSnapshot = {
 async function freightSnapshot(id: string) {
   return queryFirst<FreightSnapshot>(
     `select service_situation as serviceSituation,seller_id as sellerId,seller_commission_override_cents as sellerCommissionOverrideCents,notes,trip_id as tripId, yard_cost_cents as yardCostCents, pickup_cost_cents as pickupCostCents,
-      delivery_cost_cents as deliveryCostCents, other_cost_cents as otherCostCents, insurance_cost_cents as insuranceCostCents, invoice_cost_cents as invoiceCostCents, icms_cost_cents as icmsCostCents, cte_mdfe_cost_cents as cteMdfeCostCents, actual_fuel_cost_cents as actualFuelCostCents, cargo_vehicles as cargoVehicles,
+      delivery_cost_cents as deliveryCostCents, other_cost_cents as otherCostCents, insurance_cost_cents as insuranceCostCents, invoice_cost_cents as invoiceCostCents, damages_cost_cents as damagesCostCents, icms_cost_cents as icmsCostCents, cte_mdfe_cost_cents as cteMdfeCostCents, actual_fuel_cost_cents as actualFuelCostCents, cargo_vehicles as cargoVehicles,
           fuel_liters_milli as fuelLitersMilli, fuel_pump_amount_cents as fuelPumpAmountCents,
       id, vehicle_id as vehicleId, vehicle_plate as vehiclePlate,
       driver_id as driverId, driver_name as driverName,
@@ -114,7 +115,7 @@ export async function PATCH(request: Request, context: RouteContext) {
             freight_amount_cents = ?, distance_meters = ?, toll_cents = ?,
             driver_commission_cents = ?, updated_by = ?, origin_cep = ?, destination_cep = ?,
             trip_id = ?, yard_cost_cents = ?, pickup_cost_cents = ?, delivery_cost_cents = ?, other_cost_cents = ?, actual_fuel_cost_cents = ?,
-            cargo_vehicles = ?::text::jsonb, fuel_liters_milli = ?, fuel_pump_amount_cents = ?, route_distance_meters = ?, odometer_start_meters = ?, odometer_end_meters = ?, insurance_cost_cents = ?, invoice_cost_cents = ?, icms_cost_cents = ?, cte_mdfe_cost_cents = ?,
+            cargo_vehicles = ?::text::jsonb, fuel_liters_milli = ?, fuel_pump_amount_cents = ?, route_distance_meters = ?, odometer_start_meters = ?, odometer_end_meters = ?, insurance_cost_cents = ?, invoice_cost_cents = ?, icms_cost_cents = ?, cte_mdfe_cost_cents = ?, damages_cost_cents = ?,
             updated_at = to_char(timezone('UTC', now()), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
            where id = ?`,
         )
@@ -143,7 +144,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           data.tripId, data.yardCostCents, data.pickupCostCents, data.deliveryCostCents, data.otherCostCents, data.actualFuelCostCents,
           JSON.stringify(data.cargoVehicles), data.fuelLitersMilli, data.fuelPumpAmountCents,
           data.routeDistanceMeters, data.odometerStartMeters, data.odometerEndMeters,
-          data.insuranceCostCents, data.invoiceCostCents, data.icmsCostCents, data.cteMdfeCostCents,
+          data.insuranceCostCents, data.invoiceCostCents, data.icmsCostCents, data.cteMdfeCostCents, data.damagesCostCents,
           id,
         ),
       db.prepare("update freight_sales set commission_override_cents=? where fleet_freight_id=? and sale_channel='FROTA'").bind(commissionOverrideCents,id),
