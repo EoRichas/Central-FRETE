@@ -79,5 +79,7 @@ export async function loadFleetClientReport(user: CurrentUser, params: URLSearch
         paid: receivedCents >= s.amountCents ? 'Sim' : receivedCents > 0 ? 'Parcial' : 'Não', notes: s.notes ?? ''};
     }),
   ];
-  return {clients, report: buildFleetClientReport(client, from, to, rows)};
+  const rowId = params.get('rowId')?.trim();
+  if (rowId && !rows.some(row => row.id === rowId)) throw new ApiError(404, 'Venda não disponível neste cliente e período para seu perfil.');
+  return {clients, report: buildFleetClientReport(client, from, to, rowId ? rows.filter(row => row.id === rowId) : rows)};
 }

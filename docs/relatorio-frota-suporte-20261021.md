@@ -52,3 +52,11 @@ Somente Central-FRETE. Não altera CZAR/EKON, Sup, os dados existentes, permiss�
 - A relação deixa de oferecer o botão Gerar PDF da relação e seus modais de exportação; filtros, totais e acesso à venda permanecem.
 - Na OS individual da Frota, Adicionar Observação abre um modal que contém a opção já existente Incluir observações da venda. Fechar ou o fechamento padrão do modal retornam à prévia.
 - A escolha continua controlando a prévia, impressão e download, sem alterar a venda ou emitir uma OS automaticamente. Não requer migração. A OS da Cegonha mantém seu fluxo.
+
+## Editor completo no botão Adicionar Observação
+
+- O botão dentro da OS passa a oferecer Sim/Não, seleção das vendas e edição do texto existente (até 6.000 caracteres por venda), com Visualizar PDF e Cancelar.
+- Ao entrar pela relação, mantém o cliente e as datas efetivamente consultados; a lista inclui as vendas autorizadas desse filtro. Ao entrar diretamente na OS, rowId restringe consulta e exportação à venda correspondente (inclusive vínculos comerciais).
+- O servidor recarrega os dados e recalcula totais; rowId precisa pertencer ao cliente, período e perfil. IDs fora da seleção são recusados também nas observações. A seleção de notas não remove vendas nem altera totais.
+- O PDF gerado substitui a prévia da OS; impressão e Salvar PDF usam o mesmo arquivo temporário. A URL é revogada ao sair, gerar outro arquivo ou atualizar a OS. Cancelar encerra a requisição pendente. Textos editados não gravam na venda ou nas versões emitidas.
+- A relação continua sem botão de geração. Sem migração ou mudança de permissões.

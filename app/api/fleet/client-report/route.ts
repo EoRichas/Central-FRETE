@@ -39,6 +39,8 @@ export async function POST(request: Request) {
         if (item.text.trim()) observations.push({saleId: item.saleId, text: item.text.trim()});
       }
     }
-    return pdfResponse(await renderFleetClientPdf(report, observations), `Relatorio-Vendas-Frota-${report.from}-${report.to}.pdf`);
+    const single = Boolean(new URL(request.url).searchParams.get('rowId')?.trim());
+    const number = report.rows[0].saleNumber.replace(/[^a-zA-Z0-9-]/g, '_');
+    return pdfResponse(await renderFleetClientPdf(report, observations, single ? report.rows[0].saleNumber : undefined), single ? `OS-Central-${number}.pdf` : `Relatorio-Vendas-Frota-${report.from}-${report.to}.pdf`);
   } catch (error) { return jsonError(error); }
 }
