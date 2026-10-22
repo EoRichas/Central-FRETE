@@ -1,3 +1,4 @@
+import { commissionedRevenueCents } from './commissions';
 import type { SaleRecord } from '@/lib/contracts';
 import type { FleetFreight } from './fleet';
 import { weightedMarginBasisPoints } from './finance';
@@ -32,8 +33,10 @@ export function buildSalesReport(sales: ReportSale[], showCommission = true) {
   let commissions = 0;
   for (const sale of ordered) {
     const sellerKey = reportSellerKey(sale);
-    if(!sellers.has(sellerKey))sellers.set(sellerKey,[]);
-    sellers.get(sellerKey)!.push(sale);
+    if (commissionedRevenueCents(sale.freightAmountCents,sale.financial.commissionCents) > 0) {
+      if(!sellers.has(sellerKey))sellers.set(sellerKey,[]);
+      sellers.get(sellerKey)!.push(sale);
+    }
     const name = sale.clientName || 'Cliente não informado';
     if(!groups.has(name))groups.set(name,[]);
     groups.get(name)!.push(sale);
@@ -51,7 +54,8 @@ export function buildSalesReport(sales: ReportSale[], showCommission = true) {
   for(const value of [totals.freight,totals.cost,totals.margin,commissions]) if(!Number.isSafeInteger(value)) throw new Error('Total do relatório excede o limite de precisão.');
   const pendingFuelCount = ordered.filter(s => s.saleChannel === 'FROTA' && s.pendingReason === 'FUEL').length;
   const pendingCostCount = ordered.filter(s => s.costsPending && !(s.saleChannel === 'FROTA' && s.pendingReason === 'FUEL')).length;
-  return {sales:ordered,totals,commissions,pendingCosts:pendingCostCount+pendingFuelCount,pendingCostCount,pendingFuelCount,
+  const credited = [...sellers.values()].flat();
+  return {sales:ordered,totals,sellerTotals:{sales:credited.length,...sum(credited)},commissions,pendingCosts:pendingCostCount+pendingFuelCount,pendingCostCount,pendingFuelCount,
     sellers:[...sellers.entries()].map(([id,items])=>({id,name:items[0].sellerName,sales:items.length,...sum(items),...(showCommission ? {commission:items.reduce((total,s)=>total+s.financial.commissionCents,0)} : {})})).sort((a,b)=>b.freight-a.freight),
     clients:[...groups.entries()].map(([name,items])=>({name,sales:items.length,...sum(items)})).sort((a,b)=>b.freight-a.freight),
     expenses:[...expenses].map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value)};

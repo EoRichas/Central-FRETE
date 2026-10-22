@@ -10,3 +10,8 @@ export function sellerCommissionCents(totalSalesCents: number) {
 export function operationalCommissionCents(totalSalesCents: number) {
   return commissionCents(totalSalesCents, OPERATIONAL_COMMISSION_BASIS_POINTS);
 }
+
+/** Zero effective commission identifies a registration without individual revenue credit. */
+export function commissionedRevenueCents(amountCents: number, effectiveCommissionCents: number) {
+  return effectiveCommissionCents > 0 ? amountCents : 0;
+}

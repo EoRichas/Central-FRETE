@@ -14,7 +14,7 @@ export async function recordAuthEvent(action: string, subject: string, userId: s
     [crypto.randomUUID(), securityKey(subject), action, userId]);
 }
 
-async function consume(key: string, limit: number) {
+async function consume(key: string, limit: number, throttleAction = "LOGIN_THROTTLED") {
   const row = await queryFirst<{attempts: number; retryAfter: number}>(`
     insert into auth_login_limits(key_hash,attempts,expires_at) values (?,1,now()+interval '15 minutes')
     on conflict(key_hash) do update set
@@ -25,7 +25,7 @@ async function consume(key: string, limit: number) {
   if (!row) throw new ApiError(503, 'Proteção de acesso indisponível.');
   if (row.attempts > limit) {
     // Log only the transition; blocked retries must not grow the audit log.
-    if (row.attempts === limit + 1) await recordAuthEvent("LOGIN_THROTTLED", key);
+    if (row.attempts === limit + 1) await recordAuthEvent(throttleAction, key);
     throw new ApiError(429, 'Muitas tentativas de acesso. Aguarde alguns minutos e tente novamente.', {retryAfter: row.retryAfter});
   }
   return row.attempts;
@@ -44,6 +44,10 @@ export async function limitLogin(username: string) {
       select count(*) from removed`);
   }
   await consume(`login:account:${username}`, 10);
+}
+
+export async function limitPasswordChange(userId: string) {
+  await consume(`password-change:account:${userId}`, 10, 'PASSWORD_CHANGE_THROTTLED');
 }
 
 export function assertSetupToken(request: Request) {

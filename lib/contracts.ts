@@ -23,6 +23,7 @@ export type CostPaymentStatus = "NAO_APLICAVEL" | "EM_ABERTO" | "PAGO";
 export type SellerCommissionStatus = "EM_ABERTO" | "PAGO";
 
 export type SellerCommissionRecord = {
+  creditedSalesCents?: number;
   commissionOverrideCents?: number | null;
   saleId: string | null;
   saleNumber: string | null;
@@ -140,6 +141,7 @@ export type SaleRecord = {
 };
 
 export type DashboardData = {
+  personalRevenueCents?: number;
   competency: string;
   generatedAt: string;
   salesCount: number;

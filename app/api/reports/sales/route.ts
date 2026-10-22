@@ -10,7 +10,7 @@ function csvCell(value:unknown) {
   return `"${text.replaceAll('"','""')}"`;
 }
 export async function GET(request:Request){try{
-  const user=await authorize(request,['ADMIN','GERENCIA','FINANCEIRO','VENDEDOR']);
+  const user=await authorize(request,['ADMIN','GERENCIA','FINANCEIRO','VENDEDOR','OPERACIONAL']);
   const params=new URL(request.url).searchParams;
   const {report,showCommission,sellers,period,channel,seller}=await loadSalesReport(user,params);
   if(params.get('format')==='pdf')return pdfResponse(await renderSalesReportPdf(report,period,channel,showCommission,seller),'Vendas-Geral-Central.pdf');

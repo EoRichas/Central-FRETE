@@ -65,7 +65,7 @@ function FleetOperationsScreen() {
     `/api/fleet?${competency ? `competency=${competency}` : "period=all"}`,
   );
   const fleet = api.data?.fleet;
-  const tab = fleet?.freightOnly ? "freights" : selectedTab;
+  const tab = fleet?.freightOnly && selectedTab !== "report" ? "freights" : selectedTab;
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
@@ -159,7 +159,7 @@ function FleetOperationsScreen() {
     { id: "report", label: "Relatório de vendas" },
   ];
   const tabs = fleet?.freightOnly
-    ? allTabs.filter((item) => item.id === "freights")
+    ? allTabs.filter((item) => item.id === "freights" || item.id === "report")
     : allTabs;
 
   const viewedFreight = fleet?.freights.find(f => f.id === viewingId) ?? fleet?.billing.freights.find(f => f.id === viewingId);
@@ -167,7 +167,7 @@ function FleetOperationsScreen() {
     <>
     <div className="fleet-module">
       {viewedFreight ? <>
-        <PageHeader eyebrow={`Venda ${viewedFreight.saleNumber}`} title="Detalhes do frete" description={`${viewedFreight.origin} → ${viewedFreight.destination}`} actions={<><button className="button secondary" onClick={() => setViewingId(null)}>Voltar à Frota</button>{!fleet?.freightOnly && <Link className="button secondary" href={`/frota/fretes/${viewedFreight.id}/os`}>Visualizar OS</Link>}{fleet?.canEditFreights || fleet?.canEditFreightFinancials || fleet?.canManagePayments ? <button className="button primary" onClick={() => openEditFreight(viewedFreight)}>Editar frete</button> : null}</>} />
+        <PageHeader eyebrow={`Venda ${viewedFreight.saleNumber}`} title="Detalhes do frete" description={`${viewedFreight.origin} → ${viewedFreight.destination}`} actions={<><button className="button secondary" onClick={() => setViewingId(null)}>Voltar à Frota</button><Link className="button secondary" href={`/frota/fretes/${viewedFreight.id}/os`}>Visualizar OS</Link>{fleet?.canEditFreights || fleet?.canEditFreightFinancials || fleet?.canManagePayments ? <button className="button primary" onClick={() => openEditFreight(viewedFreight)}>Editar frete</button> : null}</>} />
         <FleetFreightDetail freight={viewedFreight} />
       </> : <>
       <PageHeader
@@ -360,7 +360,7 @@ function FleetOperationsScreen() {
           {tab === "billing" && !fleet.freightOnly && (
             <FleetBilling data={fleet.billing} onOpen={f => setViewingId(f.id)} />
           )}
-          {tab === "report" && !fleet.freightOnly && <FleetClientReportPanel />}
+          {tab === "report" && <FleetClientReportPanel />}
         </div>
       )}
       </>}

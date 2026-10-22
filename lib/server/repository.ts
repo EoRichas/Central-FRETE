@@ -12,9 +12,10 @@ import type {
 } from "@/lib/contracts";
 import {
   calculateSaleFinancials,
+  commissionCents,
   weightedMarginBasisPoints,
 } from "@/lib/domain/finance";
-import { operationalCommissionCents } from "@/lib/domain/commissions";
+import { commissionedRevenueCents, operationalCommissionCents } from "@/lib/domain/commissions";
 import { queryAll, queryFirst } from "@/lib/server/d1";
 
 type SaleRow = Omit<
@@ -226,7 +227,7 @@ export async function dashboard(
   user: CurrentUser,
   competency: string,
 ): Promise<DashboardData> {
-  const sales = await listSales(user, { competency, limit: 500 });
+  const sales = await listSales(user, { competency, all: true });
   const receivedStart = `${competency}-01`;
   const [year, month] = competency.split("-").map(Number);
   const nextMonth = `${month === 12 ? year + 1 : year}-${String(
@@ -237,14 +238,24 @@ export async function dashboard(
   const periodParams: unknown[] = [
     `${receivedStart}T00:00:00.000Z`, `${nextMonth}T00:00:00.000Z`, ...ownership.params,
   ];
-  const periodTransactions = await queryFirst<{ total: number }>(
+  const [periodTransactions, linkedCommissions] = await Promise.all([queryFirst<{ total: number }>(
     `select coalesce(sum(case when p.type = 'ESTORNO' then -p.amount_cents else p.amount_cents end), 0) as total
       from payment_transactions p
       join freight_sales s on s.id = p.sale_id
       where p.status = 'CONFIRMADO' and p.occurred_at >= ? and p.occurred_at < ?
       ${periodSellerScope}`,
     periodParams,
-  );
+  ), queryAll<{id:string; amountCents:number; rate:number; overrideCents:number|null}>(
+    `select s.id,f.freight_amount_cents as amountCents,f.seller_commission_basis_points as rate,
+      f.seller_commission_override_cents as overrideCents from freight_sales s
+      join fleet_freights f on f.id=s.fleet_freight_id
+      where s.competency=? and s.sale_channel='FROTA' and ${ownership.sql}`,
+    [competency,...ownership.params]),
+  ]);
+  // A linked commercial record must use its operational freight's effective
+  // commission for individual credit, without rewriting the company ledger.
+  const linkedCommissionById = new Map(linkedCommissions.map(row => [row.id,commissionCents(row.amountCents,row.rate,row.overrideCents)]));
+  const effectiveCommission = (sale:SaleRecord) => linkedCommissionById.get(sale.id) ?? sale.financial.commissionCents;
 
   const statuses: DashboardData["statuses"] = {
     EM_ABERTO: { count: 0, amountCents: 0 },
@@ -263,9 +274,9 @@ export async function dashboard(
       marginCents: 0,
       commissionCents:0,
     };
-    seller.freightAmountCents += sale.freightAmountCents;
-    seller.marginCents += sale.financial.marginCents;
-    seller.commissionCents += sale.financial.commissionCents;
+    seller.freightAmountCents += commissionedRevenueCents(sale.freightAmountCents, effectiveCommission(sale));
+    seller.marginCents += effectiveCommission(sale) > 0 ? sale.financial.marginCents : 0;
+    seller.commissionCents += effectiveCommission(sale);
     sellerMap.set(sale.sellerName, seller);
     dayMap.set(
       sale.saleDate,
@@ -291,6 +302,7 @@ export async function dashboard(
     competency,
     generatedAt: new Date().toISOString(),
     salesCount: sales.length,
+    ...(['VENDEDOR','OPERACIONAL'].includes(user.role) ? {personalRevenueCents: sales.filter(s => s.sellerId === user.id).reduce((sum,s) => sum + commissionedRevenueCents(s.freightAmountCents,effectiveCommission(s)),0)} : {}),
     freightAmountCents,
     operationalCommissionCents: operationalCommissionCents(freightAmountCents),
     totalReceivedCents: total("totalReceivedCents"),

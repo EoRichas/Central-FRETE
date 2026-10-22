@@ -97,7 +97,7 @@ export async function DELETE(request: Request, context: RouteContext) {
 
 export async function PATCH(request: Request, context: RouteContext) {
   try {
-    const user = await authorize(request, ["ADMIN", "FINANCEIRO", "VENDEDOR"]);
+    const user = await authorize(request, ["ADMIN", "FINANCEIRO", "VENDEDOR", "OPERACIONAL"]);
     const { id } = await context.params;
     const sale = await getSale(user, id);
     if (!sale) throw new ApiError(404, "Venda não encontrada.");

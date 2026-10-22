@@ -51,7 +51,7 @@ export function DashboardScreen() {
             })}
           </section>
           <section className="kpi-grid dashboard-kpis">
-            <article className="kpi-card"><span>Faturamento</span><strong>{formatMoney(dashboard.freightAmountCents)}</strong><small>{dashboard.salesCount} venda{dashboard.salesCount === 1 ? "" : "s"} no mês</small></article>
+            <article className="kpi-card"><span>{dashboard.personalRevenueCents !== undefined ? "Faturamento individual" : "Faturamento"}</span><strong>{formatMoney(dashboard.personalRevenueCents ?? dashboard.freightAmountCents)}</strong><small>{dashboard.personalRevenueCents !== undefined ? "Somente vendas com comissão" : `${dashboard.salesCount} venda${dashboard.salesCount === 1 ? "" : "s"} no mês`}</small></article>
             <article className="kpi-card"><span>Recebido no período</span><strong>{formatMoney(dashboard.receivedInPeriodCents)}</strong><small>Caixa pela data do recebimento</small></article>
             <article className="kpi-card"><span>Saldo em haver</span><strong>{formatMoney(dashboard.totalBalanceCents)}</strong><small>Após pagamentos confirmados</small></article>
             <article className="kpi-card"><span>Custo de transporte</span><strong>{formatMoney(dashboard.transportCostCents)}</strong><small>Comissão + despesas</small></article>

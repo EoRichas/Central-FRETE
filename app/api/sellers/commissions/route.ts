@@ -1,3 +1,4 @@
+import { commissionedRevenueCents } from '@/lib/domain/commissions';
 import type {
   SellerCommissionRecord,
   SellerCommissionStatus,
@@ -71,6 +72,7 @@ function toCommissionRecord(
   sellerProfilesByName: Map<string, SellerPaymentProfileRow>,
 ): SellerCommissionRecord {
   const totalSalesCents = Number(row.totalSalesCents);
+  const effectiveCommission = commissionCents(totalSalesCents, Number(row.commissionBasisPoints), row.commissionOverrideCents == null ? null : Number(row.commissionOverrideCents));
   const sellerUser =
     row.sellerId ? sellerUsersById.get(row.sellerId) : sellerUsersByName.get(row.sellerName.toUpperCase());
   return {
@@ -89,11 +91,8 @@ function toCommissionRecord(
     totalSalesCents,
     commissionBasisPoints: Number(row.commissionBasisPoints),
     commissionOverrideCents: row.commissionOverrideCents,
-    commissionCents: commissionCents(
-      totalSalesCents,
-      Number(row.commissionBasisPoints),
-      row.commissionOverrideCents == null ? null : Number(row.commissionOverrideCents),
-    ),
+    creditedSalesCents: commissionedRevenueCents(totalSalesCents, effectiveCommission),
+    commissionCents: effectiveCommission,
     status: row.status ?? "EM_ABERTO",
     paidAt: row.paidAt,
     paidByName: row.paidByName,

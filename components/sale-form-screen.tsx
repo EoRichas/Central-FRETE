@@ -138,8 +138,8 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
     initialSale ? centsToInput(initialSale.freightAmountCents) : "",
   );
   const isAdmin = ['ADMIN', 'FINANCEIRO'].includes(meApi.data?.user.role ?? '');
-  const canEditStatus = isAdmin || (editing && meApi.data?.user.role === 'VENDEDOR');
-  const canSeeCommission = ['ADMIN','VENDEDOR','OPERACIONAL'].includes(meApi.data?.user.role ?? '');
+  const canEditStatus = isAdmin || (editing && ['VENDEDOR','OPERACIONAL'].includes(meApi.data?.user.role ?? ''));
+  const canSeeCommission = ['ADMIN','VENDEDOR'].includes(meApi.data?.user.role ?? '') || (meApi.data?.user.role === 'OPERACIONAL' && (!editing || initialSale?.sellerId === meApi.data.user.id));
   const [commissionValue, setCommissionValue] = useState<string | null>(initialSale?.commissionOverrideCents == null ? null : centsToInput(initialSale.commissionOverrideCents));
   const commissionBasisPoints = editing && sellerId === (initialSale?.sellerId ?? 'historical')
     ? initialSale?.commissionBasisPoints ?? 0

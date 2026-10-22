@@ -12,6 +12,11 @@ const green = rgb(.09, .4, .28), amber = rgb(.6, .36, .08);
 
 /** Customer relation: no cost, commission, margin or internal identity is exported. */
 export async function renderFleetClientPdf(report: FleetClientReport, observations: ClientReportObservation[], orderNumber?: string) {
+  // The aggregate relation uses tighter spacing; individual OS keeps its layout.
+  const compact = !orderNumber;
+  const rowMin = compact ? 44 : 68, lineHeight = compact ? 9 : 11;
+  const rowPadding = compact ? 16 : 22, textTop = compact ? 14 : 21;
+  const headerHeight = compact ? 30 : 38;
   const notes = new Map(observations.map(item => [item.saleId, item.text]));
   const doc = await PDFDocument.create(); doc.registerFontkit(fontkit);
   const [regularBytes, boldBytes, logoBytes] = await Promise.all([
@@ -65,8 +70,8 @@ export async function renderFleetClientPdf(report: FleetClientReport, observatio
     {label: 'CONFIRMAÇÃO\nDO PAGAMENTO', width: WIDTH - 661},
   ];
   const heading = () => {
-    rect(M, y - 38, WIDTH, 38, navy); let x = M;
-    columns.forEach(c => { wrap(c.label, c.width - 15, 6.8, true).forEach((s, i) => text(s, x + 8, y - 15 - i * 9, 6.8, true, white)); x += c.width; }); y -= 38;
+    rect(M, y - headerHeight, WIDTH, headerHeight, navy); let x = M;
+    columns.forEach(c => { wrap(c.label, c.width - 15, 6.8, true).forEach((s, i) => text(s, x + 8, y - 15 - i * 9, 6.8, true, white)); x += c.width; }); y -= headerHeight;
   };
   newPage(); heading();
   for (const [index, row] of report.rows.entries()) {
@@ -81,14 +86,14 @@ export async function renderFleetClientPdf(report: FleetClientReport, observatio
     const lines = cells.map((cell, i) => wrap(cell, columns[i].width - 15, 7.3, i === 7));
     const count = Math.max(...lines.map(l => l.length));
     // Move normal rows intact. Extremely long notes continue with repeated headings.
-    const rowHeight = Math.max(68, count * 11 + 22);
-    const freshTop = H - 173 - (wrap(`CLIENTE: ${report.client.name}`, WIDTH, 9, true).length - 1) * 13 - 38;
+    const rowHeight = Math.max(rowMin, count * lineHeight + rowPadding);
+    const freshTop = H - 173 - (wrap(`CLIENTE: ${report.client.name}`, WIDTH, 9, true).length - 1) * 13 - headerHeight;
     if (y - rowHeight < 57 && rowHeight <= freshTop - 57) { newPage(); heading(); }
     let offset = 0;
     while (offset < count) {
-      if (y < 125) { newPage(); heading(); }
-      const capacity = Math.max(1, Math.floor((y - 57 - 22) / 11));
-      const n = Math.min(capacity, count - offset), height = Math.max(68, n * 11 + 22);
+      if (y < 57 + rowMin) { newPage(); heading(); }
+      const capacity = Math.max(1, Math.floor((y - 57 - rowPadding) / lineHeight));
+      const n = Math.min(capacity, count - offset), height = Math.max(rowMin, n * lineHeight + rowPadding);
       if (y - height < 57) { newPage(); heading(); continue; }
       if (index % 2 === 0) rect(M, y - height, WIDTH, height);
       let x = M;
@@ -99,7 +104,7 @@ export async function renderFleetClientPdf(report: FleetClientReport, observatio
         visible.forEach((s, j) => {
           const strong = i === 7, color = i === 8 && offset + j === 0 ? (row.paid === 'Sim' ? green : amber) : ink;
           const xx = i === 7 ? x + c.width - 7 - bold.widthOfTextAtSize(s, 7.3) : x + 8;
-          text(s, xx, y - 21 - j * 11, 7.3, strong, color);
+          text(s, xx, y - textTop - j * lineHeight, 7.3, strong, color);
         }); x += c.width;
       });
       y -= height; page.drawLine({start: {x: M, y}, end: {x: W - M, y}, color: line, thickness: .5}); offset += n;

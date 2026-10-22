@@ -37,6 +37,8 @@ export function LoginScreen() {
       new URLSearchParams(window.location.search).get("setup") === "done",
   );
 
+  const [passwordChanged] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("passwordChanged") === "1");
+
   useEffect(() => {
     const controller = new AbortController();
     fetchRead("/api/auth/setup", controller.signal)
@@ -103,6 +105,7 @@ export function LoginScreen() {
       <LoginVisual />
       <section className="login-card">
         <span className="login-logo" role="img" aria-label="Central Express" />
+        {passwordChanged && <p className="form-success" role="status">Senha alterada. Entre com a nova senha.</p>}
         {setupDone && <p className="form-success" role="status">Administrador criado. Agora entre com o usuário e a senha escolhidos.</p>}
         <form className="form-stack" onSubmit={submit}>
           <Field label="Usuário">
