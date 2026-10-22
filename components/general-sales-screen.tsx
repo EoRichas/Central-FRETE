@@ -88,7 +88,7 @@ export function GeneralSalesScreen() {
             </article>
             {api.data?.showCommission && <article className="kpi-card"><span>Comissões dos vendedores</span><strong>{formatMoney(api.data.report.commissions)}</strong></article>}
           </section>
-          <section className="panel table-panel"><header className="fleet-panel-header"><div><span className="eyebrow">Comparativo</span><h2>Resultado por vendedor</h2><p>{sales.length} vendas selecionadas. Os totais incluem todas as páginas.</p></div></header>
+          <section className="panel table-panel"><header className="fleet-panel-header"><div><span className="eyebrow">Comparativo</span><h2>Resultado por vendedor</h2><p>Somente vendas com comissão entram no resultado individual. A listagem e os totais da empresa incluem todas as vendas.</p></div></header>
             <div className="responsive-table"><table><thead><tr><th>Vendedor</th><th>Vendas</th><th>Receita</th><th>Custo</th><th>Margem</th>{api.data?.showCommission && <th>Comissão</th>}</tr></thead><tbody>{api.data?.report.sellers.map(s=><tr key={s.id}><td data-label="Vendedor"><strong>{s.name}</strong></td><td data-label="Vendas">{s.sales}</td><td data-label="Receita">{formatMoney(s.freight)}</td><td data-label="Custo">{formatMoney(s.cost)}</td><td data-label="Margem">{formatMoney(s.margin)}</td>{api.data?.showCommission && <td data-label="Comissão">{formatMoney(s.commission??0)}</td>}</tr>)}</tbody></table></div>
           </section>
           <section className="panel">

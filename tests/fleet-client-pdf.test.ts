@@ -40,3 +40,25 @@ test('relação contém nove campos, tipos de serviço, baixas reais e somente o
     assert.equal(report.rows[0].situation, 'Em rota');
   } finally { PDFPage.prototype.drawText = original; }
 });
+
+test('relação compacta comporta cinco vendas com totais e preserva notas ao paginar',async()=>{
+ const rows=Array.from({length:10},(_,i)=>({...row,id:`dense:${i}`,driverName:`MOTORISTA ${i+1}`,receivedDates:['2026-10-02'],notes:`NOTA CURTA ${i+1}`}));
+ const report=(items:typeof rows)=>buildFleetClientReport({id:'test',name:row.clientName},'2026-10-01','2026-10-31',items);
+ const texts:string[]=[],original=PDFPage.prototype.drawText;
+ PDFPage.prototype.drawText=function(value,options){texts.push(value);if(options?.y!==undefined)assert.ok(options.y>=20,'Texto abaixo do rodapé');return original.call(this,value,options);};
+ try {
+  const five=await renderFleetClientPdf(report(rows.slice(0,5)),rows.slice(0,5).map(r=>({saleId:r.id,text:r.notes})));
+  assert.equal((await PDFDocument.load(five)).getPageCount(),1);
+  for(let i=1;i<=5;i++)assert.ok(texts.includes(`NOTA CURTA ${i}`));
+  assert.ok(texts.includes('VALOR TOTAL'));texts.length=0;
+  const ten=await renderFleetClientPdf(report(rows),rows.map(r=>({saleId:r.id,text:r.notes})));
+  assert.equal((await PDFDocument.load(ten)).getPageCount(),2);
+  for(let i=1;i<=10;i++)assert.equal(texts.filter(t=>t===`NOTA CURTA ${i}`).length,1);
+  texts.length=0;
+  await renderFleetClientPdf(report(rows.slice(0,1)),[{saleId:rows[0].id,text:'CONDIÇÃO DO CLIENTE '.repeat(500)+'FIM DA OBSERVAÇÃO'}]);
+  assert.ok(texts.join(' ').includes('FIM DA OBSERVAÇÃO'));
+  const single=await PDFDocument.load(await renderFleetClientPdf(report(rows.slice(0,1)),[],'123'));
+  assert.equal(single.getPageCount(),1);assert.match(single.getTitle()!,/^OS 123/);
+  if(process.env.CENTRAL_DENSE_QA_OUTPUT){await mkdir(process.env.CENTRAL_DENSE_QA_OUTPUT,{recursive:true});await writeFile(`${process.env.CENTRAL_DENSE_QA_OUTPUT}/cinco-vendas.pdf`,five);await writeFile(`${process.env.CENTRAL_DENSE_QA_OUTPUT}/dez-vendas.pdf`,ten);}
+ }finally{PDFPage.prototype.drawText=original;}
+});

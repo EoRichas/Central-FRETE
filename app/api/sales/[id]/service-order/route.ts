@@ -26,7 +26,7 @@ export async function GET(request: Request, context: Context) {
 }
 export async function POST(request: Request, context: Context) {
   try {
-    const user = await authorize(request,['ADMIN','GERENCIA','VENDEDOR','FINANCEIRO']);
+    const user = await authorize(request,['ADMIN','GERENCIA','VENDEDOR','FINANCEIRO','OPERACIONAL']);
     const {id} = await context.params;
     await authorizeOrder(user,id);
     return Response.json(await issueOrder(id,user),{headers:{'Cache-Control':'no-store'}});

@@ -52,7 +52,7 @@ export function SellersScreen({
     () =>
       commissions.reduce(
         (sum, item) => ({
-          sales: sum.sales + item.totalSalesCents,
+          sales: sum.sales + (item.creditedSalesCents ?? (item.commissionCents > 0 ? item.totalSalesCents : 0)),
           commission: sum.commission + item.commissionCents,
         }),
         { sales: 0, commission: 0 },
@@ -143,9 +143,9 @@ export function SellersScreen({
         <div className="seller-commission-stack">
           <section className="kpi-grid seller-commission-kpis">
             <article className="kpi-card">
-              <span>Valor total das vendas</span>
+              <span>Faturamento individual</span>
               <strong>{formatMoney(totals.sales)}</strong>
-              <small>{competencyLabel(competency)}</small>
+              <small>{competencyLabel(competency)} · somente vendas com comissão</small>
             </article>
             <article className="kpi-card accent">
               <span>Comissão total dos vendedores</span>

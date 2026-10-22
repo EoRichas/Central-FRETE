@@ -311,14 +311,14 @@ test('vendedor abre edição e baixa pela própria lista Frota e atualiza detalh
  editor.props.onSaved('Pagamento atualizado.');tree=render();assert.equal(find(tree,n=>n.type===FreightModal),null);assert.equal(refreshes,2);
 });
 
-test('barra lateral permite tela de edição do vendedor e mantém administração restrita', () => {
- for (const path of ['/vendas/234/editar','/configuracoes']) {
-  const state=hooks([false,false,{id:'seller',name:'VENDEDOR',role:'VENDEDOR'},true,0]);state.react.useSyncExternalStore=()=>false;
+test('barra lateral permite edição e configurações pessoais, mas preserva o fechamento restrito', () => {
+ for (const role of ['VENDEDOR','OPERACIONAL']) for (const path of ['/vendas/234/editar','/configuracoes','/vendas-gerais','/vendas/fechamento']) {
+  const state=hooks([false,false,{id:'seller',name:'USUÁRIO',role},true,0]);state.react.useSyncExternalStore=()=>false;
   const marker=React.createElement('div',null,'FORMULÁRIO DA VENDA');const noOp=()=>null,mod=new Proxy({},{get:()=>noOp});
   const src=readFileSync(new URL('../components/app-shell.tsx',import.meta.url),'utf8');const overrides=Object.fromEntries([...src.matchAll(/from\s+["']([^"']+)["']/g)].map(m=>[m[1],mod]));
   Object.assign(overrides,{react:state.react,'@/lib/domain/permissions':permissions,'@/components/current-user-context':{CurrentUserContext:React.createContext(null)},'@/components/icons':{Icons:new Proxy({},{get:()=>icon})},'next/navigation':{usePathname:()=>path},'next/link':{__esModule:true,default:({children})=>React.createElement('span',null,children)}});
   const {AppShell}=compile('components/app-shell.tsx',overrides);const tree=AppShell({children:marker});
-  assert.equal(Boolean(find(tree,n=>n===marker)),path.includes('/editar'));
+  assert.equal(Boolean(find(tree,n=>n===marker)),path!=='/vendas/fechamento');
  }
 });
 
@@ -339,4 +339,54 @@ test('edição do vendedor envia o status selecionado sem reabrir a venda ou mos
  const original=globalThis.FormData;globalThis.FormData=class {get(key){return {operationalStatus:'FINALIZADO',saleDate:'2026-10-22',financialDueDate:'2026-10-30',paymentMethod:'PIX'}[key]??'';}};
  try {await find(tree,n=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{}});assert.equal(calls.length,1);assert.equal(calls[0].body.operationalStatus,'FINALIZADO');assert.equal(calls[0].body.sellerId,'seller');}
  finally {globalThis.FormData=original;}
+});
+
+test('configurações mostram troca da própria senha a todos e só ADMIN consulta usuários',()=>{
+ const PasswordChangeForm=()=>React.createElement('div',null,'MINHA SENHA');
+ for(const role of ['ADMIN','GERENCIA','VENDEDOR','FINANCEIRO','OPERACIONAL']){
+  const state=hooks(),urls=[];
+  const {SettingsScreen}=compile('components/settings-screen.tsx',{
+   react:state.react,'@/components/password-change-form':{PasswordChangeForm},'@/components/ui':ui,'@/components/icons':{Icons:new Proxy({},{get:()=>icon})},
+   '@/components/use-transient-message':{useTransientMessage:()=>[null,()=>{}]},
+   '@/components/use-api':{apiMutation:async()=>{},useApi:url=>{urls.push(url);return {data:url==='/api/me'?{user:{id:'me',role}}:{users:[]},loading:false};}},
+  });
+  const html=renderToStaticMarkup(SettingsScreen());assert.ok(html.includes('MINHA SENHA'));
+  assert.equal(urls.includes('/api/users'),role==='ADMIN');assert.equal(html.includes('Usuários, senhas e perfis'),role==='ADMIN');
+ }
+});
+
+test('troca de senha confirma antes do envio, mostra erro e redireciona após sucesso',async()=>{
+ const state=hooks(),calls=[],redirects=[];let fail=false;
+ const {PasswordChangeForm}=compile('components/password-change-form.tsx',{
+  react:state.react,'@/components/ui':ui,'next/navigation':{useRouter:()=>({replace:url=>redirects.push(url)})},
+  '@/components/use-api':{apiMutation:async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});if(fail)throw new Error('Senha atual incorreta.');}},
+ });
+ const render=()=>{state.reset();return PasswordChangeForm();};
+ let payload={currentPassword:'ATUAL-SOMENTE-LAB',newPassword:'NOVA-SOMENTE-LAB',passwordConfirmation:'DIFERENTE'};
+ const original=globalThis.FormData;globalThis.FormData=class{*[Symbol.iterator](){yield*Object.entries(payload);}};
+ try{
+  let tree=render();assert.equal(find(tree,n=>n.props?.name==='currentPassword').props.autoComplete,'current-password');
+  await find(tree,n=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{}});assert.equal(calls.length,0);assert.ok(renderToStaticMarkup(render()).includes('confirmação'));
+  payload={...payload,passwordConfirmation:payload.newPassword};fail=true;tree=render();
+  await find(tree,n=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{}});assert.ok(renderToStaticMarkup(render()).includes('Senha atual incorreta.'));assert.equal(redirects.length,0);
+  fail=false;tree=render();await find(tree,n=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{}});
+  assert.equal(calls[1].url,'/api/auth/password');assert.deepEqual(calls[1].body,payload);assert.deepEqual(redirects,['/login?passwordChanged=1']);
+ }finally{globalThis.FormData=original;}
+});
+
+test('operacional encontra relatório na Frota e continua sem abas de administração',()=>{
+ const state=hooks();state.react.useMemo=fn=>fn();const noOp=()=>null,mod=new Proxy({},{get:()=>noOp});
+ const source=readFileSync(new URL('../components/fleet-screen.tsx',import.meta.url),'utf8');
+ const overrides=Object.fromEntries([...source.matchAll(/from\s+["']([^"']+)["']/g)].map(m=>[m[1],mod]));const ReportPanel=()=>null;
+ Object.assign(overrides,{
+  react:state.react,'@/components/ui':ui,'@/lib/format':format,'@/lib/domain/permissions':permissions,
+  '@/lib/domain/cargo-vehicles':{cargoVehiclesOrLegacy:()=>[]},'@/lib/domain/dates':{currentCompetency:()=>'2026-10'},
+  '@/components/icons':{Icons:new Proxy({},{get:()=>icon})},'@/lib/domain/fleet':{FLEET_OPERATIONAL_STATUSES:[],FLEET_PRIORITIES:[]},
+  '@/components/use-transient-message':{useTransientMessage:()=>[null,()=>{}]},'@/components/fleet-client-report':{FleetClientReportPanel:ReportPanel},
+  '@/components/use-api':{useApi:url=>url==='/api/me'?{data:{user:{role:'OPERACIONAL'}}}:{data:{fleet:{freightOnly:true,canEditFreights:true,freights:[],vehicles:[],drivers:[],summary:{},billing:{freights:[],drivers:[]}}}}},
+ });
+ const {FleetScreen}=compile('components/fleet-screen.tsx',overrides);const inner=FleetScreen().type,render=()=>{state.reset();return inner();};
+ let tree=render();const button=find(tree,n=>n.type==='button'&&n.props.children==='Relatório de vendas');assert.ok(button);
+ for(const label of ['Visão geral','Faturamento','Fechamento mensal'])assert.equal(find(tree,n=>n.type==='button'&&n.props.children===label),null);
+ button.props.onClick();tree=render();assert.ok(find(tree,n=>n.type===ReportPanel));
 });

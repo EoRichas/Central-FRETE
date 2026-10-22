@@ -36,6 +36,7 @@ before(async()=>{
  delete process.env.CENTRAL_FRETE_SETUP_TOKEN;delete process.env.CENTRAL_FRETE_PUBLIC_ORIGIN;
  await pg.exec('CREATE ROLE anon; CREATE ROLE authenticated;');
  await pg.exec(await readFile(new URL('../../database/001_central_frete_postgres.sql',import.meta.url),'utf8'));
+ await pg.exec(await readFile(new URL('../../database/004_operational_role.sql',import.meta.url),'utf8'));
  await pg.exec('ALTER TABLE users ADD COLUMN commission_basis_points integer not null default 0;');
  const migration=await readFile(new URL('../../supabase/migrations/20261005122915_security_sessions_and_login_limits.sql',import.meta.url),'utf8');
  await pg.exec(migration);await pg.exec(migration);
@@ -173,4 +174,51 @@ test('lab: gateway falha fechado e rejeita bypass, assinatura, expiração e pú
   }
   assert.equal(keyFetches,1);
  } finally {delete process.env.CENTRAL_ACCESS_ISSUER;delete process.env.CENTRAL_ACCESS_AUDIENCE;globalThis.fetch=async()=>{throw new Error('EXTERNAL NETWORK IS DISABLED IN THIS LAB');};}
+});
+
+test('troca da própria senha: todos os perfis, confirmação, CSRF, revogação e nenhum acesso de administração',async()=>{
+ const {createPasswordCredential,verifyLocalSession}=await import('../../lib/server/local-session.ts');
+ const {POST}=await import('../../app/api/auth/password/route.ts');
+ const {GET:me}=await import('../../app/api/me/route.ts');
+ await pg.exec('delete from auth_login_limits');
+ const first=await createPasswordCredential('current-password');
+ for (const role of ['ADMIN','GERENCIA','VENDEDOR','FINANCEIRO','OPERACIONAL']) {
+  const id='password-'+role.toLowerCase();
+  await queryFirst(`insert into users(id,email,name,role,username,password_salt,password_hash) values (?,?,?,?,?,?,?) returning id`,[id,id+'@example.test',id,role,id,first.passwordSalt,first.passwordHash]);
+  const signed=await login(id,'current-password'),parallel=await login(id,'current-password');
+  assert.equal(signed.status,200);const headers={cookie:cookie(signed)};
+  const body={currentPassword:'current-password',newPassword:'replacement-password',passwordConfirmation:'replacement-password',userId:adminId};
+  assert.equal((await POST(req('/api/auth/password',body,{...headers,origin:'https://evil.test'}))).status,403);
+  assert.equal((await POST(req('/api/auth/password',body))).status,401);
+  assert.equal((await POST(req('/api/auth/password',{...body,passwordConfirmation:'different'},headers))).status,400);
+  assert.equal((await POST(req('/api/auth/password',{...body,newPassword:'short',passwordConfirmation:'short'},headers))).status,400);
+  assert.equal((await POST(req('/api/auth/password',{...body,currentPassword:'incorrect-current'},headers))).status,400);
+  assert.equal((await POST(req('/api/auth/password',{...body,newPassword:'x'.repeat(20000)},headers))).status,413);
+  const unchanged=await queryFirst('select password_hash from users where id=?',[adminId]);
+  const response=await POST(req('/api/auth/password',body,headers));assert.equal(response.status,200,await response.clone().text());
+  assert.match(response.headers.get('set-cookie')!,/Max-Age=0/);assert.equal(response.headers.get('cache-control'),'private, no-store');
+  assert.equal(await verifyLocalSession(sessionRequest(cookie(parallel))),null);
+  assert.equal((await me(sessionRequest(headers.cookie))).status,401);
+  assert.equal((await login(id,'current-password')).status,401);assert.equal((await login(id,'replacement-password')).status,200);
+  assert.deepEqual(await queryFirst('select password_hash from users where id=?',[adminId]),unchanged);
+ }
+ const audit=JSON.stringify(await queryAll("select * from audit_logs where action like 'PASSWORD_%'"));
+ for(const secret of ['current-password','replacement-password','incorrect-current','cf_local_session']) assert.ok(!audit.includes(secret));
+ assert.equal((await queryFirst("select count(*)::integer as n from audit_logs where action='PASSWORD_CHANGED'"))!.n,5);
+});
+
+test('troca de senha: tentativas limitadas por conta e atualização concorrente não sobrescreve outra troca',async()=>{
+ const {POST}=await import('../../app/api/auth/password/route.ts');
+ await pg.exec('delete from auth_login_limits');
+ const signed=await login('password-vendedor','replacement-password');assert.equal(signed.status,200);
+ const headers={cookie:cookie(signed)};
+ const bad={currentPassword:'wrong-current',newPassword:'new-password',passwordConfirmation:'new-password'};
+ const attempts=await Promise.all(Array.from({length:12},()=>POST(req('/api/auth/password',bad,headers))));
+ assert.equal(attempts.filter(r=>r.status===400).length,10);assert.equal(attempts.filter(r=>r.status===429).length,2);
+ const other=await login('password-operacional','replacement-password');assert.equal(other.status,200);
+ const body={currentPassword:'replacement-password',newPassword:'concurrent-password',passwordConfirmation:'concurrent-password'};
+ const results=await Promise.all([POST(req('/api/auth/password',body,{cookie:cookie(other)})),POST(req('/api/auth/password',body,{cookie:cookie(other)}))]);
+ assert.equal(results.filter(r=>r.status===200).length,1);
+ assert.ok(results.every(r=>[200,400,401,409].includes(r.status)));
+ assert.equal((await login('password-operacional','concurrent-password')).status,200);
 });

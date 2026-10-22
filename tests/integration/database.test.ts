@@ -565,7 +565,7 @@ test('OS tem vínculo único, versões imutáveis, autorização e PDF com ident
  const {PDFDocument}=await import('pdf-lib');
  const response=await sales.POST(await request('/api/sales','seller','POST',salePayload));assert.equal(response.status,201,await response.clone().text());const sale=await response.json();
  const context={params:Promise.resolve({id:sale.id})};
- assert.equal((await orders.POST(await request('/api/sales/x/service-order','operator','POST'),context)).status,403);
+ assert.equal((await orders.POST(await request('/api/sales/missing/service-order','operator','POST'),{params:Promise.resolve({id:'missing'})})).status,404);
  assert.equal((await orders.POST(await request('/api/sales/other/service-order','seller','POST'),{params:Promise.resolve({id:'other'})})).status,404);
  assert.equal((await orders.GET(await request('/api/sales/x/service-order?format=pdf','seller'),context)).status,404);
  const emitted=await orders.POST(await request('/api/sales/x/service-order','seller','POST'),context);assert.equal(emitted.status,200,await emitted.clone().text());
@@ -956,7 +956,7 @@ test('Frota gera número global e OS própria, adota o documento ao vincular ven
  const created=await create.POST(await request('/api/fleet/freights','admin','POST',payload));assert.equal(created.status,201,await created.clone().text());const {id}=await created.json();const ctx={params:Promise.resolve({id})};
  const f=(await loadFleetData(true,true,true,false,'2035-01')).freights.find(f=>f.id===id)!;assert.equal(f.saleNumber,String(before+1));
  const cegonha=await sales.POST(await request('/api/sales','seller','POST',salePayload));assert.equal(cegonha.status,201);const c=await cegonha.json();assert.equal(c.saleNumber,String(before+2));
- for(const role of ['seller','operator']){assert.equal((await orders.GET(await request('/api/fleet/freights/x/service-order',role),ctx)).status,403);assert.equal((await orders.POST(await request('/api/fleet/freights/x/service-order',role,'POST'),ctx)).status,403);}
+ for(const role of ['seller']){assert.equal((await orders.GET(await request('/api/fleet/freights/x/service-order',role),ctx)).status,403);assert.equal((await orders.POST(await request('/api/fleet/freights/x/service-order',role,'POST'),ctx)).status,403);}
  assert.equal((await orders.GET(await request('/api/fleet/freights/x/service-order?format=pdf','finance'),ctx)).status,404);
  const result=await orders.POST(await request('/api/fleet/freights/x/service-order','finance','POST'),ctx);assert.equal(result.status,200,await result.clone().text());const first=await result.json();
  assert.equal(first.latest.snapshot.saleNumber,f.saleNumber);assert.equal(first.latest.snapshot.clientName,payload.clientName);assert.equal(first.latest.snapshot.originLocationType,'PATIO');assert.equal(first.latest.snapshot.destinationLocationType,'PORTA');assert.equal(first.latest.snapshot.financialDueDate,null);assert.equal(first.latest.snapshot.installments.length,0);assert.equal(first.latest.snapshot.cargoVehicles.length,1);assert.equal(first.latest.snapshot.operationValues,undefined);
@@ -1154,7 +1154,7 @@ test('relatório completo respeita canal, vendedor e permissões; PDF não trunc
  const mine=await (await api.GET(await request('/api/reports/sales?competency=2041-03','seller'))).json();assert.equal(mine.report.sales.length,1);assert.equal(mine.report.sales[0].sellerId,'seller');
  assert.equal((await api.GET(await request('/api/reports/sales?competency=2041-99','admin'))).status,400);
  assert.equal((await api.GET(await request('/api/reports/sales?saleChannel=INVALID','admin'))).status,400);
- assert.equal((await api.GET(await request('/api/reports/sales?format=pdf','operator'))).status,403);
+ assert.equal((await api.GET(await request('/api/reports/sales?competency=2041-03&format=pdf','operator'))).status,200);
  const pdf=await api.GET(await request('/api/reports/sales?competency=2041-02&saleChannel=FROTA&format=pdf','finance'));
  assert.equal(pdf.status,200,await pdf.clone().text());assert.equal(pdf.headers.get('cache-control'),'private, no-store');
  const bytes=new Uint8Array(await pdf.arrayBuffer());assert.ok((await PDFDocument.load(bytes)).getPageCount()>2);
@@ -1912,4 +1912,78 @@ test('vendedor edita frete, anexa e baixa só os próprios; opções preservam c
   const data=await (await options.GET(await request('/api/fleet/freights/options?freightId='+id,'seller'))).json();
   assert.equal(data.fleet.canManagePayments,true);assert.ok(data.fleet.vehicles.some((v:{id:string})=>v.id==='calc-vehicle'));assert.ok(data.fleet.drivers.some((d:{id:string})=>d.id==='calc-driver'));
  } finally {await pg.exec("update fleet_vehicles set active=1 where id='calc-vehicle';update fleet_drivers set active=1 where id='calc-driver'");}
+});
+
+test('operacional edita sem transferir autoria/comissão, emite OS e relatórios; privilégios administrativos continuam restritos',async()=>{
+ const create=await import('../../app/api/sales/route.ts'),edit=await import('../../app/api/sales/[id]/route.ts');
+ const orders=await import('../../app/api/sales/[id]/service-order/route.ts');
+ const reports=await import('../../app/api/reports/sales/route.ts');
+ for(const saleChannel of ['CEGONHA','FROTA']){
+  const payload={...salePayload,saleChannel,saleDate:'2094-05-01',financialDueDate:'2094-05-31',clientId:'lookup-a',serviceSituation:saleChannel==='FROTA'?'RETIRA':undefined,commissionOverrideCents:123};
+  const created=await create.POST(await request('/api/sales','seller','POST',payload));assert.equal(created.status,201,await created.clone().text());
+  const {id}=await created.json();const ctx={params:Promise.resolve({id})};
+  const before=await queryFirst('select seller_id,seller_name,commission_basis_points,commission_override_cents from freight_sales where id=?',[id]);
+  const change={...payload,commissionOverrideCents:undefined,sellerId:'operator',sellerName:'OPERADOR',freightAmountCents:234000,operationalStatus:'FINALIZADO',notes:'EDITADA PELO OPERACIONAL'};
+  const saved=await edit.PATCH(await request('/api/sales/x','operator','PATCH',change),ctx);assert.equal(saved.status,200,await saved.clone().text());
+  assert.deepEqual(await queryFirst('select seller_id,seller_name,commission_basis_points,commission_override_cents from freight_sales where id=?',[id]),before);
+  const visible=await (await edit.GET(await request('/api/sales/x','operator'),ctx)).json();
+  assert.equal(visible.sale.freightAmountCents,234000);assert.equal(visible.sale.operationalStatus,'FINALIZADO');assert.equal(visible.sale.commissionOverrideCents,undefined);
+  assert.equal((await edit.PATCH(await request('/api/sales/x','operator','PATCH',{...change,commissionOverrideCents:0}),ctx)).status,403);
+  assert.equal((await orders.POST(await request('/api/sales/x/service-order','operator','POST'),ctx)).status,200);
+  const pdf=await orders.GET(await request('/api/sales/x/service-order?format=pdf','operator'),ctx);assert.equal(pdf.status,200,await pdf.clone().text());assert.equal(pdf.headers.get('content-type'),'application/pdf');
+  assert.equal((await edit.DELETE(await request('/api/sales/x','operator','DELETE'),ctx)).status,403);
+ }
+ for(const format of ['json','pdf','csv']){
+  const response=await reports.GET(await request(`/api/reports/sales?competency=2094-05&format=${format}`,'operator'));assert.equal(response.status,200,await response.clone().text());
+  if(format==='json'){const r=await response.json();assert.equal(r.showCommission,false);assert.equal(r.report.sales.length,2);assert.equal(r.report.sales[0].financial.commissionCents,undefined);assert.equal(r.report.commissions,undefined);}
+ }
+ const freights=await import('../../app/api/fleet/freights/route.ts'),freightEdit=await import('../../app/api/fleet/freights/[id]/route.ts');
+ const fleetOrders=await import('../../app/api/fleet/freights/[id]/service-order/route.ts');
+ await pg.exec("insert into fleet_vehicles(id,plate) values ('op-access-vehicle','OPR1A22'); insert into fleet_drivers(id,name,active) values ('op-access-driver','MOTORISTA TESTE',1); insert into clients(id,type,legal_name,sale_channel,active) values ('op-access-client','PJ','CLIENTE TESTE','FROTA',1);");
+ const freight=await freights.POST(await request('/api/fleet/freights','operator','POST',{vehicleId:'op-access-vehicle',driverId:'op-access-driver',clientId:'op-access-client',clientName:'CLIENTE TESTE',origin:'A',destination:'B',pickupDate:'2094-05-01',operationalStatus:'SEM_PREVISAO',priority:'NORMAL',freightAmountCents:100000,distanceMeters:10000,tollCents:0,driverCommissionCents:0,returnUsed:false,cargoVehicles:[{model:'UNO',plate:'AAA1A11'}]}));
+ assert.equal(freight.status,201,await freight.clone().text());const {id}=await freight.json();const ctx={params:Promise.resolve({id})};
+ assert.equal((await freightEdit.PATCH(await request('/api/fleet/freights/x','operator','PATCH',{notes:'OBS OPERACIONAL',serviceSituation:'ENTREGA'}),ctx)).status,200);
+ assert.equal((await fleetOrders.POST(await request('/api/fleet/freights/x/service-order','operator','POST'),ctx)).status,200);
+ assert.equal((await fleetOrders.GET(await request('/api/fleet/freights/x/service-order?format=pdf','operator'),ctx)).status,200);
+ assert.equal((await freightEdit.DELETE(await request('/api/fleet/freights/x','operator','DELETE'),ctx)).status,403);
+ assert.equal((await (await import('../../app/api/users/route.ts')).GET(await request('/api/users','operator'))).status,403);
+ assert.equal((await (await import('../../app/api/fleet/monthly/route.ts')).POST(await request('/api/fleet/monthly','operator','POST',{action:'CLOSE',competency:'2094-05',reviewed:true}))).status,403);
+ const clientReports=await import('../../app/api/fleet/client-report/route.ts');
+ assert.equal((await clientReports.GET(await request('/api/fleet/client-report?clientId=op-access-client&from=2020-01-01&to=2099-12-31','operator'))).status,200);
+});
+
+test('comissão zero recalcula competências anteriores sem apagar vendas, faturamento da empresa ou recebimentos',async()=>{
+ const commissions=await import('../../app/api/sellers/commissions/route.ts'),reports=await import('../../app/api/reports/sales/route.ts');
+ const {dashboard}=await import('../../lib/server/repository.ts');const {authorize}=await import('../../lib/server/auth.ts');
+ for(const who of ['seller','operator']){
+  for(const [suffix,rate,override,amount] of [['rate',700,null,10000],['override-zero',700,0,20000],['rate-zero',0,null,30000],['agreed',0,500,40000]] as const){
+   await queryFirst(`insert into freight_sales(id,sale_date,competency,seller_id,seller_name,origin,destination,financial_due_date,operational_status,freight_amount_cents,commission_basis_points,commission_override_cents,created_by)
+    values (?,'1999-03-01','1999-03',?,?,'A','B','1999-03-31','CONFIRMAR',?,?,?,'admin') returning id`,['credit-'+who+'-'+suffix,who,who.toUpperCase(),amount,rate,override]);
+  }
+  await queryFirst(`insert into fleet_freights(id,vehicle_plate,driver_name,client_name,origin,destination,pickup_date,operational_status,freight_amount_cents,distance_meters,seller_id,seller_name,seller_commission_basis_points,seller_commission_override_cents)
+   values (?,'AAA1A11','TESTE','CLIENTE','A','B','1999-03-01','SEM_PREVISAO',50000,10000,?,?,700,0) returning id`,['credit-freight-'+who,who,who.toUpperCase()]);
+  await queryFirst(`insert into freight_sales(id,sale_channel,fleet_freight_id,sale_date,competency,seller_id,seller_name,origin,destination,financial_due_date,operational_status,freight_amount_cents,commission_basis_points,created_by)
+   select ?,'FROTA',id,'1999-03-01','1999-03',seller_id,seller_name,'A','B','1999-03-31','CONFIRMAR',freight_amount_cents,700,'admin' from fleet_freights where id=? returning id`,['credit-mirror-'+who,'credit-freight-'+who]);
+ }
+ await queryFirst(`insert into payment_transactions(id,sale_id,type,status,amount_cents,occurred_at,payment_method,idempotency_key,created_by)
+ values ('credit-payment','credit-seller-override-zero','RECEBIMENTO','CONFIRMADO',20000,'1999-03-02T12:00:00Z','PIX','credit-payment','admin') returning id`);
+ const before=await queryAll("select * from freight_sales where competency='1999-03' order by id");
+ for(const who of ['seller','operator']){
+  const result=await commissions.GET(await request('/api/sellers/commissions?competency=1999-03',who));assert.equal(result.status,200);const {commissions:rows}=await result.json();
+  assert.equal(rows.length,5);assert.equal(rows.reduce((n:number,r:{totalSalesCents:number})=>n+r.totalSalesCents,0),150000);
+  assert.equal(rows.reduce((n:number,r:{creditedSalesCents:number})=>n+r.creditedSalesCents,0),50000);
+  assert.equal(rows.find((r:{saleId:string})=>r.saleId==='credit-'+who+'-override-zero').totalSalesCents,20000);
+  assert.equal(rows.find((r:{saleId:string})=>r.saleId==='credit-'+who+'-agreed').creditedSalesCents,40000);
+  assert.equal(rows.find((r:{saleId:string})=>r.saleId==='credit-freight-'+who).creditedSalesCents,0);
+  const user=await authorize(await request('/api/me',who)),data=await dashboard(user,'1999-03');
+  assert.equal(data.personalRevenueCents,50000);
+  if(who==='seller'){assert.equal(data.freightAmountCents,150000);assert.equal(data.totalReceivedCents,20000);assert.equal(data.totalBalanceCents,130000);}
+ }
+ const company=await dashboard(await authorize(await request('/api/me')),'1999-03');assert.equal(company.freightAmountCents,300000);assert.equal(company.totalReceivedCents,20000);
+ assert.equal(company.bySeller.reduce((n,r)=>n+r.freightAmountCents,0),100000);
+ const report=await (await reports.GET(await request('/api/reports/sales?competency=1999-03'))).json();
+ assert.equal(report.report.sales.length,10);assert.equal(report.report.totals.freight,300000);assert.equal(report.report.sellerTotals.freight,100000);assert.equal(report.report.sellerTotals.sales,4);
+ assert.equal(report.report.clients.reduce((n:number,c:{freight:number})=>n+c.freight,0),300000);
+ assert.equal(report.report.sales.find((r:{id:string})=>r.id==='credit-seller-override-zero').freightAmountCents,20000);
+ assert.deepEqual(await queryAll("select * from freight_sales where competency='1999-03' order by id"),before);
 });

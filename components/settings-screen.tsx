@@ -2,7 +2,8 @@
 import { useTransientMessage } from "@/components/use-transient-message";
 
 import { useState } from "react";
-import type { Role } from "@/lib/contracts";
+import { PasswordChangeForm } from "@/components/password-change-form";
+import type { CurrentUser, Role } from "@/lib/contracts";
 import { Icons } from "@/components/icons";
 import {
   ErrorState,
@@ -35,6 +36,17 @@ function profileLabel(role: Role) {
 }
 
 export function SettingsScreen() {
+  const me = useApi<{user: CurrentUser}>("/api/me");
+  if (me.loading) return <LoadingState />;
+  if (me.error || !me.data) return <ErrorState message={me.error || "Não foi possível carregar seu acesso."} />;
+  return <>
+    <PageHeader eyebrow="Minha conta" title="Configurações" description="Atualize sua senha de acesso." />
+    <PasswordChangeForm />
+    {me.data.user.role === "ADMIN" && <AdminSettingsPanel />}
+  </>;
+}
+
+function AdminSettingsPanel() {
   const usersApi = useApi<{ users: UserRow[] }>("/api/users");
   const [newRole, setNewRole] = useState<Role>("VENDEDOR");
   const [editRole, setEditRole] = useState<Role>("VENDEDOR");
@@ -125,11 +137,6 @@ export function SettingsScreen() {
 
   return (
     <>
-      <PageHeader
-        eyebrow="Administração"
-        title="Configurações"
-        description="Gerencie os acessos e a comissão dos vendedores."
-      />
       {message && <p className="success-banner" role="status">{message}</p>}
       {error && <p className="form-error" role="alert">{error}</p>}
       <section className="panel settings-section">

@@ -84,7 +84,7 @@ export function SaleDetailScreen({ id, onBack, onViewOrder, hideDeleteActions = 
   const canManagePayments = canManageProviders || ownSellerSale;
   const canManageOperationCosts = canManageProviders;
   const canDeletePayment = user?.role === "ADMIN" || user?.role === "FINANCEIRO";
-  const canEditSale = user?.role === "ADMIN" || user?.role === "FINANCEIRO" || ownSellerSale;
+  const canEditSale = user?.role === "ADMIN" || user?.role === "FINANCEIRO" || user?.role === "OPERACIONAL" || ownSellerSale;
   const canAttach =
     user?.role === "ADMIN" || user?.role === "FINANCEIRO" || user?.role === "VENDEDOR" || user?.role === "OPERACIONAL";
 
