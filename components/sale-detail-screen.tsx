@@ -80,10 +80,11 @@ export function SaleDetailScreen({ id, onBack, onViewOrder, hideDeleteActions = 
   const user = meApi.data?.user;
   const canManageProviders =
     user?.role === "ADMIN" || user?.role === "FINANCEIRO" || user?.role === "OPERACIONAL";
-  const canManagePayments = canManageProviders;
+  const ownSellerSale = user?.role === "VENDEDOR" && Boolean(sale && sale.sellerId === user.id);
+  const canManagePayments = canManageProviders || ownSellerSale;
   const canManageOperationCosts = canManageProviders;
   const canDeletePayment = user?.role === "ADMIN" || user?.role === "FINANCEIRO";
-  const canEditSale = user?.role === "ADMIN" || user?.role === "FINANCEIRO";
+  const canEditSale = user?.role === "ADMIN" || user?.role === "FINANCEIRO" || ownSellerSale;
   const canAttach =
     user?.role === "ADMIN" || user?.role === "FINANCEIRO" || user?.role === "VENDEDOR" || user?.role === "OPERACIONAL";
 

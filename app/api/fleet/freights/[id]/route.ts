@@ -82,7 +82,7 @@ async function freightSnapshot(id: string) {
 
 export async function PATCH(request: Request, context: RouteContext) {
   try {
-    const user = await authorize(request, ["ADMIN", "GERENCIA", "OPERACIONAL", "FINANCEIRO"]);
+    const user = await authorize(request, ["ADMIN", "GERENCIA", "OPERACIONAL", "FINANCEIRO", "VENDEDOR"]);
     const { id } = await context.params;
     await assertFleetAccess(user, id);
     const previous = await freightSnapshot(id);
@@ -91,6 +91,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     if (payload.saleNumber !== undefined) throw new ApiError(400, "O número da venda não pode ser alterado.");
     const submitted = parseFleetFreightPayload({ ...previous, ...payload,
       cargoVehicles: payload.cargoVehicles === undefined ? previous.cargoVehicles ?? undefined : payload.cargoVehicles });
+    if (user.role === "VENDEDOR" && submitted.tripId !== previous.tripId) throw new ApiError(403, "Seu perfil não pode alterar o vínculo de viagem administrativa.");
     const data = submitted;
     const commissionOverrideCents = saleCommissionOverride(user, payload.sellerCommissionOverrideCents, previous.sellerCommissionOverrideCents, previous.sellerId);
     Object.assign(data, await resolveFreightClient(data, previous));

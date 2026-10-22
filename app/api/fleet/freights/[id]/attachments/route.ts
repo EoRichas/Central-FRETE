@@ -5,7 +5,7 @@ import { readPaymentProof } from "@/lib/server/payment-proof";
 type Context = { params: Promise<{ id: string }> };
 export async function GET(request: Request, context: Context) {
  try {
-  const user = await authorize(request, ["ADMIN", "GERENCIA", "FINANCEIRO", "OPERACIONAL"]);
+  const user = await authorize(request, ["ADMIN", "GERENCIA", "FINANCEIRO", "OPERACIONAL", "VENDEDOR"]);
   const { id } = await context.params;
   await assertFleetAccess(user,id);
   const attachments = await queryAll("select id, file_name as fileName, created_at as createdAt from fleet_attachments where freight_id = ? order by created_at desc", [id]);
@@ -15,7 +15,7 @@ export async function GET(request: Request, context: Context) {
 export async function POST(request: Request, context: Context) {
  let key: string | null = null;
  try {
-  const user = await authorize(request, ["ADMIN", "GERENCIA", "FINANCEIRO", "OPERACIONAL"]);
+  const user = await authorize(request, ["ADMIN", "GERENCIA", "FINANCEIRO", "OPERACIONAL", "VENDEDOR"]);
   const { id } = await context.params;
   await assertFleetAccess(user,id);
   if (!await queryFirst("select id from fleet_freights where id = ?", [id])) throw new ApiError(404, "Frete não encontrado.");

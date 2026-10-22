@@ -277,3 +277,66 @@ test('formulário Frota remove hodômetro e abastecimento, posiciona CTE e avari
     for(const field of ['actualFuelCostCents','fuelLitersMilli','fuelPumpAmountCents','icmsCostCents','cteMdfeCostCents','damagesCostCents','odometerStartMeters','odometerEndMeters']) assert.equal(body[field],freight[field],field);
   } finally {globalThis.FormData=OriginalFormData;}
 });
+
+test('vendedor vê editar e novo recebimento somente na própria venda, sem exclusão de recebimentos', () => {
+ for (const sellerId of ['seller','other']) {
+  const sale={id:'sale',sellerId,saleNumber:'234',saleChannel:'CEGONHA',cargoVehicles:[],costs:[],payments:[],installments:[],attachments:[],financial:{status:'EM_ABERTO'}};
+  const {SaleDetailScreen}=compile('components/sale-detail-screen.tsx',{
+   '@/lib/domain/permissions':permissions,'@/lib/domain/operations':operations,'@/lib/format':format,
+   '@/lib/domain/proof-files':{isProofMimeType:()=>false,automaticProofId:()=>null},'@/components/proof-upload':{ProofUpload:()=>null,UploadButton:()=>null},
+   '@/components/icons':{Icons:new Proxy({},{get:()=>icon})},'@/components/ui':ui,
+   'next/link':{__esModule:true,default:({href,children})=>React.createElement('a',{href},children)},
+   '@/components/use-api':{useApi:url=>({data:url==='/api/me'?{user:{id:'seller',role:'VENDEDOR'}}:{sale}})},
+  });
+  const html=renderToStaticMarkup(React.createElement(SaleDetailScreen,{id:'sale'}));
+  assert.equal(html.includes('href="/vendas/sale/editar"'),sellerId==='seller');
+  assert.equal(html.includes('Novo recebimento'),sellerId==='seller');
+  assert.equal(html.includes('Excluir recebimento'),false);
+ }
+});
+
+test('vendedor abre edição e baixa pela própria lista Frota e atualiza detalhes após salvar', () => {
+ const state=hooks();let refreshes=0;const urls=[];
+ const FreightModal=()=>null,detail={id:'234',saleNumber:'234',clientName:'CLIENTE',origin:'A',destination:'B'};
+ const {SellerFleetScreen}=compile('components/seller-fleet-screen.tsx',{
+  react:state.react,'@/components/fleet-freight-detail':{FleetFreightDetail:()=>null},'@/components/fleet-freight-modal':{FreightModal},'@/components/ui':ui,
+  '@/components/use-transient-message':{useTransientMessage:()=>[null,()=>{}]},'@/lib/format':format,
+  '@/components/use-api':{useApi:url=>{urls.push(url);return {data:url?.startsWith('/api/fleet/freights/options')?{fleet:{canManagePayments:true,canDeleteFreights:false}}:url==='/api/fleet/freights'?{freights:[detail]}:{freight:detail},refresh:()=>refreshes++};}},
+ });
+ const render=()=>{state.reset();return SellerFleetScreen();};let tree=render();
+ find(tree,n=>n.type==='button'&&n.props.children==='Ver detalhes').props.onClick();tree=render();
+ find(tree,n=>n.type==='button'&&n.props.children==='Editar / dar baixa').props.onClick();tree=render();
+ const editor=find(tree,n=>n.type===FreightModal);assert.equal(editor.props.freight.id,'234');assert.equal(editor.props.fleet.canManagePayments,true);assert.equal(editor.props.fleet.canDeleteFreights,false);
+ assert.ok(urls.includes('/api/fleet/freights/options?freightId=234'));
+ editor.props.onSaved('Pagamento atualizado.');tree=render();assert.equal(find(tree,n=>n.type===FreightModal),null);assert.equal(refreshes,2);
+});
+
+test('barra lateral permite tela de edição do vendedor e mantém administração restrita', () => {
+ for (const path of ['/vendas/234/editar','/configuracoes']) {
+  const state=hooks([false,false,{id:'seller',name:'VENDEDOR',role:'VENDEDOR'},true,0]);state.react.useSyncExternalStore=()=>false;
+  const marker=React.createElement('div',null,'FORMULÁRIO DA VENDA');const noOp=()=>null,mod=new Proxy({},{get:()=>noOp});
+  const src=readFileSync(new URL('../components/app-shell.tsx',import.meta.url),'utf8');const overrides=Object.fromEntries([...src.matchAll(/from\s+["']([^"']+)["']/g)].map(m=>[m[1],mod]));
+  Object.assign(overrides,{react:state.react,'@/lib/domain/permissions':permissions,'@/components/current-user-context':{CurrentUserContext:React.createContext(null)},'@/components/icons':{Icons:new Proxy({},{get:()=>icon})},'next/navigation':{usePathname:()=>path},'next/link':{__esModule:true,default:({children})=>React.createElement('span',null,children)}});
+  const {AppShell}=compile('components/app-shell.tsx',overrides);const tree=AppShell({children:marker});
+  assert.equal(Boolean(find(tree,n=>n===marker)),path.includes('/editar'));
+ }
+});
+
+test('edição do vendedor envia o status selecionado sem reabrir a venda ou mostrar troca de vendedor', async () => {
+ const state=hooks(),calls=[],noOp=()=>null,mod=new Proxy({},{get:()=>noOp});
+ const src=readFileSync(new URL('../components/sale-form-screen.tsx',import.meta.url),'utf8');const overrides=Object.fromEntries([...src.matchAll(/from\s+["']([^"']+)["']/g)].map(m=>[m[1],mod]));
+ Object.assign(overrides,{
+  react:state.react,'@/lib/domain/permissions':permissions,'@/lib/domain/operations':operations,'@/lib/domain/fleet-client-report':clientReport,'@/lib/format':fullFormat,
+  '@/lib/domain/cargo-vehicles':{cargoVehiclesOrLegacy:()=>[{model:'CARRO',plate:'AAA1A11',identification:null}]},'@/lib/domain/finance':{commissionCents:()=>700},
+  '@/lib/domain/dates':{todaySaoPaulo:()=>'2026-10-22'},'@/components/ui':ui,'@/components/icons':{Icons:new Proxy({},{get:()=>icon})},
+  'next/navigation':{useRouter:()=>({push:()=>{},refresh:()=>{}})},'next/link':{__esModule:true,default:noOp},
+  '@/components/use-api':{useApi:url=>({data:url==='/api/me'?{user:{id:'seller',role:'VENDEDOR',commissionBasisPoints:700}}:null}),apiMutation:async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});return {id:'234'};}},
+ });
+ const {SaleFormScreen}=compile('components/sale-form-screen.tsx',overrides);
+ const tree=SaleFormScreen({initialSale:{id:'234',sellerId:'seller',sellerName:'VENDEDOR',saleChannel:'CEGONHA',saleNumber:'234',clientId:'client',clientName:'CLIENTE',freightAmountCents:10000,commissionBasisPoints:700,costs:[],installments:[],operationalStatus:'FINALIZADO'}});
+ assert.equal(find(tree,n=>n.type==='select'&&n.props.name==='operationalStatus').props.defaultValue,'FINALIZADO');
+ assert.equal(find(tree,n=>n.props?.label==='Vendedor'),null);
+ const original=globalThis.FormData;globalThis.FormData=class {get(key){return {operationalStatus:'FINALIZADO',saleDate:'2026-10-22',financialDueDate:'2026-10-30',paymentMethod:'PIX'}[key]??'';}};
+ try {await find(tree,n=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{}});assert.equal(calls.length,1);assert.equal(calls[0].body.operationalStatus,'FINALIZADO');assert.equal(calls[0].body.sellerId,'seller');}
+ finally {globalThis.FormData=original;}
+});

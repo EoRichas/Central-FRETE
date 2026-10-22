@@ -1,9 +1,12 @@
+import { assertFleetAccess } from './seller-commission';
 import type { CurrentUser, SaleRecord } from '@/lib/contracts';
 import { ApiError, queryFirst } from '@/lib/server/d1';
 import { boundedText, parseCargoVehicles } from '@/lib/server/cargo-validation';
 
 export async function parseSaleCargo(payload: Record<string, unknown>, user: CurrentUser, previous?: SaleRecord) {
   const fleetFreightId = payload.fleetFreightId === undefined ? previous?.fleetFreightId ?? null : boundedText(payload.fleetFreightId, 'Frete da frota', 80);
+  if (user.role === 'VENDEDOR' && previous && fleetFreightId !== previous.fleetFreightId) throw new ApiError(403, 'Seu perfil não pode alterar o vínculo com a Frota.');
+  if (user.role === 'VENDEDOR' && previous && fleetFreightId) await assertFleetAccess(user,fleetFreightId);
   if (fleetFreightId && fleetFreightId !== previous?.fleetFreightId) {
     if (!['ADMIN','FINANCEIRO'].includes(user.role)) throw new ApiError(403, 'Somente o administrador pode vincular uma operação da Frota.');
     const freight = await queryFirst<{saleNumber:string}>('select sale_number as saleNumber from fleet_freights where id=?', [fleetFreightId]);

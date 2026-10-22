@@ -42,7 +42,7 @@ const navigation: Array<{
 
 function canAccessPath(pathname: string, role: Role) {
   if (pathname.startsWith("/vendas/fechamento") && !["ADMIN","GERENCIA","FINANCEIRO"].includes(role)) return false;
-  if (!["ADMIN", "FINANCEIRO"].includes(role) && /^\/vendas\/[^/]+\/editar\/?$/.test(pathname)) {
+  if (!["ADMIN", "FINANCEIRO", "VENDEDOR"].includes(role) && /^\/vendas\/[^/]+\/editar\/?$/.test(pathname)) {
     return false;
   }
   if (pathname === "/frota/vendas/nova" && !roleCan(role, "CREATE_FLEET_SALE")) return false;
