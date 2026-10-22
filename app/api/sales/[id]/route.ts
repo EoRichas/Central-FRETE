@@ -97,7 +97,7 @@ export async function DELETE(request: Request, context: RouteContext) {
 
 export async function PATCH(request: Request, context: RouteContext) {
   try {
-    const user = await authorize(request, ["ADMIN", "FINANCEIRO"]);
+    const user = await authorize(request, ["ADMIN", "FINANCEIRO", "VENDEDOR"]);
     const { id } = await context.params;
     const sale = await getSale(user, id);
     if (!sale) throw new ApiError(404, "Venda não encontrada.");
@@ -226,6 +226,9 @@ export async function PATCH(request: Request, context: RouteContext) {
       const preservedProviderPayment = providerSlot
         ? providerPaymentBySlot.get(providerSlot)
         : null;
+      const confirmed = isDirectPaidOperationCostCategory(category) || (category === "PRESTADOR_SERVICO"
+        ? preservedProviderPayment?.paymentStatus === "PAGO"
+        : ["ADMIN", "FINANCEIRO"].includes(user.role) ? Boolean(cost.confirmed) : availableConfirmed > 0);
       return {
         id: crypto.randomUUID(),
         category,
@@ -235,14 +238,12 @@ export async function PATCH(request: Request, context: RouteContext) {
           ? dateOnly(cost.occurredOn, `Data da despesa ${index + 1}`)
           : null,
         amountCents,
-        confirmed: isDirectPaidOperationCostCategory(category) || (category === "PRESTADOR_SERVICO"
-          ? preservedProviderPayment?.paymentStatus === "PAGO"
-          : ["ADMIN", "FINANCEIRO"].includes(user.role) ? Boolean(cost.confirmed) : availableConfirmed > 0),
+        confirmed,
         providerSlot,
         paymentStatus:
           category === "PRESTADOR_SERVICO"
             ? preservedProviderPayment?.paymentStatus ?? "EM_ABERTO"
-            : isDirectPaidOperationCostCategory(category) || Boolean(cost.confirmed) ? "PAGO" : "EM_ABERTO",
+            : confirmed ? "PAGO" : "EM_ABERTO",
         pixDetails:
           category === "PRESTADOR_SERVICO"
             ? preservedProviderPayment?.pixDetails ?? null

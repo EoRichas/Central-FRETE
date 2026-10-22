@@ -45,7 +45,7 @@ function normalizeOccurredAt(value: unknown) {
 export async function POST(request: Request, context: RouteContext) {
   let uploadedKey: string | null = null;
   try {
-    const user = await authorize(request, ["ADMIN", "FINANCEIRO", "OPERACIONAL"]);
+    const user = await authorize(request, ["ADMIN", "FINANCEIRO", "OPERACIONAL", "VENDEDOR"]);
     const { id: saleId } = await context.params;
     const sale = await getSale(user, saleId);
     if (!sale) throw new ApiError(404, "Venda não encontrada.");
@@ -55,11 +55,12 @@ export async function POST(request: Request, context: RouteContext) {
     if (!idempotencyKey || idempotencyKey.length > 120) {
       throw new ApiError(400, "Chave de idempotência ausente ou inválida.");
     }
-    const duplicate = await queryFirst<{ id: string }>(
-      `select id from payment_transactions where idempotency_key = ?`,
+    const duplicate = await queryFirst<{ id: string; saleId: string }>(
+      `select id,sale_id as saleId from payment_transactions where idempotency_key = ?`,
       [idempotencyKey],
     );
     if (duplicate) {
+      if (duplicate.saleId !== saleId) throw new ApiError(409, "Esta chave já foi utilizada em outra operação.");
       return Response.json({ id: duplicate.id, duplicate: true });
     }
 

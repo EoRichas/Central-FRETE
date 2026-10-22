@@ -1,10 +1,12 @@
+import { assertFleetAccess } from "@/lib/server/seller-commission";
 import { authorize } from "@/lib/server/auth";
 import { ApiError, getD1, jsonError, queryFirst } from "@/lib/server/d1";
 import { asObject, dateOnly, enumValue } from "@/lib/server/validation";
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
  try {
-  const user = await authorize(request, ["ADMIN", "FINANCEIRO", "OPERACIONAL"]);
+  const user = await authorize(request, ["ADMIN", "FINANCEIRO", "OPERACIONAL", "VENDEDOR"]);
   const { id } = await context.params;
+  await assertFleetAccess(user,id);
   const data = asObject(await request.json());
   const status = enumValue(data.status, "Situação", ["EM_ABERTO", "PAGO"]);
   const previous = await queryFirst("select payment_status, paid_at, proof_attachment_id from fleet_freights where id = ?", [id]);

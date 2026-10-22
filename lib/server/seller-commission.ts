@@ -13,6 +13,7 @@ export function commissionProfileValue(value: unknown, fallback = 700) {
 
 type Seller = { id: string; name: string; commissionBasisPoints: number };
 export async function resolveSaleSeller(user: CurrentUser, payload: Record<string, unknown>, previous?: Pick<SaleRecord, 'sellerId' | 'sellerName' | 'commissionBasisPoints'>): Promise<Seller | {id: null; name: string; commissionBasisPoints: number}> {
+  if (user.role === 'VENDEDOR' && previous?.sellerId === user.id) return {id: previous.sellerId, name: previous.sellerName, commissionBasisPoints: previous.commissionBasisPoints};
   if (user.role !== 'ADMIN' && user.role !== 'FINANCEIRO') {
     const actor = await queryFirst<Seller>(`select id,name,case when role in ('VENDEDOR','OPERACIONAL') then commission_basis_points else 0 end as commissionBasisPoints from users where id=? and active=1`, [user.id]);
     if (!actor) throw new ApiError(403, 'Usuário inativo.');

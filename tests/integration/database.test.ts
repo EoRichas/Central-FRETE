@@ -138,12 +138,12 @@ test('cadastro normaliza CPF, permite homônimos, desatrela motorista e exclui p
  assert.deepEqual(await queryFirst("select vehicle_id,vehicle_plate,freight_amount_cents from fleet_freights where id='linked-freight'"), {vehicle_id:null,vehicle_plate:'ABC1D23',freight_amount_cents:1000});
 });
 
-test('financeiro confirma frete somente com comprovante dele e data; vendedor não pode confirmar', async () => {
+test('financeiro confirma frete com comprovante dele e data; vendedor não confirma frete alheio', async () => {
  await pg.exec("INSERT INTO fleet_freights(id,vehicle_plate,driver_name,client_name,origin,destination,pickup_date,operational_status,freight_amount_cents,distance_meters) VALUES ('freight','ABC1D23','TESTE','CLIENTE','A','B','2026-09-01','SEM_PREVISAO',1000,1000)");
  const payment = await import('../../app/api/fleet/freights/[id]/payment/route.ts');
  const upload = await import('../../app/api/fleet/freights/[id]/attachments/route.ts');
  const context = {params: Promise.resolve({id:'freight'})};
- assert.equal((await payment.PATCH(await request('/api/fleet/freights/freight/payment','seller','PATCH',{status:'PAGO'}),context)).status,403);
+ assert.equal((await payment.PATCH(await request('/api/fleet/freights/freight/payment','seller','PATCH',{status:'PAGO'}),context)).status,404);
  assert.equal((await payment.PATCH(await request('/api/fleet/freights/freight/payment','finance','PATCH',{status:'PAGO'}),context)).status,400);
  const invalid = new FormData(); invalid.set('file',new File(['fake'],'fake.pdf',{type:'application/pdf'}));
  assert.equal((await upload.POST(await request('/api/fleet/freights/freight/attachments','finance','POST',invalid),context)).status,400);
@@ -195,7 +195,7 @@ test('acesso independe de licença antiga e mantém sessão, usuário ativo e pe
  }
 });
 
-test('vendedor anexa na própria venda sem ganhar permissão para confirmar pagamento', async () => {
+test('vendedor anexa na própria venda; baixa exige os dados obrigatórios', async () => {
  await pg.exec("ALTER TABLE freight_sales DISABLE TRIGGER freight_sale_number; INSERT INTO freight_sales(id,sale_number,sale_date,competency,seller_id,seller_name,origin,destination,financial_due_date,operational_status,freight_amount_cents,commission_basis_points,created_by) VALUES ('own','1','2026-09-01','2026-09','seller','Seller','A','B','2026-09-05','SEM_PREVISAO',1000,1000,'admin'),('other','2','2026-09-01','2026-09','admin','Admin','A','B','2026-09-05','SEM_PREVISAO',1000,1000,'admin'); ALTER TABLE freight_sales ENABLE TRIGGER freight_sale_number;");
  const upload = await import('../../app/api/sales/[id]/attachments/route.ts');
  const payments = await import('../../app/api/sales/[id]/payments/route.ts');
@@ -205,7 +205,7 @@ test('vendedor anexa na própria venda sem ganhar permissão para confirmar paga
  const other = await upload.POST(await request('/api/sales/other/attachments','seller','POST',form()), {params:Promise.resolve({id:'other'})});
  assert.equal(other.status,404,await other.clone().text());
  const paid = await payments.POST(await request('/api/sales/own/payments','seller','POST',{amountCents:1000}), {params:Promise.resolve({id:'own'})});
- assert.equal(paid.status,403);
+ assert.equal(paid.status,400);
 });
 
 test('vendedor consulta prestadores e despesas de nota fiscal e outras despesas podem ser editadas', async () => {
@@ -803,7 +803,7 @@ test('custos fiscais da Frota persistem no cadastro e edição, compõem resulta
  f=(await loadFleetData(true,true,true,false,'2031-01')).freights.find(f=>f.id===id)!;
  assert.equal(f.icmsCostCents,7000);assert.equal(f.insuranceCostCents,3000);assert.equal(f.totalCostCents,33000);assert.equal(f.origin,'ORIGEM ATUALIZADA');
  assert.equal((await edit.PATCH(await request('/api/fleet/freights/x','admin','PATCH',{insuranceCostCents:-1}),ctx)).status,400);
- assert.equal((await edit.PATCH(await request('/api/fleet/freights/x','seller','PATCH',{insuranceCostCents:1}),ctx)).status,403);
+ assert.equal((await edit.PATCH(await request('/api/fleet/freights/x','seller','PATCH',{insuranceCostCents:1}),ctx)).status,404);
  const audit=await queryAll("select new_value from audit_logs where entity_type='FLEET_FREIGHT' and entity_id=? and action='UPDATED'",[id]) as {new_value:string}[];
  assert.equal(JSON.parse(audit[0].new_value).icmsCostCents,7000);
 });
@@ -1330,7 +1330,7 @@ test('vendedor cria frete e consulta somente os próprios sem receber administra
  const response=await options.GET(await request('/api/fleet/freights/options','seller'));
  assert.equal(response.status,200,await response.clone().text());
  const {fleet}=await response.json();
- assert.equal(fleet.canEditFreights,true); assert.equal(fleet.canDeleteFreights,false); assert.equal(fleet.canManagePayments,false);
+ assert.equal(fleet.canEditFreights,true); assert.equal(fleet.canDeleteFreights,false); assert.equal(fleet.canManagePayments,true);
  assert.equal(fleet.parameters.officeMonthlyCostCents,null); assert.equal('freights' in fleet,false);
  assert.ok(fleet.vehicles.every((v:{costs:unknown[]})=>v.costs.length===0));
  assert.ok(fleet.drivers.every((d:{cpf:unknown;phone:unknown;address:unknown})=>d.cpf===null&&d.phone===null&&d.address===null));
@@ -1344,7 +1344,7 @@ test('vendedor cria frete e consulta somente os próprios sem receber administra
  const ownIds=(await own.json()).freights.map((f:{id:string})=>f.id);
  assert.ok(ownIds.includes(id));
  for(const ownId of ownIds)assert.equal((await queryFirst('select seller_id from fleet_freights where id=?',[ownId]) as {seller_id:string}).seller_id,'seller');
- assert.equal((await edit.PATCH(await request(`/api/fleet/freights/${id}`,'seller','PATCH',payload),context)).status,403);
+ assert.equal((await edit.PATCH(await request(`/api/fleet/freights/${id}`,'seller','PATCH',payload),context)).status,200);
  assert.equal((await edit.DELETE(await request(`/api/fleet/freights/${id}`,'seller','DELETE'),context)).status,403);
  assert.equal((await options.GET(await request('/api/fleet/freights/options','finance'))).status,200);
 });
@@ -1380,7 +1380,7 @@ test('comissão do cadastro valida percentual e só administrador altera; venda 
  const fd=await detail.GET(await request('/api/fleet/freights/x',id),fc);assert.equal(fd.status,200,await fd.clone().text());const freight=(await fd.json()).freight;
  assert.equal(freight.sellerId,id);assert.equal(freight.sellerCommissionBasisPoints,1235);assert.equal(freight.sellerCommissionCents,12350);
  for(const other of ['seller'])assert.equal((await detail.GET(await request('/api/fleet/freights/x',other),fc)).status,404);
- assert.equal((await detail.PATCH(await request('/api/fleet/freights/x',id,'PATCH',{freightAmountCents:1}),fc)).status,403);
+ assert.equal((await detail.PATCH(await request('/api/fleet/freights/x',id,'PATCH',{notes:'EDIÇÃO PRÓPRIA'}),fc)).status,200);
  assert.equal((await editUser.PATCH(await request('/api/users/x','admin','PATCH',{...base,password:undefined,active:true,commissionPercent:5}),ctx)).status,200);
  assert.equal((await queryFirst('select commission_basis_points from freight_sales where id=?',[sale.id]) as {commission_basis_points:number}).commission_basis_points,1235);
  assert.equal((await queryFirst('select seller_commission_basis_points from fleet_freights where id=?',[f.id]) as {seller_commission_basis_points:number}).seller_commission_basis_points,1235);
@@ -1844,4 +1844,72 @@ test('avarias têm campo próprio, entram no resultado e fechamento e preservam 
  const {loadMonthlyReport}=await import('../../lib/server/monthly-results.ts');
  assert.equal((await loadMonthlyReport('2093-01')).current.freights.find(row=>row.id===id)!.directCostCents,f.directCostCents);
  assert.equal((await edit.PATCH(await request('/api/fleet/freights/x','admin','PATCH',{damagesCostCents:-1}),ctx)).status,400);
+});
+
+test('vendedor edita e recebe nas próprias vendas Cegonha/Frota, preserva comissão e não acessa terceiros ou exclusões', async () => {
+ const create=await import('../../app/api/sales/route.ts'),edit=await import('../../app/api/sales/[id]/route.ts');
+ const payments=await import('../../app/api/sales/[id]/payments/route.ts'),remove=await import('../../app/api/payments/[id]/route.ts');
+ const beforeProfile=await queryFirst('select commission_basis_points from users where id=?',['seller']);
+ const createdIds:string[]=[];
+ try {
+ for (const saleChannel of ['CEGONHA','FROTA']) {
+  const body={...salePayload,saleChannel,clientId:'lookup-a',serviceSituation:saleChannel==='FROTA'?'ENTREGA':undefined};
+  const created=await create.POST(await request('/api/sales','seller','POST',body));assert.equal(created.status,201,await created.clone().text());
+  const {id}=await created.json();createdIds.push(id);const ctx={params:Promise.resolve({id})};
+  const previous=await (await edit.GET(await request('/api/sales/x','seller'),ctx)).json();
+  await pg.exec("update users set commission_basis_points=9999 where id='seller'");
+  const change={...body,sellerId:'admin',sellerName:'ADMIN',commissionBasisPoints:9999,freightAmountCents:200000,operationalStatus:'FINALIZADO',notes:'EDITADA PELO VENDEDOR',costs:[{category:'CTE_MDFE',amountCents:1234,confirmed:true}]};
+  const updated=await edit.PATCH(await request('/api/sales/x','seller','PATCH',change),ctx);assert.equal(updated.status,200,await updated.clone().text());
+  const saved=await (await edit.GET(await request('/api/sales/x','seller'),ctx)).json();
+  assert.equal(saved.sale.notes,change.notes);assert.equal(saved.sale.operationalStatus,'FINALIZADO');assert.equal(saved.sale.freightAmountCents,200000);
+  assert.equal(saved.sale.sellerId,'seller');assert.equal(saved.sale.sellerName,previous.sale.sellerName);assert.equal(saved.sale.commissionBasisPoints,previous.sale.commissionBasisPoints);
+  assert.equal(saved.sale.costs[0].confirmed,false);assert.equal(saved.sale.costs[0].paymentStatus,'EM_ABERTO');
+  const req=await request('/api/sales/x/payments','seller','POST',{type:'RECEBIMENTO',status:'CONFIRMADO',amountCents:200000,occurredAt:'2026-10-22',paymentMethod:'PIX'});req.headers.set('idempotency-key','seller-payment-'+id);
+  const received=await payments.POST(req.clone(),ctx);assert.equal(received.status,201,await received.clone().text());const receipt=await received.json();
+  assert.equal((await payments.POST(req.clone(),ctx)).status,200);
+  const paid=await (await edit.GET(await request('/api/sales/x','seller'),ctx)).json();assert.equal(paid.sale.financial.balanceCents,0);
+  assert.equal((await queryFirst('select created_by from payment_transactions where id=?',[receipt.id]) as {created_by:string}).created_by,'seller');
+  assert.equal((await edit.DELETE(await request('/api/sales/x','seller','DELETE'),ctx)).status,403);
+  assert.equal((await remove.DELETE(await request('/api/payments/x','seller','DELETE'),{params:Promise.resolve({id:receipt.id})})).status,403);
+ }
+ const foreign=await create.POST(await request('/api/sales','admin','POST',{...salePayload,sellerId:'operator',clientId:'lookup-a'}));assert.equal(foreign.status,201,await foreign.clone().text());const foreignId=(await foreign.json()).id;
+ const foreignCtx={params:Promise.resolve({id:foreignId})};
+ assert.equal((await edit.PATCH(await request('/api/sales/x','seller','PATCH',salePayload),foreignCtx)).status,404);
+ const req=await request('/api/sales/x/payments','seller','POST',{type:'RECEBIMENTO',status:'CONFIRMADO',amountCents:1,occurredAt:'2026-10-22',paymentMethod:'PIX'});req.headers.set('idempotency-key','seller-payment-'+createdIds[0]);
+ assert.equal((await payments.POST(req.clone(),foreignCtx)).status,404);
+ // A key from another sale must not disclose its receipt or register a new one.
+ assert.equal((await payments.POST(req.clone(),{params:Promise.resolve({id:createdIds[1]})})).status,409);
+ } finally {await pg.query('update users set commission_basis_points=$1 where id=$2',[(beforeProfile as {commission_basis_points:number}).commission_basis_points,'seller']);}
+});
+
+test('vendedor edita frete, anexa e baixa só os próprios; opções preservam cadastros inativos e bloqueiam terceiros', async () => {
+ const create=await import('../../app/api/fleet/freights/route.ts'),edit=await import('../../app/api/fleet/freights/[id]/route.ts');
+ const options=await import('../../app/api/fleet/freights/options/route.ts'),attachments=await import('../../app/api/fleet/freights/[id]/attachments/route.ts');
+ const download=await import('../../app/api/fleet/freights/[id]/attachments/[attachmentId]/route.ts'),payment=await import('../../app/api/fleet/freights/[id]/payment/route.ts');
+ const created=await create.POST(await request('/api/fleet/freights','seller','POST',{...registeredFreight,clientId:'lookup-a'}));assert.equal(created.status,201,await created.clone().text());
+ const {id}=await created.json(),ctx={params:Promise.resolve({id})};
+ const updated=await edit.PATCH(await request('/api/fleet/freights/x','seller','PATCH',{notes:'VENDEDOR EDITOU',freightAmountCents:200000,sellerId:'operator'}),ctx);assert.equal(updated.status,200,await updated.clone().text());
+ assert.deepEqual(await queryFirst('select notes,seller_id from fleet_freights where id=?',[id]),{notes:'VENDEDOR EDITOU',seller_id:'seller'});
+ assert.equal((await edit.PATCH(await request('/api/fleet/freights/x','seller','PATCH',{tripId:'admin-trip'}),ctx)).status,403);
+ const form=new FormData();form.set('file',new File(['%PDF-1.4\n%%EOF'],'comprovante-vendedor.pdf',{type:'application/pdf'}));
+ const upload=await attachments.POST(await request('/api/fleet/freights/x/attachments','seller','POST',form),ctx);assert.equal(upload.status,201,await upload.clone().text());const proof=(await upload.json()).id;
+ assert.equal((await attachments.GET(await request('/api/fleet/freights/x/attachments','seller'),ctx)).status,200);
+ assert.equal((await download.GET(await request('/api/fleet/freights/x/attachments/p','seller'),{params:Promise.resolve({id,attachmentId:proof})})).status,200);
+ const body={status:'PAGO',paidAt:'2026-10-22',proofId:proof};
+ const received=await payment.PATCH(await request('/api/fleet/freights/x/payment','seller','PATCH',body),ctx);assert.equal(received.status,200,await received.clone().text());
+ assert.equal((await queryFirst('select payment_status from fleet_freights where id=?',[id]) as {payment_status:string}).payment_status,'PAGO');
+ const foreign=await create.POST(await request('/api/fleet/freights','admin','POST',{...registeredFreight,clientId:'lookup-a',sellerId:'operator'}));assert.equal(foreign.status,201);const other=(await foreign.json()).id,otherCtx={params:Promise.resolve({id:other})};
+ assert.equal((await edit.PATCH(await request('/api/fleet/freights/x','seller','PATCH',{notes:'FORJADO'}),otherCtx)).status,404);
+ assert.equal((await payment.PATCH(await request('/api/fleet/freights/x/payment','seller','PATCH',body),otherCtx)).status,404);
+ assert.equal((await attachments.GET(await request('/api/fleet/freights/x/attachments','seller'),otherCtx)).status,404);
+ assert.equal((await attachments.POST(await request('/api/fleet/freights/x/attachments','seller','POST',new FormData()),otherCtx)).status,404);
+ assert.equal((await download.GET(await request('/api/fleet/freights/x/attachments/p','seller'),{params:Promise.resolve({id:other,attachmentId:proof})})).status,404);
+ assert.equal((await options.GET(await request('/api/fleet/freights/options?freightId='+other,'seller'))).status,404);
+ const mismatch=await payment.PATCH(await request('/api/fleet/freights/x/payment','operator','PATCH',body),otherCtx);assert.equal(mismatch.status,400);
+ assert.equal((await edit.DELETE(await request('/api/fleet/freights/x','seller','DELETE'),ctx)).status,403);
+ await pg.exec("update fleet_vehicles set active=0 where id='calc-vehicle';update fleet_drivers set active=0 where id='calc-driver'");
+ try {
+  const data=await (await options.GET(await request('/api/fleet/freights/options?freightId='+id,'seller'))).json();
+  assert.equal(data.fleet.canManagePayments,true);assert.ok(data.fleet.vehicles.some((v:{id:string})=>v.id==='calc-vehicle'));assert.ok(data.fleet.drivers.some((d:{id:string})=>d.id==='calc-driver'));
+ } finally {await pg.exec("update fleet_vehicles set active=1 where id='calc-vehicle';update fleet_drivers set active=1 where id='calc-driver'");}
 });

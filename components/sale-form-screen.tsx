@@ -138,6 +138,7 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
     initialSale ? centsToInput(initialSale.freightAmountCents) : "",
   );
   const isAdmin = ['ADMIN', 'FINANCEIRO'].includes(meApi.data?.user.role ?? '');
+  const canEditStatus = isAdmin || (editing && meApi.data?.user.role === 'VENDEDOR');
   const canSeeCommission = ['ADMIN','VENDEDOR','OPERACIONAL'].includes(meApi.data?.user.role ?? '');
   const [commissionValue, setCommissionValue] = useState<string | null>(initialSale?.commissionOverrideCents == null ? null : centsToInput(initialSale.commissionOverrideCents));
   const commissionBasisPoints = editing && sellerId === (initialSale?.sellerId ?? 'historical')
@@ -234,7 +235,7 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
         originYardEntryDate: originYardEntryDate || null,
         deliveryDeadline: destinationArrivalDate || null,
         financialDueDate: form.get("financialDueDate"),
-        operationalStatus: isAdmin ? form.get("operationalStatus") : "CONFIRMAR",
+        operationalStatus: canEditStatus ? form.get("operationalStatus") : "CONFIRMAR",
         serviceSituation: saleChannel === "FROTA" ? form.get("serviceSituation") : undefined,
         notes: form.get("notes"),
         ...(canSeeCommission ? {commissionOverrideCents: commissionValue?.trim() ? moneyInputToCents(commissionValue) : null} : {}),
@@ -325,7 +326,7 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
               <Field label="Data da venda"><input name="saleDate" type="date" defaultValue={initialSale?.saleDate ?? today} required /></Field>
               {isAdmin && <Field label="Vendedor"><select value={sellerId} onChange={e=>setSellerId(e.target.value)} required><option value="">Selecione um vendedor</option>{initialSale && !sellersApi.data?.sellers.some(s=>s.id===initialSale.sellerId) && <option value={initialSale.sellerId ?? 'historical'}>{initialSale.sellerName} (histórico)</option>}{sellersApi.data?.sellers.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select>{sellersApi.error && <span role="alert">{sellersApi.error}</span>}</Field>}
               {saleChannel === "FROTA" && <Field label="Situação do serviço"><select name="serviceSituation" defaultValue={initialSale?.serviceSituation ?? ""} required><option value="">Selecione</option>{FLEET_RELATION_SITUATIONS.map(value => <option key={value} value={value}>{value}</option>)}</select></Field>}
-              {isAdmin && <Field label="Status operacional"><select name="operationalStatus" defaultValue={initialSale?.operationalStatus ?? "CONFIRMAR"}>{OPERATIONAL_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></Field>}
+              {canEditStatus && <Field label="Status operacional"><select name="operationalStatus" defaultValue={initialSale?.operationalStatus ?? "CONFIRMAR"}>{OPERATIONAL_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></Field>}
               <Field label="Prestador inicial"><input name="initialProviderName" defaultValue={initialSale?.initialProviderName ?? ""} /></Field>
               <Field label="Prazo operacional (dias)"><input type="number" min={1} max={365} inputMode="numeric" value={operationalDeadlineDays} onChange={(event) => { const value = event.target.value; setOperationalDeadlineDays(value); const calculated = calculateDestinationArrivalDate(originYardEntryDate, value); if (calculated) setDestinationArrivalDate(calculated); }} /></Field>
             </div>

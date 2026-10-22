@@ -306,19 +306,19 @@ export async function loadFleetData(
 }
 
 // Only the data needed to create a freight: no customer operations, billing or personal driver details.
-export async function loadFleetCreationData(): Promise<import("@/lib/domain/fleet").FleetFreightFormData> {
+export async function loadFleetCreationData(current?: {vehicleId: string | null; driverId: string | null}): Promise<import("@/lib/domain/fleet").FleetFreightFormData> {
   const [parameters, vehicles, drivers, costs] = await Promise.all([
     loadParameters(),
-    queryAll<VehicleRow>("select id, plate, model, active from fleet_vehicles where active=1 order by plate"),
-    queryAll<{id:string;name:string}>("select id, name from fleet_drivers where active=1 order by name"),
+    queryAll<VehicleRow>("select id, plate, model, active from fleet_vehicles where active=1 or id=? order by plate", [current?.vehicleId ?? null]),
+    queryAll<{id:string;name:string;active:number}>("select id, name, active from fleet_drivers where active=1 or id=? order by name", [current?.driverId ?? null]),
     queryAll<VehicleCostRow>(`select id, vehicle_id as vehicleId, competency, distance_meters as distanceMeters,
       monthly_cost_cents as monthlyCostCents, include_in_rate_average as includeInRateAverage
       from fleet_vehicle_costs where include_in_rate_average=1`),
   ]);
   return {
     parameters: {...parameters, officeMonthlyCostCents:null, updatedByName:null},
-    vehicles: vehicles.map(vehicle => ({...vehicle, active:true, costs:[], averageCostPerKmCents:averageVehicleCostPerKmCents(costs.filter(c=>c.vehicleId===vehicle.id).map(c=>({...c, includeInRateAverage:true, costPerKmCents:c.distanceMeters>0?c.monthlyCostCents/(c.distanceMeters/1000):0})))})),
-    drivers: drivers.map(driver=>({...driver, active:true, vehicleId:null, cpf:null, address:null, phone:null})),
+    vehicles: vehicles.map(vehicle => ({...vehicle, active:Boolean(vehicle.active), costs:[], averageCostPerKmCents:averageVehicleCostPerKmCents(costs.filter(c=>c.vehicleId===vehicle.id).map(c=>({...c, includeInRateAverage:true, costPerKmCents:c.distanceMeters>0?c.monthlyCostCents/(c.distanceMeters/1000):0})))})),
+    drivers: drivers.map(driver=>({...driver, active:Boolean(driver.active), vehicleId:null, cpf:null, address:null, phone:null})),
     canEditFreights:true, canEditFreightFinancials:false, canManagePayments:false, canDeleteFreights:false,
   };
 }
