@@ -149,6 +149,53 @@ test('Novo frete aparece só em Fretes e a explicação abre e fecha em modal', 
   find(tree,n=>n.type==='button'&&n.props.children==='Ver todos').props.onClick();tree=render();assert.ok(create(tree));
 });
 
+test('fretes filtra vendedor ao lado de prioridade, combinando filtros e preservando identidades e histórico', () => {
+  const state = hooks(); state.react.useMemo = fn => fn();
+  const noOp = () => null, mod = new Proxy({}, {get: () => noOp}), FreightTable = () => null;
+  const source = readFileSync(new URL('../components/fleet-screen.tsx', import.meta.url), 'utf8');
+  const overrides = Object.fromEntries([...source.matchAll(/from\s+["']([^"']+)["']/g)].map(m => [m[1], mod]));
+  const row = (id, sellerId, sellerName, extra = {}) => ({id, sellerId, sellerName, clientName: 'CLIENTE M1', priority: 'URGENTE', operationalStatus: 'EM_ROTA', ...extra});
+  const freights = [
+    row('1', 'a', 'ANA'), row('2', 'a', 'ANA', {priority: 'NORMAL'}),
+    row('3', 'a', 'ANA', {operationalStatus: 'ENTREGUE'}), row('4', 'b', 'ANA'),
+    row('5', null, 'HISTÓRICO'), row('6', null, null),
+    row('7', 'a', 'ANA', {clientName: 'OUTRO CLIENTE'}),
+  ];
+  const endpoints = [];
+  Object.assign(overrides, {
+    react: state.react, '@/components/ui': ui, '@/lib/format': format,
+    '@/lib/domain/permissions': permissions, '@/lib/domain/cargo-vehicles': {cargoVehiclesOrLegacy: () => []},
+    '@/lib/domain/dates': {currentCompetency: () => '2026-10'}, '@/components/icons': {Icons: new Proxy({}, {get: () => icon})},
+    '@/lib/domain/fleet': fleetDomain, '@/components/fleet-freight-table': {FreightTable},
+    '@/components/use-transient-message': {useTransientMessage: () => [null, noOp]},
+    '@/components/use-api': {useApi: url => {
+      endpoints.push(url);
+      return url === '/api/me' ? {data: {user: {role: 'OPERACIONAL'}}} : {data: {fleet: {freightOnly: true, freights, billing: {freights: []}, summary: {}}}};
+    }},
+  });
+  const {FleetScreen} = compile('components/fleet-screen.tsx', overrides);
+  const inner = FleetScreen().type, render = () => {state.reset(); return inner();};
+  const select = (tree, label) => find(find(tree, n => n.type === 'label' && n.props.children?.[0]?.props.children === label), n => n.type === 'select');
+  const change = (tree, label, value) => select(tree, label).props.onChange({target: {value}});
+  const ids = tree => find(tree, n => n.type === FreightTable).props.freights.map(f => f.id);
+  let tree = render();
+  const panel = find(tree, n => n.props?.className === 'filter-panel fleet-filter-panel');
+  assert.deepEqual(panel.props.children.filter(n => n.type === 'label').map(n => n.props.children[0].props.children), ['Buscar', 'Status', 'Prioridade', 'Vendedor']);
+  const options = React.Children.toArray(select(tree, 'Vendedor').props.children);
+  assert.deepEqual(options.map(n => n.props.value), ['', 'id:a', 'id:b', 'name:HISTÓRICO', 'unassigned']);
+  change(tree, 'Vendedor', 'id:a'); tree = render(); assert.deepEqual(ids(tree), ['1', '2', '3', '7']);
+  change(tree, 'Prioridade', 'URGENTE'); tree = render(); assert.deepEqual(ids(tree), ['1', '3', '7']);
+  change(tree, 'Status', 'EM_ROTA'); tree = render(); assert.deepEqual(ids(tree), ['1', '7']);
+  find(tree, n => n.type === 'input' && n.props.placeholder).props.onChange({target: {value: ' m1 '}});
+  tree = render(); assert.deepEqual(ids(tree), ['1']);
+  assert.equal(find(tree, n => n.props?.className === 'filter-stat').props.children[0].props.children, 1);
+  change(tree, 'Vendedor', 'id:b'); tree = render(); assert.deepEqual(ids(tree), ['4']);
+  change(tree, 'Vendedor', 'name:HISTÓRICO'); tree = render(); assert.deepEqual(ids(tree), ['5']);
+  change(tree, 'Vendedor', 'unassigned'); tree = render(); assert.deepEqual(ids(tree), ['6']);
+  change(tree, 'Vendedor', ''); tree = render(); assert.deepEqual(ids(tree), ['1', '4', '5', '6']);
+  assert.ok(endpoints.every(url => ['/api/me', '/api/fleet?competency=2026-10'].includes(url)));
+});
+
 test('Adicionar Observação limita a OS à venda atual, inclusive em vendas vinculadas, e usa a prévia gerada', () => {
   const OrderObservationsDialog=()=>null;
   for (const [source,id,rowId,expected] of [['fleet','record','record','freight:record'],['sale','record','record','sale:record'],['sale','commercial','operation','freight:operation']]) {
