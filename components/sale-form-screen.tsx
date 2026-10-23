@@ -370,7 +370,7 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
             {canSeeCommission && <Field label="Valor da comissão (R$)" hint="Preenchido automaticamente. Altere o valor se houver uma comissão combinada."><input inputMode="decimal" value={commissionValue ?? centsToInput(calculatedCommission ?? 0)} onChange={e=>setCommissionValue(e.target.value)} onBlur={()=>{if (!commissionValue?.trim()) setCommissionValue(null);}} required /></Field>}
           </div>
           <div className="cost-list">
-            <div className="cost-list-head"><div><h3>Custos da operação</h3><p>Preencha apenas as linhas que possuem valor.</p></div><span className="cost-currency-tag">TODOS OS VALORES EM BRL</span></div>
+            <div className="cost-list-head"><div><h3>Custos da operação</h3><p>Preencha apenas as linhas que possuem valor.</p></div></div>
             <div className="fixed-cost-grid">
               {costs.map((cost, index) => (
                 <label className="fixed-cost-row" key={cost.key}>

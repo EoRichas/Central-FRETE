@@ -86,7 +86,7 @@ export async function renderFleetClientPdf(report: FleetClientReport, observatio
     // Only explicitly selected observations enter a customer document.
     const cells = [formatDate(row.createdDate), row.driverName || 'Não informado', row.clientName,
       models || 'Não informado', plates || 'Não informada', row.serviceSituation || 'Não informada',
-      `${row.clientName}\n${notes.get(row.id) || 'Sem observação incluída.'}${options.includeProviders&&(row.providerServices?.length)?'\nPRESTADORES: '+row.providerServices.map(p=>`${p.providerName}${p.referenceName?' / '+p.referenceName:''} · ${providerKindLabel(p.kind)}: ${formatMoney(p.amountCents)}`).join('\n'):''}${row.returnFreight?'\nFRETE RETORNO':''}`, formatMoney(row.amountCents), confirmation];
+      `${row.clientName}\n${notes.get(row.id) || 'Sem observação incluída.'}${options.includeProviders&&(row.providerServices?.length)?'\nPRESTADORES: '+row.providerServices.map(p=>`${p.providerName}${p.referenceName?' / '+p.referenceName:''} · ${providerKindLabel(p.kind)}: ${formatMoney(p.amountCents)}`).join('\n'):''}`, formatMoney(row.amountCents), confirmation];
     const lines = cells.map((cell, i) => wrap(cell, columns[i].width - 15, 7.3, i === 7));
     const count = Math.max(...lines.map(l => l.length));
     // Move normal rows intact. Extremely long notes continue with repeated headings.

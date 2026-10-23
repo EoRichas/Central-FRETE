@@ -1,5 +1,4 @@
 "use client";
-import { SellerChangeButton } from './seller-change-button';
 
 import { roleCan } from "@/lib/domain/permissions";
 import Link from "next/link";
@@ -302,7 +301,7 @@ export function SaleDetailScreen({ id, onBack, onViewOrder, hideDeleteActions = 
         <article className="panel detail-card">
           <header><div><span className="eyebrow">Cadastro</span><h2>Dados da operação</h2></div></header>
           <dl className="details-list">
-            <div><dt>Vendedor</dt><dd>{sale.sellerName} <SellerChangeButton source="sale" id={sale.id} sellerId={sale.sellerId} sellerName={sale.sellerName} onChanged={saleApi.refresh} /></dd></div>
+            <div><dt>Vendedor</dt><dd>{sale.sellerName}</dd></div>
             <div className="full"><dt>Veículos transportados ({sale.cargoVehicles.length})</dt><dd>{sale.cargoVehicles.map((v, i) => <div key={i}>{i + 1}. {[v.model, v.plate, sale.saleChannel !== "CEGONHA" || v.fipeValueCents == null ? null : `FIPE: ${formatMoney(v.fipeValueCents)}`].filter(Boolean).join(" · ") || "Não informado"}</div>)}</dd></div>
             {sale.saleChannel === "FROTA" && <div><dt>Situação do serviço</dt><dd>{sale.serviceSituation || "Não informada"}</dd></div>}
             <div><dt>Cliente</dt><dd>{sale.clientName ?? "CLIENTE NÃO INFORMADO"}</dd></div>

@@ -168,7 +168,7 @@ function FleetOperationsScreen() {
     <div className="fleet-module">
       {viewedFreight ? <>
         <PageHeader eyebrow={`Venda ${viewedFreight.saleNumber}`} title="Detalhes do frete" description={`${viewedFreight.origin} → ${viewedFreight.destination}`} actions={<><button className="button secondary" onClick={() => setViewingId(null)}>Voltar à Frota</button><Link className="button secondary" href={`/frota/fretes/${viewedFreight.id}/os`}>Visualizar OS</Link>{fleet?.canEditFreights || fleet?.canEditFreightFinancials || fleet?.canManagePayments ? <button className="button primary" onClick={() => openEditFreight(viewedFreight)}>Editar frete</button> : null}</>} />
-        <FleetFreightDetail freight={viewedFreight} onSellerChanged={api.refresh} />
+        <FleetFreightDetail freight={viewedFreight} />
       </> : <>
       <PageHeader
         eyebrow="Operação logística"

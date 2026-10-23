@@ -19,7 +19,6 @@ function compile(file, overrides) {
   new Function('require', 'module', 'exports', code)(id => {
     if (Object.hasOwn(overrides, id)) return overrides[id];
     if (id === 'react' || id === 'react/jsx-runtime') return require(id);
-    if(id==='./seller-change-button')return {SellerChangeButton:()=>React.createElement('button',{type:'button'},'Trocar vendedor')};
     if(id==='./provider-report-panel')return {ProviderReportPanel:()=>null};
     if(id==='@/lib/domain/provider-services')return {providerKindLabel:value=>value};
     throw new Error('Unexpected dependency: ' + id);
@@ -434,16 +433,25 @@ test('baixa em lote filtra por cliente, usa saldo restante e preserva a chave na
 });
 
 
-test('troca de vendedor nos detalhes carrega opções sob demanda, envia a atribuição anterior e mantém erro recuperável', async()=>{
- const state=hooks(),calls=[],queries=[];let fail=true,refreshed=0;
- const {SellerChangeButton}=compile('components/seller-change-button.tsx',{
-  react:state.react,'./ui':ui,'./use-api':{useApi:url=>{queries.push(url);return {loading:false,data:{sellers:[{id:'new',name:'NOVO'}]}};},apiMutation:async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});if(fail)throw new Error('O vendedor desta venda mudou.');return {accessTransferred:false};}}
+
+
+test('prestadores: seleção permanece no campo, + abre o próximo e cada valor acompanha seu prestador',()=>{
+ const state=hooks(),providers=[{id:'p1',name:'PRESTADOR UM',referenceName:'PEDRO',active:true},{id:'p2',name:'PRESTADOR DOIS',referenceName:'ANA',active:true},{id:'p3',name:'PRESTADOR TRÊS',referenceName:null,active:true}];
+ let services=[];const queries=[];
+ const {ProviderServicesEditor}=compile('components/provider-services-editor.tsx',{
+  react:state.react,'./ui':ui,'@/lib/format':fullFormat,'@/lib/domain/provider-services':{providerKindLabel:k=>k,PROVIDER_SERVICE_KINDS:['COLETA','ENTREGA','OUTRO']},
+  './use-api':{useApi:url=>{queries.push(url);return {loading:false,data:{providers}};}}
  });
- const render=()=>{state.reset();return SellerChangeButton({source:'freight',id:'123',sellerId:'old',sellerName:'ANTIGO',onChanged:()=>refreshed++});};
- let tree=render();assert.equal(queries.at(-1),null);
- find(tree,n=>n.type==='button'&&n.props.children==='Trocar vendedor').props.onClick();tree=render();assert.equal(queries.at(-1),'/api/sales/sellers?assignment=1');
- find(tree,n=>n.type==='select').props.onChange({target:{value:'new'}});tree=render();
- await find(tree,n=>n.type==='button'&&n.props.children==='Salvar vendedor').props.onClick();tree=render();assert.equal(refreshed,0);assert.ok(find(tree,n=>n.props?.role==='alert'));
- assert.deepEqual(calls[0],{url:'/api/fleet/freights/123/seller',body:{sellerId:'new',previousSellerId:'old'}});
- fail=false;await find(tree,n=>n.type==='button'&&n.props.children==='Salvar vendedor').props.onClick();assert.equal(refreshed,1);
+ const render=(mode='identification')=>{state.reset();return ProviderServicesEditor({services,onChange:rows=>services=rows,mode});};
+ const all=(node,match)=>{if(!node||typeof node!=='object')return [];if(Array.isArray(node))return node.flatMap(n=>all(n,match));return [...(match(node)?[node]:[]),...all(node.props?.children,match)];};
+ let tree=render();assert.equal(all(tree,n=>n.type==='select').length,1);assert.equal(find(tree,n=>n.props?.['aria-label']==='Adicionar prestador').props.children,'+');
+ find(tree,n=>n.type==='select').props.onChange({target:{value:'p1'}});tree=render();const firstId=services[0].id;
+ assert.equal(all(tree,n=>n.type==='select').length,1);assert.equal(find(tree,n=>n.type==='select').props.value,'p1');
+ find(tree,n=>n.props?.['aria-label']==='Adicionar prestador').props.onClick();tree=render();assert.equal(all(tree,n=>n.type==='select').length,2);
+ all(tree,n=>n.type==='select')[1].props.onChange({target:{value:'p2'}});tree=render();assert.equal(services.length,2);assert.equal(services[0].id,firstId);assert.deepEqual(services.map(s=>s.providerId),['p1','p2']);
+ let costs=render('costs');assert.equal(queries.at(-1),null);let amounts=all(costs,n=>n.type?.name==='ProviderAmount');assert.equal(amounts.length,2);
+ assert.match(amounts[0].props.label,/Prestador 1.*PRESTADOR UM/);amounts[0].props.onChange(1234);costs=render('costs');amounts=all(costs,n=>n.type?.name==='ProviderAmount');amounts[1].props.onChange(5678);assert.deepEqual(services.map(s=>s.amountCents),[1234,5678]);
+ tree=render();all(tree,n=>n.type==='select')[0].props.onChange({target:{value:'p3'}});assert.equal(services[0].amountCents,0);assert.equal(services[1].amountCents,5678);
+ tree=render();find(tree,n=>n.props?.['aria-label']==='Remover PRESTADOR TRÊS').props.onClick();costs=render('costs');amounts=all(costs,n=>n.type?.name==='ProviderAmount');assert.equal(amounts.length,1);assert.equal(amounts[0].props.row.providerId,'p2');assert.equal(amounts[0].props.row.amountCents,5678);
+ tree=render();find(tree,n=>n.props?.['aria-label']==='Remover PRESTADOR DOIS').props.onClick();assert.equal(render('costs'),null);assert.equal(all(render(),n=>n.type==='select').length,1);
 });

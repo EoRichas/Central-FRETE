@@ -28,6 +28,6 @@ function ReportFreightDetail({id, onBack, onViewOrder}: {id: string; onBack: () 
     <PageHeader eyebrow={freight ? `Venda ${freight.saleNumber}` : 'Venda Frota'} title="Detalhes da venda"
       description={freight ? `${freight.origin} → ${freight.destination}` : undefined}
       actions={<><button type="button" className="button secondary" onClick={onBack}>Voltar ao relatório</button>{freight && me.data && roleCan(me.data.user.role, 'VIEW_SERVICE_ORDERS') && <button type="button" className="button secondary" onClick={onViewOrder}>Visualizar OS</button>}</>} />
-    {api.loading || me.loading ? <LoadingState label="Carregando detalhes da venda…" /> : api.error ? <ErrorState message={api.error} retry={api.refresh} /> : me.error ? <ErrorState message={me.error} retry={me.refresh} /> : freight ? <FleetFreightDetail freight={freight} onSellerChanged={api.refresh} /> : null}
+    {api.loading || me.loading ? <LoadingState label="Carregando detalhes da venda…" /> : api.error ? <ErrorState message={api.error} retry={api.refresh} /> : me.error ? <ErrorState message={me.error} retry={me.refresh} /> : freight ? <FleetFreightDetail freight={freight} /> : null}
   </>;
 }
