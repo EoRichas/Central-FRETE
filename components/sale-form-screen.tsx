@@ -111,7 +111,8 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
   const [cargoVehicles, setCargoVehicles] = useState(() => cargoVehiclesOrLegacy(initialSale?.cargoVehicles, initialSale?.vehicle ?? null, initialSale?.plate ?? null));
   const [fleetFreightId, setFleetFreightId] = useState(initialSale?.fleetFreightId ?? '');
   const meApi = useApi<{ user: CurrentUser }>("/api/me");
-  const sellersApi = useApi<{sellers: {id: string; name: string; commissionBasisPoints: number}[]}>(["ADMIN", "FINANCEIRO"].includes(meApi.data?.user.role ?? "") ? "/api/sales/sellers" : null);
+  const canChooseSeller=Boolean(meApi.data)&&(editing||["ADMIN","FINANCEIRO"].includes(meApi.data?.user.role??""));
+  const sellersApi = useApi<{sellers: {id: string; name: string; commissionBasisPoints: number}[]}>(canChooseSeller?(editing&&!["ADMIN","FINANCEIRO"].includes(meApi.data?.user.role??"")?"/api/sales/sellers?assignment=1":"/api/sales/sellers"):null);
   const [sellerId, setSellerId] = useState(initialSale ? initialSale.sellerId ?? "historical" : "");
   const canCreateClient = Boolean(meApi.data && roleCan(meApi.data.user.role, "MANAGE_CLIENTS"));
   const fleetOptions = useApi<{freights: {id:string;label:string}[]}>(saleChannel === "FROTA" && ["ADMIN", "FINANCEIRO"].includes(meApi.data?.user.role ?? "") ? "/api/sales/fleet-options" : null);
@@ -139,7 +140,8 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
   );
   const isAdmin = ['ADMIN', 'FINANCEIRO'].includes(meApi.data?.user.role ?? '');
   const canEditStatus = isAdmin || (editing && ['VENDEDOR','OPERACIONAL'].includes(meApi.data?.user.role ?? ''));
-  const canSeeCommission = ['ADMIN','VENDEDOR'].includes(meApi.data?.user.role ?? '') || (meApi.data?.user.role === 'OPERACIONAL' && (!editing || initialSale?.sellerId === meApi.data.user.id));
+  const sellerChanged=editing&&sellerId!==(initialSale?.sellerId??'historical');
+  const canSeeCommission = (['ADMIN','VENDEDOR'].includes(meApi.data?.user.role ?? '') || (meApi.data?.user.role === 'OPERACIONAL' && (!editing || initialSale?.sellerId === meApi.data.user.id)))&&(!sellerChanged||meApi.data?.user.role==='ADMIN');
   const [commissionValue, setCommissionValue] = useState<string | null>(initialSale?.commissionOverrideCents == null ? null : centsToInput(initialSale.commissionOverrideCents));
   const commissionBasisPoints = editing && sellerId === (initialSale?.sellerId ?? 'historical')
     ? initialSale?.commissionBasisPoints ?? 0
@@ -220,6 +222,7 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
       const payload = {
         cargoVehicles, fleetFreightId: fleetFreightId || null,
         saleChannel, sellerId: sellerId === "historical" ? null : sellerId,
+        ...(editing?{previousSellerId:initialSale?.sellerId??null}:{}),
         saleDate: form.get("saleDate"),
         billingDate: saleChannel === "FROTA" ? form.get("billingDate") || null : initialSale?.billingDate ?? null,
         sellerName: sellersApi.data?.sellers.find(s => s.id === sellerId)?.name ?? initialSale?.sellerName,
@@ -244,7 +247,7 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
         costs: costPayload(),
       };
 
-      const result = await apiMutation<{ id?: string }>(
+      const result = await apiMutation<{ id?: string;accessTransferred?:boolean }>(
         editing ? `/api/sales/${initialSale!.id}` : "/api/sales",
         {
           method: editing ? "PATCH" : "POST",
@@ -252,6 +255,7 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
           body: JSON.stringify(payload),
         },
       );
+      if(result.accessTransferred){router.replace(listHref);router.refresh();return;}
       router.push(`/vendas/${initialSale?.id ?? result.id}`);
     } catch (submitError) {
       setError(
@@ -324,7 +328,7 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
               <Field label="Número da venda" hint="Sequência automática compartilhada entre Cegonha e Frota."><input value={initialSale?.saleNumber ?? "Automático ao salvar"} readOnly /></Field>
               {saleChannel === "FROTA" && <Field label="Data do faturamento" hint={fleetFreightId ? "No faturamento, prevalece a data da operação vinculada." : "Preencha quando a venda for faturada."}><input name="billingDate" type="date" defaultValue={initialSale?.billingDate ?? ""}/></Field>}
               <Field label="Data da venda"><input name="saleDate" type="date" defaultValue={initialSale?.saleDate ?? today} required /></Field>
-              {isAdmin && <Field label="Vendedor"><select value={sellerId} onChange={e=>setSellerId(e.target.value)} required><option value="">Selecione um vendedor</option>{initialSale && !sellersApi.data?.sellers.some(s=>s.id===initialSale.sellerId) && <option value={initialSale.sellerId ?? 'historical'}>{initialSale.sellerName} (histórico)</option>}{sellersApi.data?.sellers.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select>{sellersApi.error && <span role="alert">{sellersApi.error}</span>}</Field>}
+              {canChooseSeller && <Field label="Vendedor"><select disabled={sellersApi.loading||Boolean(sellersApi.error)} value={sellerId} onChange={e=>setSellerId(e.target.value)} required><option value="">Selecione um vendedor</option>{initialSale && !sellersApi.data?.sellers.some(s=>s.id===initialSale.sellerId) && <option value={initialSale.sellerId ?? 'historical'}>{initialSale.sellerName} (histórico)</option>}{sellersApi.data?.sellers.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select>{sellerChanged&&<small>A troca será salva com o frete. Comissão automática pelo novo cadastro; valores combinados e baixas são preservados.</small>}{sellersApi.error && <span role="alert">{sellersApi.error}</span>}</Field>}
               {saleChannel === "FROTA" && <Field label="Situação do serviço"><select name="serviceSituation" defaultValue={initialSale?.serviceSituation ?? ""} required><option value="">Selecione</option>{FLEET_RELATION_SITUATIONS.map(value => <option key={value} value={value}>{value}</option>)}</select></Field>}
               {canEditStatus && <Field label="Status operacional"><select name="operationalStatus" defaultValue={initialSale?.operationalStatus ?? "CONFIRMAR"}>{OPERATIONAL_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></Field>}
               <Field label="Prestador inicial"><input name="initialProviderName" defaultValue={initialSale?.initialProviderName ?? ""} /></Field>

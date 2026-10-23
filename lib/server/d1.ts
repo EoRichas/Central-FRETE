@@ -29,7 +29,7 @@ type Prepared = D1PreparedStatement & {
 
 type Database = {
   prepare: (query: string) => Prepared;
-  batch: <T = Record<string, unknown>>(statements: D1PreparedStatement[]) => Promise<QueryResult<T>[]>;
+  batch: <T = Record<string, unknown>>(statements: D1PreparedStatement[], before?: (queries:TransactionQueries)=>Promise<void>) => Promise<QueryResult<T>[]>;
 };
 
 const statementData = new WeakMap<D1PreparedStatement, { query: string; params: unknown[] }>();
@@ -115,9 +115,13 @@ function prepared(query: string, params: unknown[] = []): Prepared {
 export async function getD1(): Promise<Database> {
   return {
     prepare: (query: string) => prepared(query),
-    batch: async <T = Record<string, unknown>>(statements: D1PreparedStatement[]) => {
+    batch: async <T = Record<string, unknown>>(statements: D1PreparedStatement[], before?: (queries:TransactionQueries)=>Promise<void>) => {
       try {
         return await runDatabase((client) => client.begin(async (transaction) => {
+          if(before){
+            const all=async <Row>(sql:string,params:unknown[]=[])=>queryResult<Row>(await transaction.unsafe(toPostgresSql(sql),params as never[])).results;
+            await before({queryAll:all,queryFirst:async <Row>(sql:string,params:unknown[]=[])=>((await all<Row>(sql,params))[0]??null)});
+          }
           const results: QueryResult<T>[] = [];
           for (const statement of statements) {
             const data = statementData.get(statement);

@@ -1,5 +1,5 @@
 import { parseProviderServices } from '@/lib/server/provider-services';
-import { resolveSaleSeller } from '@/lib/server/seller-commission';
+import { resolveSaleSeller,resolveEditedSeller,sellerEditGuard } from '@/lib/server/seller-commission';
 import { booleanValue } from '@/lib/server/fleet-validation';
 import { assertFleetAccess, freightForViewer, saleCommissionOverride } from "@/lib/server/seller-commission";
 import { loadFleetData } from "@/lib/server/fleet";
@@ -99,7 +99,10 @@ export async function PATCH(request: Request, context: RouteContext) {
     const providerServices=await parseProviderServices(payload.providerServices,previous.providerServices);
     const returnFreight=payload.returnFreight===undefined?previous.returnFreight:booleanValue(payload.returnFreight,'Frete retorno');
     let sellerAssignment: Awaited<ReturnType<typeof resolveSaleSeller>>|null=null;
-    if(!previous.sellerId&&!previous.sellerName&&payload.sellerId){
+    if(Object.hasOwn(payload,'previousSellerId')){
+      const seller=await resolveEditedSeller(user,payload,{sellerId:previous.sellerId,sellerName:previous.sellerName??'',commissionBasisPoints:previous.sellerCommissionBasisPoints});
+      if(seller.id!==previous.sellerId)sellerAssignment=seller;
+    }else if(!previous.sellerId&&!previous.sellerName&&payload.sellerId){
       if(!['ADMIN','FINANCEIRO','OPERACIONAL'].includes(user.role)||(user.role==='OPERACIONAL'&&payload.sellerId!==user.id))throw new ApiError(403,'Seu perfil não pode atribuir este vendedor.');
       sellerAssignment=await resolveSaleSeller(user,payload);
     }
@@ -107,7 +110,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       cargoVehicles: payload.cargoVehicles === undefined ? previous.cargoVehicles ?? undefined : payload.cargoVehicles });
     if (user.role === "VENDEDOR" && submitted.tripId !== previous.tripId) throw new ApiError(403, "Seu perfil não pode alterar o vínculo de viagem administrativa.");
     const data = submitted;
-    const commissionOverrideCents = saleCommissionOverride(user, payload.sellerCommissionOverrideCents, previous.sellerCommissionOverrideCents, sellerAssignment?.id??previous.sellerId);
+    const commissionOverrideCents = saleCommissionOverride(user, payload.sellerCommissionOverrideCents, previous.sellerCommissionOverrideCents, previous.sellerId);
     Object.assign(data, await resolveFreightClient(data, previous));
     const { vehicle, driver } = await resolveFleetReferences(
       data.vehicleId,
@@ -184,8 +187,8 @@ export async function PATCH(request: Request, context: RouteContext) {
           JSON.stringify(next),
           request.headers.get("x-request-id") ?? crypto.randomUUID(),
         ),
-    ]);
-    return Response.json({ id, updated: true });
+    ],sellerEditGuard(user,payload,'freight',id));
+    return Response.json({ id, updated: true,accessTransferred:Boolean(sellerAssignment&&user.role==='VENDEDOR'&&sellerAssignment.id!==user.id) });
   } catch (error) {
     return jsonError(error);
   }
