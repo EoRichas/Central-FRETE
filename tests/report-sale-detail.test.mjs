@@ -149,6 +149,53 @@ test('Novo frete aparece só em Fretes e a explicação abre e fecha em modal', 
   find(tree,n=>n.type==='button'&&n.props.children==='Ver todos').props.onClick();tree=render();assert.ok(create(tree));
 });
 
+test('fretes filtra vendedor ao lado de prioridade, combinando filtros e preservando identidades e histórico', () => {
+  const state = hooks(); state.react.useMemo = fn => fn();
+  const noOp = () => null, mod = new Proxy({}, {get: () => noOp}), FreightTable = () => null;
+  const source = readFileSync(new URL('../components/fleet-screen.tsx', import.meta.url), 'utf8');
+  const overrides = Object.fromEntries([...source.matchAll(/from\s+["']([^"']+)["']/g)].map(m => [m[1], mod]));
+  const row = (id, sellerId, sellerName, extra = {}) => ({id, sellerId, sellerName, clientName: 'CLIENTE M1', priority: 'URGENTE', operationalStatus: 'EM_ROTA', ...extra});
+  const freights = [
+    row('1', 'a', 'ANA'), row('2', 'a', 'ANA', {priority: 'NORMAL'}),
+    row('3', 'a', 'ANA', {operationalStatus: 'ENTREGUE'}), row('4', 'b', 'ANA'),
+    row('5', null, 'HISTÓRICO'), row('6', null, null),
+    row('7', 'a', 'ANA', {clientName: 'OUTRO CLIENTE'}),
+  ];
+  const endpoints = [];
+  Object.assign(overrides, {
+    react: state.react, '@/components/ui': ui, '@/lib/format': format,
+    '@/lib/domain/permissions': permissions, '@/lib/domain/cargo-vehicles': {cargoVehiclesOrLegacy: () => []},
+    '@/lib/domain/dates': {currentCompetency: () => '2026-10'}, '@/components/icons': {Icons: new Proxy({}, {get: () => icon})},
+    '@/lib/domain/fleet': fleetDomain, '@/components/fleet-freight-table': {FreightTable},
+    '@/components/use-transient-message': {useTransientMessage: () => [null, noOp]},
+    '@/components/use-api': {useApi: url => {
+      endpoints.push(url);
+      return url === '/api/me' ? {data: {user: {role: 'OPERACIONAL'}}} : {data: {fleet: {freightOnly: true, freights, billing: {freights: []}, summary: {}}}};
+    }},
+  });
+  const {FleetScreen} = compile('components/fleet-screen.tsx', overrides);
+  const inner = FleetScreen().type, render = () => {state.reset(); return inner();};
+  const select = (tree, label) => find(find(tree, n => n.type === 'label' && n.props.children?.[0]?.props.children === label), n => n.type === 'select');
+  const change = (tree, label, value) => select(tree, label).props.onChange({target: {value}});
+  const ids = tree => find(tree, n => n.type === FreightTable).props.freights.map(f => f.id);
+  let tree = render();
+  const panel = find(tree, n => n.props?.className === 'filter-panel fleet-filter-panel');
+  assert.deepEqual(panel.props.children.filter(n => n.type === 'label').map(n => n.props.children[0].props.children), ['Buscar', 'Status', 'Prioridade', 'Vendedor']);
+  const options = React.Children.toArray(select(tree, 'Vendedor').props.children);
+  assert.deepEqual(options.map(n => n.props.value), ['', 'id:a', 'id:b', 'name:HISTÓRICO', 'unassigned']);
+  change(tree, 'Vendedor', 'id:a'); tree = render(); assert.deepEqual(ids(tree), ['1', '2', '3', '7']);
+  change(tree, 'Prioridade', 'URGENTE'); tree = render(); assert.deepEqual(ids(tree), ['1', '3', '7']);
+  change(tree, 'Status', 'EM_ROTA'); tree = render(); assert.deepEqual(ids(tree), ['1', '7']);
+  find(tree, n => n.type === 'input' && n.props.placeholder).props.onChange({target: {value: ' m1 '}});
+  tree = render(); assert.deepEqual(ids(tree), ['1']);
+  assert.equal(find(tree, n => n.props?.className === 'filter-stat').props.children[0].props.children, 1);
+  change(tree, 'Vendedor', 'id:b'); tree = render(); assert.deepEqual(ids(tree), ['4']);
+  change(tree, 'Vendedor', 'name:HISTÓRICO'); tree = render(); assert.deepEqual(ids(tree), ['5']);
+  change(tree, 'Vendedor', 'unassigned'); tree = render(); assert.deepEqual(ids(tree), ['6']);
+  change(tree, 'Vendedor', ''); tree = render(); assert.deepEqual(ids(tree), ['1', '4', '5', '6']);
+  assert.ok(endpoints.every(url => ['/api/me', '/api/fleet?competency=2026-10'].includes(url)));
+});
+
 test('Adicionar Observação limita a OS à venda atual, inclusive em vendas vinculadas, e usa a prévia gerada', () => {
   const OrderObservationsDialog=()=>null;
   for (const [source,id,rowId,expected] of [['fleet','record','record','freight:record'],['sale','record','record','sale:record'],['sale','commercial','operation','freight:operation']]) {
@@ -328,7 +375,7 @@ test('barra lateral permite edição e configurações pessoais, mas preserva o 
  }
 });
 
-test('edição do vendedor envia o status selecionado sem reabrir a venda ou mostrar troca de vendedor', async () => {
+test('edição do vendedor preserva o status selecionado e permite selecionar o responsável', async () => {
  const state=hooks(),calls=[],noOp=()=>null,mod=new Proxy({},{get:()=>noOp});
  const src=readFileSync(new URL('../components/sale-form-screen.tsx',import.meta.url),'utf8');const overrides=Object.fromEntries([...src.matchAll(/from\s+["']([^"']+)["']/g)].map(m=>[m[1],mod]));
  Object.assign(overrides,{
@@ -341,7 +388,7 @@ test('edição do vendedor envia o status selecionado sem reabrir a venda ou mos
  const {SaleFormScreen}=compile('components/sale-form-screen.tsx',overrides);
  const tree=SaleFormScreen({initialSale:{id:'234',sellerId:'seller',sellerName:'VENDEDOR',saleChannel:'CEGONHA',saleNumber:'234',clientId:'client',clientName:'CLIENTE',freightAmountCents:10000,commissionBasisPoints:700,costs:[],installments:[],operationalStatus:'FINALIZADO'}});
  assert.equal(find(tree,n=>n.type==='select'&&n.props.name==='operationalStatus').props.defaultValue,'FINALIZADO');
- assert.equal(find(tree,n=>n.props?.label==='Vendedor'),null);
+ assert.ok(find(tree,n=>n.props?.label==='Vendedor'));
  const original=globalThis.FormData;globalThis.FormData=class {get(key){return {operationalStatus:'FINALIZADO',saleDate:'2026-10-22',financialDueDate:'2026-10-30',paymentMethod:'PIX'}[key]??'';}};
  try {await find(tree,n=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{}});assert.equal(calls.length,1);assert.equal(calls[0].body.operationalStatus,'FINALIZADO');assert.equal(calls[0].body.sellerId,'seller');}
  finally {globalThis.FormData=original;}
@@ -454,4 +501,33 @@ test('prestadores: seleção permanece no campo, + abre o próximo e cada valor 
  tree=render();all(tree,n=>n.type==='select')[0].props.onChange({target:{value:'p3'}});assert.equal(services[0].amountCents,0);assert.equal(services[1].amountCents,5678);
  tree=render();find(tree,n=>n.props?.['aria-label']==='Remover PRESTADOR TRÊS').props.onClick();costs=render('costs');amounts=all(costs,n=>n.type?.name==='ProviderAmount');assert.equal(amounts.length,1);assert.equal(amounts[0].props.row.providerId,'p2');assert.equal(amounts[0].props.row.amountCents,5678);
  tree=render();find(tree,n=>n.props?.['aria-label']==='Remover PRESTADOR DOIS').props.onClick();assert.equal(render('costs'),null);assert.equal(all(render(),n=>n.type==='select').length,1);
+});
+
+test('editar frete mantém seleção de vendedor na Frota e Cegonha e envia a troca junto com a edição',async()=>{
+ const OriginalFormData=globalThis.FormData;
+ globalThis.FormData=class{get(key){return ({saleDate:'2026-10-23',financialDueDate:'2026-10-31',pickupDate:'2026-10-23',origin:'ORIGEM',destination:'DESTINO',vehicleId:'truck',driverId:'driver',operationalStatus:'CONFIRMAR',priority:'NORMAL',paymentMethod:'PIX',serviceSituation:'ENTREGA',notes:'EDITADO JUNTO'})[key]??null;}};
+ try{
+  for(const kind of ['fleet','sale'])for(const role of ['ADMIN','FINANCEIRO','OPERACIONAL','VENDEDOR']){
+   const state=hooks(),calls=[],queries=[],noOp=()=>null,mod=new Proxy({},{get:()=>noOp});
+   const file=kind==='fleet'?'components/fleet-freight-modal.tsx':'components/sale-form-screen.tsx',source=readFileSync(new URL('../'+file,import.meta.url),'utf8');
+   const overrides=Object.fromEntries([...source.matchAll(/from\s+["']([^"']+)["']/g)].map(m=>[m[1],mod]));
+   Object.assign(overrides,{
+    react:state.react,'@/components/ui':ui,'@/lib/format':fullFormat,'@/lib/domain/fleet':fleetDomain,'@/lib/domain/number-input':numberInput,
+    '@/lib/domain/operations':operations,'@/lib/domain/permissions':permissions,'@/lib/domain/fleet-client-report':clientReport,'@/lib/domain/finance':{commissionCents:()=>0},
+    '@/lib/domain/dates':{todaySaoPaulo:()=>'2026-10-23'},'@/lib/domain/cargo-vehicles':{cargoVehiclesOrLegacy:()=>[{model:'CARRO',plate:'AAA1A11'}]},
+    '@/lib/domain/fleet-distance':{effectiveFleetDistance:v=>v.distanceMeters||0},'@/lib/domain/fuel-input':{fuelInputToInteger:v=>v?fullFormat.moneyInputToCents(v):null},
+    'next/navigation':{useRouter:()=>({push:()=>{}})},
+    '@/components/use-api':{useApi:url=>{queries.push(url);return {loading:false,data:url==='/api/me'?{user:{id:role==='VENDEDOR'?'owner':role.toLowerCase(),role}}:{sellers:[{id:'owner',name:'ATUAL',commissionBasisPoints:700},{id:'next',name:'NOVO',commissionBasisPoints:350}]}};},apiMutation:async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});return {id:'234',accessTransferred:false};}},
+   });
+   const exports=compile(file,overrides),record={id:'234',saleNumber:'234',sellerId:'owner',sellerName:'ATUAL',sellerCommissionBasisPoints:700,sellerCommissionOverrideCents:0,commissionBasisPoints:700,commissionOverrideCents:0,saleChannel:'CEGONHA',cargoVehicles:[],costs:[],installments:[],vehicleId:'truck',driverId:'driver',clientId:'client',clientName:'CLIENTE',distanceMeters:10000,freightAmountCents:100000,tollCents:0,driverCommissionCents:0,pickupDate:'2026-10-23',saleDate:'2026-10-23',operationalStatus:'CONFIRMAR',priority:'NORMAL'};
+   const fleet={parameters:fleetDomain.DEFAULT_FLEET_PARAMETERS,vehicles:[{id:'truck',active:true}],drivers:[{id:'driver',active:true}],canEditFreights:true};
+   const render=()=>{state.reset();return kind==='fleet'?exports.FreightModal({freight:record,fleet,onClose:()=>{},onSaved:()=>{},onDelete:()=>{}}):exports.SaleFormScreen({initialSale:record});};
+   let tree=render();let field=find(tree,n=>n.props?.label==='Vendedor');assert.ok(field,kind+role);assert.equal(find(field,n=>n.type==='select').props.value,'owner');
+   find(field,n=>n.type==='select').props.onChange({target:{value:'next'}});tree=render();field=find(tree,n=>n.props?.label==='Vendedor');assert.equal(find(field,n=>n.type==='select').props.value,'next');
+   assert.ok(queries.includes(['OPERACIONAL','VENDEDOR'].includes(role)?'/api/sales/sellers?assignment=1':'/api/sales/sellers'));
+   await find(tree,n=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{}});
+   assert.equal(calls.length,1,kind+role);assert.equal(calls[0].body.sellerId,'next');assert.equal(calls[0].body.previousSellerId,'owner');assert.equal(calls[0].body.notes,'EDITADO JUNTO');
+   if(role!=='ADMIN')assert.equal(Object.hasOwn(calls[0].body,kind==='fleet'?'sellerCommissionOverrideCents':'commissionOverrideCents'),false);
+  }
+ }finally{globalThis.FormData=OriginalFormData;}
 });

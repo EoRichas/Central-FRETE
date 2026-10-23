@@ -43,6 +43,12 @@ import {
 
 type FleetTab = "overview" | "freights" | "assets" | "monthly" | "billing" | "report";
 
+function sellerFilterValue(freight: FleetFreight) {
+  if (freight.sellerId) return `id:${freight.sellerId}`;
+  const name = freight.sellerName?.trim();
+  return name ? `name:${name}` : "unassigned";
+}
+
 export function FleetScreen() {
   const me = useApi<{user: CurrentUser}>("/api/me");
   if (me.loading) return <LoadingState label="Carregando acesso à Frota…" />;
@@ -70,6 +76,7 @@ function FleetOperationsScreen() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [priority, setPriority] = useState("");
+  const [seller, setSeller] = useState("");
   const [freightModalOpen, setFreightModalOpen] = useState(false);
   const [editingFreight, setEditingFreight] = useState<FleetFreight | null>(
     null,
@@ -82,6 +89,14 @@ function FleetOperationsScreen() {
   const [editingDriver, setEditingDriver] = useState<FleetDriver | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [success, setSuccess] = useTransientMessage();
+
+  const sellerOptions = useMemo(() => {
+    const options = new Map<string, string>();
+    for (const freight of fleet?.freights ?? []) {
+      options.set(sellerFilterValue(freight), freight.sellerName?.trim() || "Não informado");
+    }
+    return [...options].sort((a, b) => a[1].localeCompare(b[1], "pt-BR"));
+  }, [fleet]);
 
   const filteredFreights = useMemo(() => {
     const normalized = search.trim().toLocaleUpperCase("pt-BR");
@@ -106,10 +121,11 @@ function FleetOperationsScreen() {
       return (
         matchesSearch &&
         (!status || freight.operationalStatus === status) &&
-        (!priority || freight.priority === priority)
+        (!priority || freight.priority === priority) &&
+        (!seller || sellerFilterValue(freight) === seller)
       );
     });
-  }, [fleet, priority, search, status]);
+  }, [fleet, priority, search, seller, status]);
 
   function openNewFreight() {
     setEditingFreight(null);
@@ -337,6 +353,18 @@ function FleetOperationsScreen() {
                       <option key={item} value={item}>
                         {FLEET_PRIORITY_LABELS[item]}
                       </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>Vendedor</span>
+                  <select
+                    value={seller}
+                    onChange={(event) => setSeller(event.target.value)}
+                  >
+                    <option value="">Todos</option>
+                    {sellerOptions.map(([value, name]) => (
+                      <option key={value} value={value}>{name}</option>
                     ))}
                   </select>
                 </label>

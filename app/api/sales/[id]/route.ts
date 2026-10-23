@@ -1,5 +1,5 @@
 import { parseServiceSituation } from '@/lib/server/fleet-service-situation';
-import { resolveSaleSeller, saleForViewer, saleCommissionOverride } from "@/lib/server/seller-commission";
+import { resolveEditedSeller, sellerEditGuard, saleForViewer, saleCommissionOverride } from "@/lib/server/seller-commission";
 import { validateSaleClient } from "@/lib/server/registry-validation";
 import { drainStorageCleanup } from "@/lib/server/storage-cleanup";
 import { parseSaleCargo } from "@/lib/server/sale-cargo";
@@ -267,9 +267,9 @@ export async function PATCH(request: Request, context: RouteContext) {
       throw new ApiError(400, "Cada prestador deve ocupar uma linha diferente.");
     }
 
-    const seller = await resolveSaleSeller(user, payload, sale);
+    const seller = await resolveEditedSeller(user, payload, sale);
     const sellerName = seller.name, sellerId = seller.id, commissionBasisPoints = seller.commissionBasisPoints;
-    const commissionOverrideCents = saleCommissionOverride(user, payload.commissionOverrideCents, sale.commissionOverrideCents ?? null, sellerId);
+    const commissionOverrideCents = saleCommissionOverride(user, payload.commissionOverrideCents, sale.commissionOverrideCents ?? null, sale.sellerId);
     const serviceSituation = sale.saleChannel === 'FROTA' ? parseServiceSituation(payload.serviceSituation === undefined ? sale.serviceSituation : payload.serviceSituation) : null;
     const costsPending = costs.some((cost) => !cost.confirmed);
     const db = await getD1();
@@ -428,8 +428,8 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     statements.push(db.prepare('update freight_sales set service_situation=? where id=?').bind(serviceSituation,id));
     if (cargo.fleetFreightId && payload.serviceSituation !== undefined) statements.push(db.prepare('update fleet_freights set service_situation=? where id=?').bind(serviceSituation,cargo.fleetFreightId));
-    await db.batch(statements);
-    return Response.json({ id, updated: true });
+    await db.batch(statements,sellerEditGuard(user,payload,'sale',id,sale.fleetFreightId));
+    return Response.json({ id, updated: true, accessTransferred:user.role==='VENDEDOR'&&sellerId!==user.id });
   } catch (error) {
     if (error instanceof Error && error.message.includes("UNIQUE constraint")) {
       return Response.json(

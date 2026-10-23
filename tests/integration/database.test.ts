@@ -27,7 +27,8 @@ mock.module('../../lib/server/d1.ts', { namedExports: {
   const all=async <T>(q:string,p:unknown[]=[])=>((await tx.query(toPostgresSql(q),p)).rows.map(normalizeDatabaseValue) as T[]);
   return work({queryAll:all,queryFirst:async <T>(q:string,p:unknown[]=[])=>((await all<T>(q,p))[0]??null)});
  }),
- getD1: async () => ({prepare, batch: async (statements: ReturnType<typeof prepare>[]) => pg.transaction(async tx => {
+ getD1: async () => ({prepare, batch: async (statements: ReturnType<typeof prepare>[],before?:(db:{queryAll:<T>(q:string,p?:unknown[])=>Promise<T[]>;queryFirst:<T>(q:string,p?:unknown[])=>Promise<T|null>})=>Promise<void>) => pg.transaction(async tx => {
+  if(before){const all=async <T>(q:string,p:unknown[]=[])=>((await tx.query(toPostgresSql(q),p)).rows.map(normalizeDatabaseValue) as T[]);await before({queryAll:all,queryFirst:async <T>(q:string,p:unknown[]=[])=>((await all<T>(q,p))[0]??null)});}
   const results = [];
   for (const s of statements) results.push({success: true, results: (await tx.query(toPostgresSql(s.query), s.params)).rows.map(normalizeDatabaseValue)});
   return results;
@@ -2161,4 +2162,37 @@ test('troca de vendedor: todos os perfis transferem registros acessíveis, sem m
  assert.equal((await transferFreight.PATCH(await request('/api/fleet/freights/x/seller','change-finance','PATCH',{sellerId:'oct23-seller',previousSellerId:'oct23-op'}),ctx)).status,200);
  assert.equal((await queryFirst('select seller_id from freight_sales where id=?',[sid]) as {seller_id:string}).seller_id,'oct23-seller');
  assert.ok((await queryAll("select id from audit_logs where action='SELLER_CHANGED' and entity_id=?",[id])).length>=2);
+});
+
+test('editar frete permite trocar vendedor na Cegonha e Frota, salva vínculos juntos e preserva comissão combinada',async()=>{
+ await oct23Fixtures();
+ await pg.exec("insert into users(id,email,name,role,commission_basis_points) values ('edit-owner','edit-owner@example.test','VENDEDOR EDIÇÃO','VENDEDOR',900),('edit-target','edit-target@example.test','VENDEDOR DESTINO','VENDEDOR',350),('edit-op','edit-op@example.test','OPERACIONAL EDIÇÃO','OPERACIONAL',500),('edit-admin','edit-admin@example.test','ADMIN EDIÇÃO','ADMIN',0),('edit-finance','edit-finance@example.test','FINANCEIRO EDIÇÃO','FINANCEIRO',0),('edit-inactive','edit-inactive@example.test','INATIVO EDIÇÃO','VENDEDOR',700);update users set active=0 where id='edit-inactive';");
+ const sales=await import('../../app/api/sales/route.ts'),saleEdit=await import('../../app/api/sales/[id]/route.ts'),freights=await import('../../app/api/fleet/freights/route.ts'),freightEdit=await import('../../app/api/fleet/freights/[id]/route.ts');
+ const body={...salePayload,saleDate:'2094-02-01',financialDueDate:'2094-02-28',clientId:'oct23-client-a',commissionOverrideCents:0};
+ for(const actor of ['edit-admin','edit-finance','edit-op','edit-owner']){
+  const created=await sales.POST(await request('/api/sales','edit-owner','POST',body));assert.equal(created.status,201,await created.clone().text());const sid=(await created.json()).id,sctx={params:Promise.resolve({id:sid})};
+  const original=await queryFirst('select sale_number,freight_amount_cents,commission_override_cents from freight_sales where id=?',[sid]);
+  await pg.query("insert into sale_commission_payments(source_kind,source_id,status,paid_by) values('sale',$1,'PAGO','edit-admin')",[sid]);
+  const save=await saleEdit.PATCH(await request('/api/sales/x',actor,'PATCH',{...body,commissionOverrideCents:undefined,sellerId:'edit-target',previousSellerId:'edit-owner',commissionBasisPoints:9999,sellerName:'FORJADO',notes:'EDITADO JUNTO'}),sctx);assert.equal(save.status,200,await save.clone().text());assert.equal((await save.json()).accessTransferred,actor==='edit-owner');
+  assert.deepEqual(await queryFirst('select sale_number,freight_amount_cents,commission_override_cents from freight_sales where id=?',[sid]),original);
+  assert.deepEqual(await queryFirst('select seller_id,seller_name,commission_basis_points,notes from freight_sales where id=?',[sid]),{seller_id:'edit-target',seller_name:'VENDEDOR DESTINO',commission_basis_points:350,notes:'EDITADO JUNTO'});
+  assert.equal((await queryFirst('select status from sale_commission_payments where source_id=?',[sid]) as {status:string}).status,'PAGO');
+  assert.equal((await saleEdit.GET(await request('/api/sales/x','edit-owner'),sctx)).status,404);
+  const f=await freights.POST(await request('/api/fleet/freights','edit-owner','POST',{...oct23Freight,sellerCommissionOverrideCents:0}));assert.equal(f.status,201);const fid=(await f.json()).id,fctx={params:Promise.resolve({id:fid})};
+  const update=await freightEdit.PATCH(await request('/api/fleet/freights/x',actor,'PATCH',{sellerId:'edit-target',previousSellerId:'edit-owner',sellerCommissionBasisPoints:9999,notes:'FROTA ALTERADA'}),fctx);assert.equal(update.status,200,await update.clone().text());assert.equal((await update.json()).accessTransferred,actor==='edit-owner');
+  assert.deepEqual(await queryFirst('select seller_id,seller_name,seller_commission_basis_points,seller_commission_override_cents,notes from fleet_freights where id=?',[fid]),{seller_id:'edit-target',seller_name:'VENDEDOR DESTINO',seller_commission_basis_points:350,seller_commission_override_cents:0,notes:'FROTA ALTERADA'});
+ }
+ const made=await freights.POST(await request('/api/fleet/freights','edit-owner','POST',oct23Freight));const fid=(await made.json()).id,fctx={params:Promise.resolve({id:fid})};
+ const linked=await sales.POST(await request('/api/sales','edit-admin','POST',{...body,saleChannel:'FROTA',fleetFreightId:fid,sellerId:'edit-owner'}));assert.equal(linked.status,201,await linked.clone().text());const sid=(await linked.json()).id,sctx={params:Promise.resolve({id:sid})};
+ const linkedBody={...body,commissionOverrideCents:undefined,saleChannel:'FROTA',fleetFreightId:fid,sellerId:'edit-target',previousSellerId:'edit-owner'};
+ assert.equal((await saleEdit.PATCH(await request('/api/sales/x','edit-owner','PATCH',{...linkedBody,sellerId:'edit-inactive'}),sctx)).status,400);
+ const moved=await saleEdit.PATCH(await request('/api/sales/x','edit-owner','PATCH',linkedBody),sctx);assert.equal(moved.status,200,await moved.clone().text());
+ for(const [table,id] of [['freight_sales',sid],['fleet_freights',fid]])assert.equal((await queryFirst(`select seller_id from ${table} where id=?`,[id]) as {seller_id:string}).seller_id,'edit-target');
+ assert.equal((await freightEdit.PATCH(await request('/api/fleet/freights/x','edit-admin','PATCH',{sellerId:'edit-op',previousSellerId:'edit-owner',notes:'NÃO SALVA'}),fctx)).status,409);
+ const back=await freightEdit.PATCH(await request('/api/fleet/freights/x','edit-target','PATCH',{sellerId:'edit-op',previousSellerId:'edit-target'}),fctx);assert.equal(back.status,200,await back.clone().text());
+ for(const [table,id] of [['freight_sales',sid],['fleet_freights',fid]])assert.equal((await queryFirst(`select seller_id from ${table} where id=?`,[id]) as {seller_id:string}).seller_id,'edit-op');
+ assert.equal((await freightEdit.PATCH(await request('/api/fleet/freights/x','edit-owner','PATCH',{sellerId:'edit-owner',previousSellerId:'edit-op'}),fctx)).status,404);
+ await pg.exec("alter table audit_logs add constraint edit_seller_rollback check(action<>'UPDATED' or entity_type<>'FLEET_FREIGHT') not valid");
+ try{assert.equal((await freightEdit.PATCH(await request('/api/fleet/freights/x','edit-admin','PATCH',{sellerId:'edit-owner',previousSellerId:'edit-op',notes:'REVERTER TUDO'}),fctx)).status,500);}finally{await pg.exec('alter table audit_logs drop constraint edit_seller_rollback');}
+ for(const [table,id] of [['freight_sales',sid],['fleet_freights',fid]])assert.equal((await queryFirst(`select seller_id from ${table} where id=?`,[id]) as {seller_id:string}).seller_id,'edit-op');
 });

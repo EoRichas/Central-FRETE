@@ -26,7 +26,7 @@ export function SellerFleetScreen() {
     {open && options.loading && <LoadingState label="Preparando frete…"/>}
     {open && options.error && <ErrorState message={options.error} retry={options.refresh}/>}
     {open && !options.loading && options.data && (!editing || detail.data) && <FreightModal freight={editing ? detail.data!.freight : null} fleet={options.data.fleet} onClose={()=>setOpen(false)}
-      onSaved={(message)=>{setOpen(false);setSuccess(message);list.refresh();if(editing)detail.refresh();}} onDelete={async()=>{throw new Error("Exclusão não permitida.");}}/>}
+      onSaved={(message,_id,_competency,accessTransferred)=>{setOpen(false);setSuccess(message);list.refresh();if(accessTransferred){setSelectedId(null);setEditing(false);}else if(editing)detail.refresh();}} onDelete={async()=>{throw new Error("Exclusão não permitida.");}}/>}
     {list.data && <section className="panel"><div className="responsive-table"><table><thead><tr><th>Venda</th><th>Cliente</th><th>Rota</th><th>Coleta</th><th>Frete</th><th>Detalhes</th></tr></thead><tbody>
       {list.data.freights.map(f=><tr key={f.id}><td>{f.saleNumber}</td><td>{f.clientName}</td><td>{f.origin} → {f.destination}</td><td>{formatDate(f.pickupDate)}</td><td>{formatMoney(f.freightAmountCents)}</td><td><button className="button secondary" onClick={()=>setSelectedId(f.id)}>Ver detalhes</button></td></tr>)}
       {!list.data.freights.length && <tr><td colSpan={6}>Você ainda não cadastrou fretes da Frota.</td></tr>}

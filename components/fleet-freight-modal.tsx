@@ -52,18 +52,20 @@ export function FreightModal({
   freight: FleetFreight | null;
   fleet: FleetFreightFormData;
   onClose: () => void;
-  onSaved: (message: string, id?: string, competency?: string) => void;
+  onSaved: (message: string, id?: string, competency?: string, accessTransferred?: boolean) => void;
   onDelete: (freight: FleetFreight) => Promise<void>;
 }) {
   const editing = Boolean(freight);
   const me = useApi<{user:CurrentUser}>("/api/me");
-  const canAssignSeller=(!editing||(!freight?.sellerId&&!freight?.sellerName))&&(['ADMIN','FINANCEIRO'].includes(me.data?.user.role??'')||(editing&&me.data?.user.role==='OPERACIONAL'));
-  const sellers = useApi<{sellers:{id:string;name:string;commissionBasisPoints:number}[]}>(canAssignSeller?'/api/sales/sellers':null);
-  const canSeeCommission = me.data?.user.role === 'ADMIN' || me.data?.user.role === 'VENDEDOR' || (me.data?.user.role === 'OPERACIONAL' && (!editing || freight?.sellerId === me.data.user.id));
+  const canAssignSeller=Boolean(me.data)&&(editing||['ADMIN','FINANCEIRO'].includes(me.data?.user.role??''));
+  const sellers = useApi<{sellers:{id:string;name:string;commissionBasisPoints:number}[]}>(canAssignSeller?(editing&&!['ADMIN','FINANCEIRO'].includes(me.data?.user.role??'')?'/api/sales/sellers?assignment=1':'/api/sales/sellers'):null);
+
   const [commissionValue,setCommissionValue] = useState<string | null>(freight?.sellerCommissionOverrideCents == null ? null : centsToInput(freight.sellerCommissionOverrideCents));
   const [sellerId,setSellerId] = useState(freight?.sellerId ?? '');
+  const sellerChanged=editing&&sellerId!==(freight?.sellerId??'');
+  const canSeeCommission = (me.data?.user.role === 'ADMIN' || me.data?.user.role === 'VENDEDOR' || (me.data?.user.role === 'OPERACIONAL' && (!editing || freight?.sellerId === me.data.user.id)))&&(!sellerChanged||me.data?.user.role==='ADMIN');
   const [providerServices,setProviderServices]=useState<ProviderService[]>(freight?.providerServices??[]);
-  const sellerRate = editing && (freight?.sellerId||freight?.sellerName) ? freight?.sellerCommissionBasisPoints ?? 0 : ['VENDEDOR','OPERACIONAL'].includes(me.data?.user.role ?? '') ? me.data?.user.commissionBasisPoints ?? 0 : sellers.data?.sellers.find(s=>s.id===sellerId)?.commissionBasisPoints ?? 0;
+  const sellerRate = editing && !sellerChanged && (freight?.sellerId||freight?.sellerName) ? freight?.sellerCommissionBasisPoints ?? 0 : ['VENDEDOR','OPERACIONAL'].includes(me.data?.user.role ?? '') ? me.data?.user.commissionBasisPoints ?? 0 : sellers.data?.sellers.find(s=>s.id===sellerId)?.commissionBasisPoints ?? 0;
   const [client, setClient] = useState<SelectedClient | null>(freight ? {id: freight.clientId ?? null, legalName: freight.clientName} : null);
   const financialOnly =
     fleet.canEditFreightFinancials && !fleet.canEditFreights;
@@ -270,6 +272,7 @@ export function FreightModal({
     catch { return null; }
   })();
   const preview = (() => {
+    if(sellerChanged&&me.data?.user.role!=='ADMIN')return null;
     try {
       return calculateFleetFreightPreview(
         {
@@ -366,13 +369,13 @@ export function FreightModal({
         ...distanceValues(),
         tollCents: moneyInputToCents(toll || "0"),
         driverCommissionCents: moneyInputToCents(driverCommission || "0"),
-        ...(!editing || (!freight?.sellerId&&!freight?.sellerName) ? {sellerId} : {}),
+        sellerId,...(editing?{previousSellerId:freight?.sellerId??null}:{}),
         providerServices,
         serviceSituation: financialOnly ? freight?.serviceSituation : form.get("serviceSituation"),
         notes: form.get("notes"),
         ...(canSeeCommission ? {sellerCommissionOverrideCents: commissionValue?.trim() ? moneyInputToCents(commissionValue) : null} : {}),
       };
-      const saved = await apiMutation<{id: string}>(
+      const saved = await apiMutation<{id: string;accessTransferred?:boolean}>(
         editing ? `/api/fleet/freights/${freight!.id}` : "/api/fleet/freights",
         {
           method: editing ? "PATCH" : "POST",
@@ -380,7 +383,7 @@ export function FreightModal({
           body: JSON.stringify(payload),
         },
       );
-      onSaved(editing ? "Frete atualizado." : "Frete cadastrado.", saved.id, pickupDate.slice(0,7));
+      onSaved(editing ? "Frete atualizado." : "Frete cadastrado.", saved.id, pickupDate.slice(0,7),saved.accessTransferred);
     } catch (submitError) {
       setError(
         submitError instanceof Error
@@ -427,7 +430,7 @@ export function FreightModal({
               </p>
             )}
             <div className="form-grid three">
-              {canAssignSeller && <Field label="Vendedor"><select value={sellerId} onChange={e=>setSellerId(e.target.value)}><option value="">Sem vendedor</option>{sellers.data?.sellers.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select>{sellers.error && <span role="alert">{sellers.error}</span>}</Field>}
+              {canAssignSeller && <Field label="Vendedor"><select value={sellerId} disabled={sellers.loading||Boolean(sellers.error)} required={Boolean(freight?.sellerId)} onChange={e=>setSellerId(e.target.value)}><option value="">{freight?.sellerName&&!freight.sellerId?`${freight.sellerName} (histórico)`:"Sem vendedor"}</option>{freight?.sellerId&&!sellers.data?.sellers.some(s=>s.id===freight.sellerId)&&<option value={freight.sellerId}>{freight.sellerName} (histórico)</option>}{sellers.data?.sellers.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select>{sellerChanged&&<small>A troca será salva com o frete. Comissão automática pelo novo cadastro; valores combinados e baixas são preservados.</small>}{sellers.error && <span role="alert">{sellers.error}</span>}</Field>}
               <Field label="Veículo da frota">
                 <select
                   name="vehicleId"
