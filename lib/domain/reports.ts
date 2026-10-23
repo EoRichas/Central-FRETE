@@ -7,21 +7,24 @@ import { costCategoryLabel } from './operations';
 export type ReportSale = Pick<SaleRecord, 'id'|'saleNumber'|'saleDate'|'saleChannel'|'sellerId'|'sellerName'|'clientName'|'freightAmountCents'|'commissionBasisPoints'|'costsPending'> & {
   pendingReason?: 'COSTS' | 'FUEL' | null;
   origin?: string; destination?: string;
+  clientId?: string|null;
+  providerServices?: import('./provider-services').ProviderService[];
+  returnFreight?: boolean;
   costs: {category:string;amountCents:number}[];
-  financial: Pick<SaleRecord['financial'],'commissionCents'|'transportCostCents'|'marginCents'|'marginBasisPoints'>;
+  financial: Pick<SaleRecord['financial'],'commissionCents'|'transportCostCents'|'marginCents'|'marginBasisPoints'> & {balanceCents?:number;totalReceivedCents?:number;status?:string};
 };
 export const reportSellerKey = (sale: Pick<ReportSale,'sellerId'|'sellerName'>) => sale.sellerId || `historical:${sale.sellerName || 'Não informado'}`;
 
 // Operational Frota records are authoritative when a commercial mirror exists.
-export function consolidateReportSales(sales: (ReportSale & Pick<SaleRecord, 'fleetFreightId'>)[], freights: FleetFreight[]): ReportSale[] {
-  return [...sales.filter(s => s.saleChannel !== 'FROTA' || !s.fleetFreightId).map((s):ReportSale=>({id:s.id,origin:s.origin,destination:s.destination,saleNumber:s.saleNumber,saleDate:s.saleDate,saleChannel:s.saleChannel,sellerId:s.sellerId,sellerName:s.sellerName,clientName:s.clientName,freightAmountCents:s.freightAmountCents,commissionBasisPoints:s.commissionBasisPoints,costsPending:s.costsPending,costs:s.costs.map(c=>({category:c.category,amountCents:c.amountCents})),financial:{commissionCents:s.financial.commissionCents,transportCostCents:s.financial.transportCostCents,marginCents:s.financial.marginCents,marginBasisPoints:s.financial.marginBasisPoints}})), ...freights.map((f):ReportSale => ({
-    id: `freight:${f.id}`, origin:f.origin, destination:f.destination, saleNumber:f.saleNumber || 'Não disponível', saleDate:f.pickupDate, saleChannel:'FROTA',
+export function consolidateReportSales(sales: (ReportSale & Pick<SaleRecord, 'fleetFreightId'> & {clientId?:string|null;financial:ReportSale['financial']})[], freights: FleetFreight[]): ReportSale[] {
+  return [...sales.filter(s => s.saleChannel !== 'FROTA' || !s.fleetFreightId).map((s):ReportSale=>({id:s.id,clientId:s.clientId,origin:s.origin,destination:s.destination,saleNumber:s.saleNumber,saleDate:s.saleDate,saleChannel:s.saleChannel,sellerId:s.sellerId,sellerName:s.sellerName,clientName:s.clientName,freightAmountCents:s.freightAmountCents,commissionBasisPoints:s.commissionBasisPoints,costsPending:s.costsPending,costs:s.costs.map(c=>({category:c.category,amountCents:c.amountCents})),financial:{commissionCents:s.financial.commissionCents,transportCostCents:s.financial.transportCostCents,marginCents:s.financial.marginCents,marginBasisPoints:s.financial.marginBasisPoints,balanceCents:s.financial.balanceCents,totalReceivedCents:s.financial.totalReceivedCents,status:s.financial.status}})), ...freights.map((f):ReportSale => ({
+    id: `freight:${f.id}`,clientId:f.clientId,providerServices:f.providerServices,returnFreight:f.returnFreight, origin:f.origin, destination:f.destination, saleNumber:f.saleNumber || 'Não disponível', saleDate:f.pickupDate, saleChannel:'FROTA',
     sellerId:f.sellerId ?? null, sellerName:f.sellerName || 'Não informado', clientName:f.clientName,
     freightAmountCents:f.freightAmountCents, commissionBasisPoints:f.sellerCommissionBasisPoints ?? 0,
     costsPending:f.fuelCostSource === 'ESTIMADO',
     pendingReason:f.fuelCostSource === 'ESTIMADO' ? 'FUEL' : null,
     costs:[{category:'Despesas operacionais da Frota',amountCents:f.totalCostCents-(f.sellerCommissionCents ?? 0)}],
-    financial:{commissionCents:f.sellerCommissionCents ?? 0,transportCostCents:f.totalCostCents,marginCents:f.netRevenueCents,marginBasisPoints:f.marginBasisPoints},
+    financial:{commissionCents:f.sellerCommissionCents ?? 0,transportCostCents:f.totalCostCents,marginCents:f.netRevenueCents,marginBasisPoints:f.marginBasisPoints,balanceCents:f.paymentStatus==='PAGO'?0:f.freightAmountCents,totalReceivedCents:f.paymentStatus==='PAGO'?f.freightAmountCents:0,status:f.paymentStatus},
   }))];
 }
 

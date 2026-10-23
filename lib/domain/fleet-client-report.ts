@@ -19,6 +19,8 @@ export type FleetClientReportRow = {
   receivedDates: string[];
   paid: 'Sim' | 'Não' | 'Parcial';
   notes: string;
+  providerServices?: import("./provider-services").ProviderService[];
+  returnFreight?: boolean;
   orderObservation?: string | null;
   orderIncludeObservation?: boolean | null;
 };
@@ -43,7 +45,7 @@ export function creationDate(value: string): string {
 }
 
 export function buildFleetClientReport(client: FleetClientReport['client'], from: string, to: string, source: FleetClientReportRow[]): FleetClientReport {
-  const rows = source.filter(row => row.clientId === client.id && row.createdDate >= from && row.createdDate <= to)
+  const rows = source.filter(row => (client.id==='*'||row.clientId === client.id) && row.createdDate >= from && row.createdDate <= to)
     .sort((a, b) => a.createdDate.localeCompare(b.createdDate) || a.saleNumber.localeCompare(b.saleNumber, 'pt-BR', {numeric: true}));
   const totals = rows.reduce((sum, row) => ({
     sales: sum.sales + 1, vehicles: sum.vehicles + row.vehicles.length,

@@ -12,7 +12,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const previous = await queryFirst("select payment_status, paid_at, proof_attachment_id from fleet_freights where id = ?", [id]);
   if (!previous) throw new ApiError(404, "Frete não encontrado.");
   const proof = status === "PAGO" ? await queryFirst<{ id: string }>("select id from fleet_attachments where id = ? and freight_id = ?", [String(data.proofId ?? ""), id]) : null;
-  if (status === "PAGO" && !proof) throw new ApiError(400, "Anexe e selecione um comprovante deste frete antes de confirmar Pago.");
+  if (status === "PAGO" && data.proofId && !proof) throw new ApiError(400, "Selecione um comprovante pertencente a este frete.");
   const paidAt = status === "PAGO" ? `${dateOnly(data.paidAt, "Data do pagamento")}T15:00:00.000Z` : null;
   const db = await getD1();
   await db.batch([

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { BulkPaymentPanel } from "./bulk-payment-panel";
 import { useMemo, useState } from "react";
 import { partialResultMessage, type SalesReport } from "@/lib/domain/reports";
 import type { FleetFreight } from "@/lib/domain/fleet";
@@ -87,6 +88,7 @@ export function FinanceScreen() {
               <strong>{formatMoney(totals.costs)}</strong>
             </div>
           </section>
+          <BulkPaymentPanel sales={!api.loading&&!api.error?sales:[]} onSaved={api.refresh} />
           <section className="panel table-panel">
             <div className="responsive-table">
               <table>

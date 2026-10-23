@@ -19,6 +19,8 @@ function compile(file, overrides) {
   new Function('require', 'module', 'exports', code)(id => {
     if (Object.hasOwn(overrides, id)) return overrides[id];
     if (id === 'react' || id === 'react/jsx-runtime') return require(id);
+    if(id==='./provider-report-panel')return {ProviderReportPanel:()=>null};
+    if(id==='@/lib/domain/provider-services')return {providerKindLabel:value=>value};
     throw new Error('Unexpected dependency: ' + id);
   }, compiledModule, compiledModule.exports);
   return compiledModule.exports;
@@ -228,7 +230,7 @@ test('relatório gera prévia com todas as OS salvas pelo filtro consultado e pe
   const original=globalThis.fetch;globalThis.fetch=async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});return new Response(new Blob(['%PDF'],{type:'application/pdf'}));};
   try {
     await find(tree,n=>n.type==='button'&&n.props.children==='Gerar relatório de vendas').props.onClick();tree=render();
-    assert.deepEqual(calls,[{url:'/api/fleet/client-report?clientId=client&from=2026-10-01&to=2026-10-31',body:{useOrderObservations:true}}]);
+    assert.deepEqual(calls,[{url:'/api/fleet/client-report?clientId=client&from=2026-10-01&to=2026-10-31',body:{useOrderObservations:true,includeProviders:false}}]);
     const modal=find(tree,n=>n.type===ui.Modal);assert.equal(modal.props.open,true);
     const preview=find(modal,n=>n.type==='iframe').props.src;assert.ok(preview.startsWith('blob:'));
     assert.equal(find(modal,n=>n.type==='a'&&n.props.children==='Visualizar / imprimir').props.href,preview);
@@ -270,6 +272,10 @@ test('formulário Frota remove hodômetro e abastecimento, posiciona CTE e avari
   const cte=find(tree,n=>n.props?.label==='CTE/MDF (R$)'),damages=find(tree,n=>n.props?.label==='Avarias (R$)');
   assert.ok(cte&&damages);assert.equal(find(cte,n=>n.type==='input').props.value,'20,00');assert.equal(find(damages,n=>n.type==='input').props.value,'30,00');
   const fields=find(tree,n=>n.props?.className==='form-grid four'&&n.props.children[0]?.props.label==='Seguro (R$)');assert.deepEqual(fields.props.children.map(n=>n.props.label),['Seguro (R$)','Nota Fiscal (R$)','CTE/MDF (R$)','Avarias (R$)']);
+  const aligned=find(tree,n=>n.props?.className==='form-grid three'&&n.props.children?.[0]?.props?.label==='Distância realizada');
+  assert.deepEqual(aligned.props.children.map(n=>n.props.label),['Distância realizada','Pedágio','Motorista / comissão']);
+  assert.ok(find(tree,n=>n.props?.mode==='identification'));
+  assert.ok(find(tree,n=>n.props?.mode==='costs'));
   const OriginalFormData=globalThis.FormData;globalThis.FormData=class {get(){return null;}};
   try {
     await find(tree,n=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{}});
@@ -389,4 +395,39 @@ test('operacional encontra relatório na Frota e continua sem abas de administra
  let tree=render();const button=find(tree,n=>n.type==='button'&&n.props.children==='Relatório de vendas');assert.ok(button);
  for(const label of ['Visão geral','Faturamento','Fechamento mensal'])assert.equal(find(tree,n=>n.type==='button'&&n.props.children===label),null);
  button.props.onClick();tree=render();assert.ok(find(tree,n=>n.type===ReportPanel));
+});
+
+test('comissão envia somente a origem e o ID da venda selecionada',async()=>{
+ const state=hooks();state.react.useMemo=fn=>fn();const calls=[];let refreshes=0;
+ const commissions=[1,2].map(i=>({sourceKind:i===1?'sale':'freight',saleId:String(i),saleNumber:String(240+i),sellerId:'seller',sellerName:'MESMO VENDEDOR',status:'EM_ABERTO',saleDate:'2026-10-23',competency:'2026-10',totalSalesCents:10000,commissionCents:700,pixDetails:null}));
+ const {SellersScreen}=compile('components/sellers-screen.tsx',{
+  react:state.react,'@/components/ui':ui,'@/components/icons':{Icons:new Proxy({},{get:()=>icon})},'@/lib/format':fullFormat,
+  '@/lib/domain/dates':{currentCompetency:()=>'2026-10',todaySaoPaulo:()=>'2026-10-23'},
+  '@/components/use-api':{useApi:url=>({data:url==='/api/me'?{user:{role:'ADMIN'}}:{commissions},refresh:()=>refreshes++}),apiMutation:async(url,options)=>calls.push({url,body:JSON.parse(options.body)})},
+ });
+ const render=()=>{state.reset();return SellersScreen({});};let tree=render();
+ find(tree,n=>n.type==='button'&&n.props['aria-label']==='Editar comissão da venda 242 de MESMO VENDEDOR').props.onClick();tree=render();
+ assert.ok(find(tree,n=>n.type===ui.Modal).props.description.includes('Venda 242'));
+ find(find(tree,n=>n.props?.label==='Situação'),n=>n.type==='select').props.onChange({target:{value:'PAGO'}});tree=render();
+ await find(tree,n=>n.type==='form').props.onSubmit({preventDefault(){}});
+ assert.equal(calls.length,1);assert.equal(calls[0].body.sourceKind,'freight');assert.equal(calls[0].body.saleId,'2');assert.equal(calls[0].body.status,'PAGO');assert.equal(calls[0].body.sellerName,undefined);assert.equal(refreshes,1);
+});
+
+test('baixa em lote filtra por cliente, usa saldo restante e preserva a chave na repetição após erro',async()=>{
+ const state=hooks();state.react.useRef=initial=>{const [ref]=state.react.useState(()=>({current:initial}));return ref;};
+ const calls=[];let fail=true,saved=0;
+ const {BulkPaymentPanel}=compile('components/bulk-payment-panel.tsx',{
+  react:state.react,'./ui':ui,'@/lib/format':fullFormat,'@/lib/domain/dates':{todaySaoPaulo:()=>'2026-10-23'},
+  './use-api':{useApi:()=>({data:{user:{role:'FINANCEIRO'}}}),apiMutation:async(url,options)=>{calls.push({url,key:options.headers['idempotency-key'],body:JSON.parse(options.body)});if(fail)throw new Error('Falha transitória.');}},
+ });
+ const sales=[{id:'sale-a',saleNumber:'240',clientId:'a',clientName:'M1',saleChannel:'CEGONHA',financial:{balanceCents:5000}},{id:'freight:operation-a',saleNumber:'241',clientId:'a',clientName:'M1',saleChannel:'FROTA',financial:{balanceCents:10000}},{id:'other-client',saleNumber:'242',clientId:'b',clientName:'M1',saleChannel:'FROTA',financial:{balanceCents:20000}}];
+ const render=()=>{state.reset();return BulkPaymentPanel({sales,onSaved:()=>saved++});};let tree=render();
+ find(tree,n=>n.type==='button'&&n.props.children==='Baixa em lote').props.onClick();tree=render();
+ find(find(tree,n=>n.props?.label==='Cliente'),n=>n.type==='select').props.onChange({target:{value:'a'}});tree=render();
+ assert.equal(find(tree,n=>n.props?.['aria-label']==='Baixar venda 242'),null);
+ for(const n of [240,241]){find(tree,c=>c.props?.['aria-label']===`Baixar venda ${n}`).props.onChange({target:{checked:true}});tree=render();}
+ await find(tree,n=>n.type==='form').props.onSubmit({preventDefault(){}});tree=render();assert.equal(saved,0);assert.ok(renderToStaticMarkup(tree).includes('Falha transitória.'));
+ fail=false;await find(tree,n=>n.type==='form').props.onSubmit({preventDefault(){}});
+ assert.equal(saved,1);assert.equal(calls.length,2);assert.equal(calls[0].key,calls[1].key);
+ assert.deepEqual(calls[1].body.items,[{sourceKind:'sale',id:'sale-a',expectedBalanceCents:5000},{sourceKind:'freight',id:'operation-a',expectedBalanceCents:10000}]);assert.equal(calls[1].body.clientId,'a');
 });

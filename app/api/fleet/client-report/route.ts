@@ -1,3 +1,5 @@
+import { renderClientSalesXlsx } from '@/lib/server/reports/sales-xlsx';
+import { xlsxResponse } from '@/lib/server/reports/xlsx';
 import { saveFleetOrderObservation } from '@/lib/server/fleet-order-observation';
 import { authorize } from '@/lib/server/auth';
 import { ApiError, jsonError } from '@/lib/server/d1';
@@ -10,7 +12,13 @@ export const runtime = 'nodejs';
 export async function GET(request: Request) {
   try {
     const user = await authorize(request);
-    return Response.json(await loadFleetClientReport(user, new URL(request.url).searchParams), {headers: {'Cache-Control': 'private, no-store'}});
+    const params=new URL(request.url).searchParams;
+    const data=await loadFleetClientReport(user,params);
+    if(params.get('format')==='xlsx'){
+      if(!data.report)throw new ApiError(400,'Consulte o cliente e o período antes de exportar.');
+      return xlsxResponse(renderClientSalesXlsx(data.report,params.get('includeProviders')==='1'),`Relatorio-Vendas-Frota-${data.report.from}-${data.report.to}.xlsx`);
+    }
+    return Response.json(data,{headers:{'Cache-Control':'private, no-store'}});
   } catch (error) { return jsonError(error); }
 }
 export async function POST(request: Request) {
@@ -47,7 +55,7 @@ export async function POST(request: Request) {
     }
     const single = Boolean(params.get('rowId')?.trim());
     const number = report.rows[0].saleNumber.replace(/[^a-zA-Z0-9-]/g, '_');
-    const bytes = await renderFleetClientPdf(report, observations, single ? report.rows[0].saleNumber : undefined);
+    const bytes = await renderFleetClientPdf(report, observations, single ? report.rows[0].saleNumber : undefined, {includeProviders:data.includeProviders===true});
     if (single) await saveFleetOrderObservation(user, report.rows[0].id, data.includeObservations as boolean, data.includeObservations ? observations[0]?.text ?? '' : null);
     return pdfResponse(bytes, single ? `OS-Central-${number}.pdf` : `Relatorio-Vendas-Frota-${report.from}-${report.to}.pdf`);
   } catch (error) { return jsonError(error); }

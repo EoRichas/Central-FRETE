@@ -1,4 +1,6 @@
 "use client";
+import { ProviderServicesEditor } from '@/components/provider-services-editor';
+import type { ProviderService } from '@/lib/domain/provider-services';
 import { FLEET_RELATION_SITUATIONS } from '@/lib/domain/fleet-client-report';
 import { ORIGIN_LOCATION_TYPES, ORIGIN_LOCATION_TYPE_LABELS } from "@/lib/domain/operations";
 import { commissionCents } from "@/lib/domain/finance";
@@ -55,11 +57,14 @@ export function FreightModal({
 }) {
   const editing = Boolean(freight);
   const me = useApi<{user:CurrentUser}>("/api/me");
-  const sellers = useApi<{sellers:{id:string;name:string;commissionBasisPoints:number}[]}>(['ADMIN','FINANCEIRO'].includes(me.data?.user.role ?? '') && !editing ? '/api/sales/sellers' : null);
+  const canAssignSeller=(!editing||(!freight?.sellerId&&!freight?.sellerName))&&(['ADMIN','FINANCEIRO'].includes(me.data?.user.role??'')||(editing&&me.data?.user.role==='OPERACIONAL'));
+  const sellers = useApi<{sellers:{id:string;name:string;commissionBasisPoints:number}[]}>(canAssignSeller?'/api/sales/sellers':null);
   const canSeeCommission = me.data?.user.role === 'ADMIN' || me.data?.user.role === 'VENDEDOR' || (me.data?.user.role === 'OPERACIONAL' && (!editing || freight?.sellerId === me.data.user.id));
   const [commissionValue,setCommissionValue] = useState<string | null>(freight?.sellerCommissionOverrideCents == null ? null : centsToInput(freight.sellerCommissionOverrideCents));
   const [sellerId,setSellerId] = useState(freight?.sellerId ?? '');
-  const sellerRate = editing ? freight?.sellerCommissionBasisPoints ?? 0 : ['VENDEDOR','OPERACIONAL'].includes(me.data?.user.role ?? '') ? me.data?.user.commissionBasisPoints ?? 0 : sellers.data?.sellers.find(s=>s.id===sellerId)?.commissionBasisPoints ?? 0;
+  const [providerServices,setProviderServices]=useState<ProviderService[]>(freight?.providerServices??[]);
+  const [returnFreight,setReturnFreight]=useState(freight?.returnFreight??false);
+  const sellerRate = editing && (freight?.sellerId||freight?.sellerName) ? freight?.sellerCommissionBasisPoints ?? 0 : ['VENDEDOR','OPERACIONAL'].includes(me.data?.user.role ?? '') ? me.data?.user.commissionBasisPoints ?? 0 : sellers.data?.sellers.find(s=>s.id===sellerId)?.commissionBasisPoints ?? 0;
   const [client, setClient] = useState<SelectedClient | null>(freight ? {id: freight.clientId ?? null, legalName: freight.clientName} : null);
   const financialOnly =
     fleet.canEditFreightFinancials && !fleet.canEditFreights;
@@ -289,6 +294,7 @@ export function FreightModal({
           freightAmountCents: moneyInputToCents(freightValue || "0"),
           tollCents: moneyInputToCents(toll || "0"),
           driverCommissionCents: moneyInputToCents(driverCommission || "0"),
+          providerServices,
           sellerCommissionBasisPoints: sellerRate,
           sellerCommissionOverrideCents: commissionValue?.trim() ? moneyInputToCents(commissionValue) : null,
         },
@@ -361,7 +367,8 @@ export function FreightModal({
         ...distanceValues(),
         tollCents: moneyInputToCents(toll || "0"),
         driverCommissionCents: moneyInputToCents(driverCommission || "0"),
-        ...(!editing ? {sellerId} : {}),
+        ...(!editing || (!freight?.sellerId&&!freight?.sellerName) ? {sellerId} : {}),
+        providerServices, returnFreight,
         serviceSituation: financialOnly ? freight?.serviceSituation : form.get("serviceSituation"),
         notes: form.get("notes"),
         ...(canSeeCommission ? {sellerCommissionOverrideCents: commissionValue?.trim() ? moneyInputToCents(commissionValue) : null} : {}),
@@ -421,7 +428,7 @@ export function FreightModal({
               </p>
             )}
             <div className="form-grid three">
-              {!editing && ['ADMIN','FINANCEIRO'].includes(me.data?.user.role ?? '') && <Field label="Vendedor"><select value={sellerId} onChange={e=>setSellerId(e.target.value)}><option value="">Sem vendedor</option>{sellers.data?.sellers.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select>{sellers.error && <span role="alert">{sellers.error}</span>}</Field>}
+              {canAssignSeller && <Field label="Vendedor"><select value={sellerId} onChange={e=>setSellerId(e.target.value)}><option value="">Sem vendedor</option>{sellers.data?.sellers.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select>{sellers.error && <span role="alert">{sellers.error}</span>}</Field>}
               <Field label="Veículo da frota">
                 <select
                   name="vehicleId"
@@ -462,6 +469,7 @@ export function FreightModal({
               </Field>
               <ClientAutocomplete channel="FROTA" value={client} onChange={setClient} required disabled={financialOnly} />
             </div>
+            <ProviderServicesEditor services={providerServices} onChange={setProviderServices} mode="identification" disabled={financialOnly} />
             <CargoVehiclesEditor
               vehicles={cargoVehicles}
               onChange={setCargoVehicles}
@@ -569,6 +577,7 @@ export function FreightModal({
               </Field>
             </div>
           </fieldset>
+          <label className="fleet-check-field"><input className="selection-checkbox" type="checkbox" checked={returnFreight} onChange={e=>setReturnFreight(e.target.checked)} disabled={financialOnly} /> Frete retorno</label>
           <div className="section-divider">Operação e valores</div>
           <div className="form-grid four">
             <Field label="Situação do serviço"><select name="serviceSituation" disabled={financialOnly} defaultValue={freight?.serviceSituation ?? ""} required><option value="">Selecione</option>{FLEET_RELATION_SITUATIONS.map(value => <option key={value} value={value}>{value}</option>)}</select></Field>
@@ -610,6 +619,8 @@ export function FreightModal({
                 />
               </div>
             </Field>
+          </div>
+          <div className="form-grid three">
             <Field
               label={hasOdometer ? "Distância realizada" : "Distância manual / calculada"}
               hint="Em km: 1200 ou 1.200. Para decimais, use vírgula (1200,5)."
@@ -627,8 +638,6 @@ export function FreightModal({
                 <span>km</span>
               </div>
             </Field>
-          </div>
-          <div className="form-grid three">
             <Field label="Pedágio">
               <div className="money-field">
                 <span>R$</span>
@@ -693,6 +702,7 @@ export function FreightModal({
             <Field label="CTE/MDF (R$)"><input value={cteMdfeCostCents} onChange={e => setCteMdfeCostCents(e.target.value)} inputMode="decimal" placeholder="0,00" /></Field>
             <Field label="Avarias (R$)"><input value={damagesCostCents} onChange={e => setDamagesCostCents(e.target.value)} inputMode="decimal" placeholder="0,00" /></Field>
           </div>
+          <ProviderServicesEditor services={providerServices} onChange={setProviderServices} mode="costs" />
           <Field label="Observações" hint="Anotações sobre despesas à parte. Para incluir um valor no resultado, registre-o no custo correspondente."><textarea name="notes" rows={4} maxLength={5000} defaultValue={freight?.notes ?? ''} /></Field>
           {canSeeCommission && <Field label="Valor da comissão (R$)" hint="Preenchido automaticamente. Altere o valor se houver uma comissão combinada."><input inputMode="decimal" value={commissionValue ?? centsToInput(calculatedCommission ?? 0)} onChange={e=>setCommissionValue(e.target.value)} onBlur={()=>{if (!commissionValue?.trim()) setCommissionValue(null);}} required /></Field>}
           {preview && (!editing || freight?.sellerCommissionBasisPoints != null) && (

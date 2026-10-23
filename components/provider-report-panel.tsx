@@ -1,0 +1,17 @@
+"use client";
+import { useState } from 'react';
+import type { loadProviderReport } from '@/lib/server/provider-report';
+import { currentCompetency,todaySaoPaulo } from '@/lib/domain/dates';
+import { providerKindLabel } from '@/lib/domain/provider-services';
+import { formatDate,formatMoney } from '@/lib/format';
+import { useApi } from './use-api';
+import { ErrorState,LoadingState } from './ui';
+type Report=Awaited<ReturnType<typeof loadProviderReport>>;
+export function ProviderReportPanel(){
+ const [from,setFrom]=useState(()=>currentCompetency()+'-01'),[to,setTo]=useState(todaySaoPaulo),[providerId,setProvider]=useState(''),[query,setQuery]=useState('');
+ const providers=useApi<{providers:{id:string;name:string}[]}>('/api/providers');
+ const api=useApi<{report:Report}>(query?`/api/reports/providers?${query}`:null),report=api.data?.report;
+ return <section className="panel form-stack"><header className="fleet-panel-header"><div><h2>Coletas e entregas por transportador</h2><p>Valores dos prestadores por venda da Frota. Período pela data da coleta.</p></div></header><form className="filter-panel" onSubmit={e=>{e.preventDefault();const next=new URLSearchParams({from,to,providerId}).toString();if(next===query)api.refresh();else setQuery(next);}}><label><span>Prestador</span><select value={providerId} onChange={e=>setProvider(e.target.value)}><option value="">Todos os prestadores</option>{providers.data?.providers.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label><label><span>Coleta de</span><input type="date" required value={from} max={to} onChange={e=>setFrom(e.target.value)} /></label><label><span>Até</span><input type="date" required value={to} min={from} onChange={e=>setTo(e.target.value)} /></label><button className="button primary" disabled={api.loading&&Boolean(query)}>Consultar prestadores</button></form>
+ {providers.error&&<ErrorState message={providers.error} retry={providers.refresh} />}{query&&api.loading&&<LoadingState />}{api.error&&<ErrorState message={api.error} retry={api.refresh} />}{report&&<><div className="order-actions"><strong>{formatMoney(report.totalCents)}</strong><a className="button secondary" href={`/api/reports/providers?${query}&format=xlsx`}>Exportar Excel</a><a className="button secondary" href={`/api/reports/providers?${query}&format=pdf`}>Salvar PDF</a></div><div className="responsive-table"><table><thead><tr><th>Transportador</th><th>Vendas</th><th>Coletas</th><th>Entregas</th><th>Outros serviços</th><th>Total</th></tr></thead><tbody>{report.providers.map(p=><tr key={p.id}><td>{p.name}</td><td>{p.salesCount}</td><td>{formatMoney(p.pickupCents)}</td><td>{formatMoney(p.deliveryCents)}</td><td>{formatMoney(p.otherCents)}</td><td>{formatMoney(p.totalCents)}</td></tr>)}</tbody></table></div><details><summary>Vendas e valores por transportador ({report.rows.length})</summary><div className="responsive-table"><table><thead><tr><th>Venda</th><th>Coleta</th><th>Cliente</th><th>Prestador / identificação</th><th>Serviço</th><th>Valor</th></tr></thead><tbody>{report.rows.map(r=><tr key={`${r.freightId}:${r.id}`}><td>{r.saleNumber}</td><td>{formatDate(r.date)}</td><td>{r.clientName}</td><td>{r.providerName}{r.referenceName?` · ${r.referenceName}`:''}</td><td>{providerKindLabel(r.kind)}</td><td>{formatMoney(r.amountCents)}</td></tr>)}</tbody></table></div></details>{!report.rows.length&&<p>Nenhum serviço de prestador encontrado neste período.</p>}</>}
+ </section>;
+}

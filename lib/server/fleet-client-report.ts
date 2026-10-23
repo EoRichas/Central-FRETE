@@ -6,6 +6,8 @@ import { buildFleetClientReport, creationDate, type FleetClientReportData, type 
 import { ApiError, queryAll } from './d1';
 
 type SourceRow = {
+  providerServices?: import("@/lib/domain/provider-services").ProviderService[];
+  returnFreight?: boolean;
   id: string; saleNumber: string; createdAt: string; clientId: string; clientName: string;
   vehicles: CargoVehicle[] | null; vehicle: string | null; plate: string | null;
   driverName: string | null; serviceSituation: FleetClientReportRow["serviceSituation"]; situation: string; departureDate: string | null;
@@ -31,20 +33,20 @@ export async function loadFleetClientReport(user: CurrentUser, params: URLSearch
   if (!clientId) return {clients, report: null};
   const from = validDate(params.get('from')), to = validDate(params.get('to'));
   if (from > to) throw new ApiError(400, 'A data inicial deve ser anterior ou igual à data final.');
-  const client = clients.find(c => c.id === clientId);
+  const client = clientId==='*'?{id:'*',name:'Todos os clientes'}:clients.find(c => c.id === clientId);
   if (!client) throw new ApiError(404, 'Cliente sem vendas Frota disponíveis para seu perfil.');
   // TEXT timestamps in this project contain ISO timestamps. Convert in SQL so the
   // filter uses creation in São Paulo, including the complete end day.
   const period = (alias: string) => `(${alias}.created_at::timestamptz at time zone 'America/Sao_Paulo')::date between ?::date and ?::date`;
   const [freights, sales] = await Promise.all([
-    queryAll<SourceRow>(`select f.id,f.sale_number as saleNumber,f.created_at as createdAt,
+    queryAll<SourceRow>(`select f.provider_services as providerServices,f.return_freight as returnFreight,f.id,f.sale_number as saleNumber,f.created_at as createdAt,
       f.client_id as clientId,c.legal_name as clientName,f.cargo_vehicles as vehicles,
       f.cargo_vehicle_model as vehicle,f.cargo_plate as plate,f.driver_name as driverName,
       f.service_situation as serviceSituation,f.operational_status as situation,f.pickup_date as departureDate,
       f.freight_amount_cents as amountCents,f.payment_status as paidStatus,f.paid_at as paidAt,f.notes,f.order_observation as orderObservation,f.order_include_observation as orderIncludeObservation
       from fleet_freights f join clients c on c.id=f.client_id
-      where f.client_id=? and ${period('f')} ${own ? 'and f.seller_id=?' : ''}
-      order by f.created_at,f.id limit 2001`, own ? [clientId, from, to, user.id] : [clientId, from, to]),
+      where ${clientId==='*'?'':'f.client_id=? and '}${period('f')} ${own ? 'and f.seller_id=?' : ''}
+      order by f.created_at,f.id limit 2001`, [...(clientId==='*'?[]:[clientId]),from,to,...(own?[user.id]:[])]),
     // A linked commercial sale is represented by its operation, exactly once.
     queryAll<SourceRow>(`select s.id,s.sale_number as saleNumber,s.created_at as createdAt,
       s.client_id as clientId,c.legal_name as clientName,s.cargo_vehicles as vehicles,
@@ -52,8 +54,8 @@ export async function loadFleetClientReport(user: CurrentUser, params: URLSearch
       null::text as departureDate,s.freight_amount_cents as amountCents,
       null::text as paidStatus,null::text as paidAt,s.notes,s.order_observation as orderObservation,s.order_include_observation as orderIncludeObservation
       from freight_sales s join clients c on c.id=s.client_id
-      where s.sale_channel='FROTA' and s.fleet_freight_id is null and s.client_id=? and ${period('s')}
-      ${own ? 'and s.seller_id=?' : ''} order by s.created_at,s.id limit 2001`, own ? [clientId, from, to, user.id] : [clientId, from, to]),
+      where s.sale_channel='FROTA' and s.fleet_freight_id is null and ${clientId==='*'?'':'s.client_id=? and '}${period('s')}
+      ${own ? 'and s.seller_id=?' : ''} order by s.created_at,s.id limit 2001`, [...(clientId==='*'?[]:[clientId]),from,to,...(own?[user.id]:[])]),
   ]);
   if (freights.length + sales.length > 2000) throw new ApiError(400, 'O período contém mais de 2.000 vendas. Reduza o intervalo para gerar o relatório completo.');
   const receipts = sales.length ? await queryAll<Receipt>(`select sale_id as saleId,type,amount_cents as amountCents,occurred_at as occurredAt
@@ -61,7 +63,7 @@ export async function loadFleetClientReport(user: CurrentUser, params: URLSearch
     order by occurred_at,id`, sales.map(s => s.id)) : [];
   const rows: FleetClientReportRow[] = [
     ...freights.map((f): FleetClientReportRow => ({
-      id: `freight:${f.id}`, saleNumber: f.saleNumber, createdDate: creationDate(f.createdAt), clientId: f.clientId, clientName: f.clientName,
+      id: `freight:${f.id}`,providerServices:f.providerServices,returnFreight:f.returnFreight, saleNumber: f.saleNumber, createdDate: creationDate(f.createdAt), clientId: f.clientId, clientName: f.clientName,
       vehicles: cargoVehiclesOrLegacy(f.vehicles, f.vehicle, f.plate), driverName: f.driverName, serviceSituation: f.serviceSituation,
       situation: FLEET_OPERATIONAL_STATUS_LABELS[f.situation as FleetOperationalStatus] ?? f.situation,
       departureDate: f.departureDate, amountCents: f.amountCents,

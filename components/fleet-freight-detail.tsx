@@ -1,4 +1,5 @@
 "use client";
+import { providerCostCents,providerKindLabel } from "@/lib/domain/provider-services";
 import { ORIGIN_LOCATION_TYPE_LABELS } from "@/lib/domain/operations";
 import { cargoVehiclesOrLegacy } from '@/lib/domain/cargo-vehicles';
 import { FLEET_OPERATIONAL_STATUS_LABELS, type FleetFreight } from '@/lib/domain/fleet';
@@ -22,6 +23,7 @@ export function FleetFreightDetail({freight: f}: {freight: FleetFreight}) {
           <div className="full"><dt>Veículos transportados ({cargo.length})</dt><dd>{cargo.map((v,i)=><div key={i}>{i+1}. {[v.model,v.plate].filter(Boolean).join(' · ') || 'Não informado'}</div>)}</dd></div>
           <div><dt>Situação do serviço</dt><dd>{f.serviceSituation || "Não informada"}</dd></div>
           <div><dt>Cliente</dt><dd>{f.clientName}</dd></div>
+          <div><dt>Frete retorno</dt><dd>{f.returnFreight?"Sim":"Não"}</dd></div>
           <div><dt>Vendedor</dt><dd>{f.sellerName ?? "Não informado"}</dd></div>
           <div><dt>Motorista</dt><dd>{f.driverName}</dd></div>
           <div><dt>Coleta</dt><dd>{f.origin}</dd></div>
@@ -34,6 +36,7 @@ export function FleetFreightDetail({freight: f}: {freight: FleetFreight}) {
           <div><dt>Faturamento</dt><dd>{formatDate(f.billingDate)}</dd></div>
         </dl>
       </article>
+      {!!f.providerServices?.length && <article className="panel detail-card"><header><h2>Prestadores</h2></header><div className="money-breakdown">{f.providerServices.map(item=><div key={item.id}><span>{item.providerName}{item.referenceName?` · ${item.referenceName}`:''} · {providerKindLabel(item.kind)}</span><strong>{formatMoney(item.amountCents)}</strong></div>)}<div><span>Total dos prestadores</span><strong>{formatMoney(providerCostCents(f.providerServices))}</strong></div></div></article>}
       <article className="panel financial-card">
         <header><div><span className="eyebrow">Resultado</span><h2>Composição financeira</h2></div></header>
         <div className="money-breakdown">

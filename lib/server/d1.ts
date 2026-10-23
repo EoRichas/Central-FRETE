@@ -271,3 +271,20 @@ export function jsonError(error: unknown): Response {
   console.error("central_frete_unhandled_error", error);
   return Response.json({ error: "Não foi possível concluir a operação." }, { status: 500 });
 }
+
+export type TransactionQueries = {
+ queryAll:<T>(sql:string,params?:unknown[])=>Promise<T[]>;
+ queryFirst:<T>(sql:string,params?:unknown[])=>Promise<T|null>;
+};
+/** Reads, row locks and writes share one transaction and connection. Never replay. */
+export async function withDatabaseTransaction<T>(work:(db:TransactionQueries)=>Promise<T>):Promise<T> {
+ try {
+  return await runDatabase(client=>client.begin(async transaction=>{
+   const all=async <Row>(sql:string,params:unknown[]=[])=>{
+    try{return queryResult<Row>(await transaction.unsafe(toPostgresSql(sql),params as never[])).results;}
+    catch(error){throw databaseError(error,sql);}
+   };
+   return work({queryAll:all,queryFirst:async <Row>(sql:string,params:unknown[]=[])=>((await all<Row>(sql,params))[0]??null)});
+  })) as T;
+ }catch(error){if(error instanceof ApiError)throw error;throw databaseError(error,'business transaction');}
+}
