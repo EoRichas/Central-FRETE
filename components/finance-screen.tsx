@@ -47,7 +47,7 @@ export function FinanceScreen() {
         title="Financeiro"
         description="Vendas Cegonha e fretes da Frota, pela data da venda ou da coleta, sem duplicar vínculos."
       />
-      <section className="filter-panel compact">
+      <section className="filter-panel compact finance-filters">
         <label>
           <span>Competência</span>
           <input
@@ -56,11 +56,11 @@ export function FinanceScreen() {
             onChange={(event) => setCompetency(event.target.value || currentCompetency())}
           />
         </label>
-        <label><span>Canal</span><select value={channel} onChange={e=>setChannel(e.target.value)}><option value="">Frota e Cegonha</option><option value="FROTA">Frota</option><option value="CEGONHA">Cegonha</option></select></label>
-        <div className="filter-stat">
-          <strong>{sales.length}</strong>
+        <div className="filter-stat" role="status">
+          <strong>{api.loading||api.error?"—":sales.length}</strong>
           <span>vendas exibidas</span>
         </div>
+        <label><span>Canal</span><select value={channel} onChange={e=>setChannel(e.target.value)}><option value="">Frota e Cegonha</option><option value="FROTA">Frota</option><option value="CEGONHA">Cegonha</option></select></label>
       </section>
 
       {api.loading && <LoadingState label="Calculando fretes e custos…" />}
@@ -131,7 +131,7 @@ export function FinanceScreen() {
           </section>
         </>
       )}
-      <Modal open={Boolean(selectedFreight)} onClose={()=>setSelectedFreight(null)} title="Detalhes do frete" wide><div className="modal-body">{detail.loading && <LoadingState label="Carregando frete…"/>}{detail.error && <ErrorState message={detail.error} retry={detail.refresh}/>} {!detail.loading && !detail.error && detail.data && <FleetFreightDetail freight={detail.data.freight} onSellerChanged={()=>{detail.refresh();api.refresh();}}/>}</div></Modal>
+      <Modal open={Boolean(selectedFreight)} onClose={()=>setSelectedFreight(null)} title="Detalhes do frete" wide><div className="modal-body">{detail.loading && <LoadingState label="Carregando frete…"/>}{detail.error && <ErrorState message={detail.error} retry={detail.refresh}/>} {!detail.loading && !detail.error && detail.data && <FleetFreightDetail freight={detail.data.freight}/>}</div></Modal>
     </>
   );
 }

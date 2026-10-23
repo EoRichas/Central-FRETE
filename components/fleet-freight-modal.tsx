@@ -63,7 +63,6 @@ export function FreightModal({
   const [commissionValue,setCommissionValue] = useState<string | null>(freight?.sellerCommissionOverrideCents == null ? null : centsToInput(freight.sellerCommissionOverrideCents));
   const [sellerId,setSellerId] = useState(freight?.sellerId ?? '');
   const [providerServices,setProviderServices]=useState<ProviderService[]>(freight?.providerServices??[]);
-  const [returnFreight,setReturnFreight]=useState(freight?.returnFreight??false);
   const sellerRate = editing && (freight?.sellerId||freight?.sellerName) ? freight?.sellerCommissionBasisPoints ?? 0 : ['VENDEDOR','OPERACIONAL'].includes(me.data?.user.role ?? '') ? me.data?.user.commissionBasisPoints ?? 0 : sellers.data?.sellers.find(s=>s.id===sellerId)?.commissionBasisPoints ?? 0;
   const [client, setClient] = useState<SelectedClient | null>(freight ? {id: freight.clientId ?? null, legalName: freight.clientName} : null);
   const financialOnly =
@@ -368,7 +367,7 @@ export function FreightModal({
         tollCents: moneyInputToCents(toll || "0"),
         driverCommissionCents: moneyInputToCents(driverCommission || "0"),
         ...(!editing || (!freight?.sellerId&&!freight?.sellerName) ? {sellerId} : {}),
-        providerServices, returnFreight,
+        providerServices,
         serviceSituation: financialOnly ? freight?.serviceSituation : form.get("serviceSituation"),
         notes: form.get("notes"),
         ...(canSeeCommission ? {sellerCommissionOverrideCents: commissionValue?.trim() ? moneyInputToCents(commissionValue) : null} : {}),
@@ -577,7 +576,6 @@ export function FreightModal({
               </Field>
             </div>
           </fieldset>
-          <label className="fleet-check-field"><input className="selection-checkbox" type="checkbox" checked={returnFreight} onChange={e=>setReturnFreight(e.target.checked)} disabled={financialOnly} /> Frete retorno</label>
           <div className="section-divider">Operação e valores</div>
           <div className="form-grid four">
             <Field label="Situação do serviço"><select name="serviceSituation" disabled={financialOnly} defaultValue={freight?.serviceSituation ?? ""} required><option value="">Selecione</option>{FLEET_RELATION_SITUATIONS.map(value => <option key={value} value={value}>{value}</option>)}</select></Field>

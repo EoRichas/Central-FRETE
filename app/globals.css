@@ -292,7 +292,6 @@ td > small { max-width: 270px; margin-top: 2px; overflow: hidden; color: var(--m
 .cost-list-head { margin-bottom: 11px; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
 .cost-list-head h3 { margin: 0; color: var(--navy); font-size: 13px; }
 .cost-list-head p { margin: 2px 0 0; color: var(--muted); font-size: 10px; }
-.cost-currency-tag { padding: 5px 8px; color: var(--teal); background: #e1f4f6; border-radius: 4px; font-size: 9px; font-weight: 820; letter-spacing: .05em; }
 .data-warning { margin: 0 0 12px; padding: 11px 13px; color: #80520c; background: var(--yellow-soft); border: 1px solid #f1d18e; border-radius: var(--radius-sm); font-size: 10px; }
 .fixed-cost-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-sm); }
 .fixed-cost-row { min-width: 0; min-height: 62px; padding: 10px 12px; display: grid; grid-template-columns: 28px minmax(0, 1fr) minmax(130px, 180px); align-items: center; gap: 10px; background: white; border-bottom: 1px solid var(--line); }
@@ -798,3 +797,20 @@ td > small { max-width: 270px; margin-top: 2px; overflow: hidden; color: var(--m
 
 /* Scoped selection controls for freight flags and batch settlement. */
 input.selection-checkbox { width: 18px; height: 18px; min-height: 18px; padding: 0; margin: 0; flex: 0 0 18px; vertical-align: middle; accent-color: var(--teal); }
+
+/* Filtros financeiros e prestadores: campos alinhados no fluxo do formulário. */
+.filter-panel.finance-filters { grid-template-columns: minmax(0,440px) minmax(120px,1fr) minmax(0,220px); }
+.finance-filters .filter-stat { justify-content: center; align-self: center; padding-top: 16px; }
+.provider-selectors { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.provider-selector { display: flex; flex: 0 1 300px; min-width: min(100%,240px); max-width: 100%; align-items: flex-end; gap: 6px; }
+.provider-selector .field { flex: 1; }
+.provider-remove { flex: 0 0 32px; min-height: 42px; padding: 0; font-size: 20px; }
+.provider-add { flex: 0 0 42px; width: 42px; height: 42px; padding: 0; font-size: 22px; line-height: 1; }
+.provider-cost-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,360px),1fr)); align-items: start; gap: 16px; }
+.provider-cost-item { min-width: 0; display: grid; grid-template-columns: minmax(0,1fr) minmax(105px,.55fr); align-items: start; gap: 10px; }
+.provider-cost-item .field > span { min-height: 26px; display: flex; align-items: flex-end; overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+ .filter-panel.finance-filters { grid-template-columns: minmax(0,1fr); }
+ .finance-filters .filter-stat { padding-top: 0; justify-content: center; }
+ .provider-selector { flex-basis: calc(100% - 54px); min-width: 0; }
+}
