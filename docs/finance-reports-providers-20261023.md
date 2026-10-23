@@ -6,7 +6,7 @@
 - Financeiro oferece baixa de 1 a 50 vendas do mesmo cliente cadastrado, nos filtros consultados. Quitação do saldo restante, data e forma de pagamento comuns. Clientes homônimos não são agrupados por nome. Fretes vinculados usam a operação original, uma vez. Comprovantes opcionais continuam disponíveis nos detalhes de cada venda.
 - Leituras, validações, bloqueios de registros, pagamentos e auditoria da baixa compartilham uma transação. Falha reverte o lote inteiro. A chave da solicitação permite repetir com segurança após perda de resposta. Saldo alterado exige atualizar a consulta.
 - Baixa de comissão usa origem + ID da venda, e não vendedor + mês. A tela informa o número da venda no diálogo. ADMIN mantém a administração dos pagamentos de comissão. Status históricos existentes são copiados sem presumir quais pagamentos antigos foram incorretos.
-- Fretes sem responsável podem receber vendedor na Identificação: ADMIN/FINANCEIRO escolhem um vendedor ativo; OPERACIONAL pode atribuir a si próprio. Um vendedor existente não é trocado. Atribuição ao frete também atualiza seu vínculo comercial.
+- Fretes sem responsável podem receber vendedor na Identificação: ADMIN/FINANCEIRO escolhem um vendedor ativo; OPERACIONAL pode atribuir a si próprio. Atribuição ao frete também atualiza seu vínculo comercial.
 - Distância, Pedágio e Motorista/Comissão ficam na mesma linha, adaptando-se ao layout móvel existente.
 - Identificação aceita vários prestadores pelo botão +. A seção Prestadores após os custos permite definir coleta, entrega ou outro serviço e o valor combinado de cada lançamento. O nome de referência do cadastro acompanha o prestador. Valores são informados no frete, sem supor uma tabela de preços inexistente.
 - Serviços de prestadores compõem custos, prévia, margem e fechamento da Frota. Valores avulsos antigos permanecem intactos; não repetir a mesma despesa nos dois locais. Relatório por transportador mostra valores por venda e totais separados de coleta, entrega e outros serviços, pelo período de coleta.
@@ -35,3 +35,7 @@ Em caso de problema após publicar, preferir correção adiante. As novas coluna
 - PDF renderizado e conferido na primeira, intermediária e última página; observações extensas e cinco vendas por página quando o texto permite.
 - Excel aberto com leitor independente para verificar valores numéricos, fórmula/cache dos totais, células de texto, filtros e cabeçalho fixo.
 - TypeScript, lint dos arquivos alterados e build de produção.
+
+## Troca de vendedor — complemento do PR
+
+Todos os perfis podem usar **Trocar vendedor** nos detalhes das vendas e dos fretes que já podem consultar, inclusive quando há vendedor informado. A lista específica para a troca contém apenas ID e nome dos vendedores/operacionais ativos. O novo percentual automático vem do cadastro, mantendo valores de comissão combinados (inclusive zero), baixas individuais e documentos já emitidos. Frete e venda vinculada são atualizados juntos, com auditoria e validação da atribuição anterior para evitar sobrescrever outra troca. Um vendedor que transfere sua própria venda perde o acesso a ela e retorna à listagem. Esta opção não amplia a edição dos demais campos ou a visualização de vendas alheias. Não exige migração adicional.

@@ -1,4 +1,5 @@
 "use client";
+import { SellerChangeButton } from './seller-change-button';
 import { providerCostCents,providerKindLabel } from "@/lib/domain/provider-services";
 import { ORIGIN_LOCATION_TYPE_LABELS } from "@/lib/domain/operations";
 import { cargoVehiclesOrLegacy } from '@/lib/domain/cargo-vehicles';
@@ -6,7 +7,7 @@ import { FLEET_OPERATIONAL_STATUS_LABELS, type FleetFreight } from '@/lib/domain
 import { formatDate, formatMoney, formatPercent } from '@/lib/format';
 import { StatusBadge } from '@/components/ui';
 
-export function FleetFreightDetail({freight: f}: {freight: FleetFreight}) {
+export function FleetFreightDetail({freight: f,onSellerChanged}: {freight: FleetFreight;onSellerChanged:()=>void}) {
   const cargo=cargoVehiclesOrLegacy(f.cargoVehicles,f.cargoVehicleModel,f.cargoPlate);
   const costs: [string,number][]=[['Motorista / comissão',f.driverCommissionCents],['Combustível',f.fuelCostCents],['Pedágio',f.tripId ? 0 : f.tollCents],['Custos compartilhados da viagem',f.sharedTransportCostCents],['Pátio / recebimento',f.yardCostCents??0],['Coleta',f.pickupCostCents??0],['Entrega',f.deliveryCostCents??0],['Seguro',f.insuranceCostCents??0],['Nota Fiscal',f.invoiceCostCents??0],['CTE/MDF',f.cteMdfeCostCents??0],['Avarias',f.damagesCostCents??0],['ICMS anterior',f.icmsCostCents??0],['Outras despesas',f.otherCostCents??0]];
   if (f.sellerCommissionCents != null) costs.push(['Comissão do vendedor', f.sellerCommissionCents]);
@@ -24,7 +25,7 @@ export function FleetFreightDetail({freight: f}: {freight: FleetFreight}) {
           <div><dt>Situação do serviço</dt><dd>{f.serviceSituation || "Não informada"}</dd></div>
           <div><dt>Cliente</dt><dd>{f.clientName}</dd></div>
           <div><dt>Frete retorno</dt><dd>{f.returnFreight?"Sim":"Não"}</dd></div>
-          <div><dt>Vendedor</dt><dd>{f.sellerName ?? "Não informado"}</dd></div>
+          <div><dt>Vendedor</dt><dd>{f.sellerName ?? "Não informado"} <SellerChangeButton source="freight" id={f.id} sellerId={f.sellerId} sellerName={f.sellerName} onChanged={onSellerChanged} /></dd></div>
           <div><dt>Motorista</dt><dd>{f.driverName}</dd></div>
           <div><dt>Coleta</dt><dd>{f.origin}</dd></div>
           <div><dt>Entrega</dt><dd>{f.destination}</dd></div>

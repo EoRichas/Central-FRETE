@@ -2120,3 +2120,45 @@ test('oct23: virada anual reserva sequências concorrentes sem renumerar vendas 
  }finally{await pg.exec('RESET ROLE');}
  const grants=await queryAll("select * from information_schema.role_table_grants where grantee in ('anon','authenticated') and table_name in ('sale_commission_payments','finance_payment_batches','annual_sale_number_counters')");assert.equal(grants.length,0);
 });
+
+test('troca de vendedor: todos os perfis transferem registros acessíveis, sem mudar valores combinados ou expor vendas alheias',async()=>{
+ await oct23Fixtures();
+ await pg.exec("insert into users(id,email,name,role) values ('change-admin','change-admin@example.test','ADMIN TROCA','ADMIN'),('change-finance','change-finance@example.test','FINANCEIRO TROCA','FINANCEIRO'),('change-manager','change-manager@example.test','GERÊNCIA TROCA','GERENCIA'),('change-operator','change-operator@example.test','OPERACIONAL TROCA','OPERACIONAL')");
+ const sales=await import('../../app/api/sales/route.ts'),freights=await import('../../app/api/fleet/freights/route.ts');
+ const transferSale=await import('../../app/api/sales/[id]/seller/route.ts'),transferFreight=await import('../../app/api/fleet/freights/[id]/seller/route.ts');
+ const saleDetail=await import('../../app/api/sales/[id]/route.ts'),freightDetail=await import('../../app/api/fleet/freights/[id]/route.ts'),directory=await import('../../app/api/sales/sellers/route.ts');
+ for(const actor of ['change-admin','change-finance','change-manager','change-operator','oct23-seller']) {
+  const options=await directory.GET(await request('/api/sales/sellers?assignment=1',actor));assert.equal(options.status,200);const {sellers}=await options.json();assert.ok(sellers.some((s:{id:string})=>s.id==='oct23-op'));assert.ok(sellers.every((s:object)=>Object.keys(s).sort().join(',')==='id,name'));
+  const created=await sales.POST(await request('/api/sales','oct23-seller','POST',{...salePayload,saleDate:'2093-01-10',financialDueDate:'2093-01-31',commissionOverrideCents:0}));assert.equal(created.status,201,await created.clone().text());
+  const {id}=await created.json(),ctx={params:Promise.resolve({id})};
+  await pg.query("insert into sale_commission_payments(source_kind,source_id,status,paid_at,paid_by) values('sale',$1,'PAGO','2093-01-10','admin')",[id]);
+  const before=await queryFirst('select sale_number,commission_override_cents,freight_amount_cents from freight_sales where id=?',[id]);
+  const r=await transferSale.PATCH(await request('/api/sales/x/seller',actor,'PATCH',{sellerId:'oct23-op',previousSellerId:'oct23-seller'}),ctx);assert.equal(r.status,200,await r.clone().text());assert.equal((await r.json()).accessTransferred,actor==='oct23-seller');
+  assert.deepEqual(await queryFirst('select sale_number,commission_override_cents,freight_amount_cents from freight_sales where id=?',[id]),before);
+  assert.deepEqual(await queryFirst('select seller_id,commission_basis_points from freight_sales where id=?',[id]),{seller_id:'oct23-op',commission_basis_points:500});
+  assert.equal((await queryFirst('select status from sale_commission_payments where source_id=?',[id]) as {status:string}).status,'PAGO');
+  assert.equal((await saleDetail.GET(await request('/api/sales/x','oct23-seller'),ctx)).status,404);
+  assert.equal((await transferSale.PATCH(await request('/api/sales/x/seller','oct23-seller','PATCH',{sellerId:'oct23-seller',previousSellerId:'oct23-op'}),ctx)).status,404);
+  const f=await freights.POST(await request('/api/fleet/freights','oct23-seller','POST',{...oct23Freight,sellerCommissionOverrideCents:1234}));assert.equal(f.status,201);const fid=(await f.json()).id,fctx={params:Promise.resolve({id:fid})};
+  const changed=await transferFreight.PATCH(await request('/api/fleet/freights/x/seller',actor,'PATCH',{sellerId:'oct23-op',previousSellerId:'oct23-seller'}),fctx);assert.equal(changed.status,200,await changed.clone().text());
+  assert.deepEqual(await queryFirst('select seller_id,seller_commission_basis_points,seller_commission_override_cents from fleet_freights where id=?',[fid]),{seller_id:'oct23-op',seller_commission_basis_points:500,seller_commission_override_cents:1234});
+  assert.equal((await freightDetail.GET(await request('/api/fleet/freights/x','oct23-seller'),fctx)).status,404);
+ }
+ const made=await freights.POST(await request('/api/fleet/freights','oct23-seller','POST',oct23Freight));const id=(await made.json()).id,ctx={params:Promise.resolve({id})};
+ const link=await sales.POST(await request('/api/sales','admin','POST',{...salePayload,saleChannel:'FROTA',fleetFreightId:id,sellerId:'oct23-seller'}));assert.equal(link.status,201,await link.clone().text());const sid=(await link.json()).id,sctx={params:Promise.resolve({id:sid})};
+ const send=(body:object,actor='change-manager')=>request('/api/sales/x/seller',actor,'PATCH',body).then(req=>transferSale.PATCH(req,sctx));
+ assert.equal((await send({sellerId:'admin',previousSellerId:'oct23-seller'})).status,400);
+ assert.equal((await send({sellerId:'inactive',previousSellerId:'oct23-seller'})).status,400);
+ assert.equal((await send({sellerId:'oct23-op'})).status,400);
+ assert.equal((await send({sellerId:'oct23-op',previousSellerId:'oct23-seller',freightAmountCents:1})).status,400);
+ const cross=await request('/api/sales/x/seller','change-manager','PATCH',{sellerId:'oct23-op',previousSellerId:'oct23-seller'});cross.headers.set('origin','https://untrusted.example');assert.equal((await transferSale.PATCH(cross,sctx)).status,403);
+ await pg.exec("alter table audit_logs add constraint seller_transfer_rollback check(action<>'SELLER_CHANGED') not valid");
+ try {assert.equal((await send({sellerId:'oct23-op',previousSellerId:'oct23-seller'})).status,500);}finally {await pg.exec('alter table audit_logs drop constraint seller_transfer_rollback');}
+ for(const [table,rid] of [['freight_sales',sid],['fleet_freights',id]])assert.equal((await queryFirst(`select seller_id from ${table} where id=?`,[rid]) as {seller_id:string}).seller_id,'oct23-seller');
+ const ok=await send({sellerId:'oct23-op',previousSellerId:'oct23-seller'});assert.equal(ok.status,200,await ok.clone().text());
+ for(const [table,rid] of [['freight_sales',sid],['fleet_freights',id]])assert.equal((await queryFirst(`select seller_id from ${table} where id=?`,[rid]) as {seller_id:string}).seller_id,'oct23-op');
+ assert.equal((await send({sellerId:'oct23-seller',previousSellerId:'oct23-seller'})).status,409);
+ assert.equal((await transferFreight.PATCH(await request('/api/fleet/freights/x/seller','change-finance','PATCH',{sellerId:'oct23-seller',previousSellerId:'oct23-op'}),ctx)).status,200);
+ assert.equal((await queryFirst('select seller_id from freight_sales where id=?',[sid]) as {seller_id:string}).seller_id,'oct23-seller');
+ assert.ok((await queryAll("select id from audit_logs where action='SELLER_CHANGED' and entity_id=?",[id])).length>=2);
+});

@@ -32,7 +32,7 @@ export function SellerFleetScreen() {
       {!list.data.freights.length && <tr><td colSpan={6}>Você ainda não cadastrou fretes da Frota.</td></tr>}
     </tbody></table></div></section>}
     <Modal open={Boolean(selectedId) && !open} onClose={()=>setSelectedId(null)} title={`Detalhes da venda ${detail.data?.freight.saleNumber ?? ''}`} wide>
-      <div className="modal-body">{detail.loading && <LoadingState label="Carregando detalhes…"/>}{detail.error && <ErrorState message={detail.error} retry={detail.refresh}/>}{detail.data && !detail.loading && <><div className="order-actions"><button type="button" className="button primary" onClick={()=>{setEditing(true);setOpen(true);}}>Editar / dar baixa</button></div><FleetFreightDetail freight={detail.data.freight}/></>}</div>
+      <div className="modal-body">{detail.loading && <LoadingState label="Carregando detalhes…"/>}{detail.error && <ErrorState message={detail.error} retry={detail.refresh}/>}{detail.data && !detail.loading && <><div className="order-actions"><button type="button" className="button primary" onClick={()=>{setEditing(true);setOpen(true);}}>Editar / dar baixa</button></div><FleetFreightDetail freight={detail.data.freight} onSellerChanged={()=>{detail.refresh();list.refresh();}}/></>}</div>
     </Modal>
   </>;
 }

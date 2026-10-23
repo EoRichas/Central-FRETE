@@ -19,6 +19,7 @@ function compile(file, overrides) {
   new Function('require', 'module', 'exports', code)(id => {
     if (Object.hasOwn(overrides, id)) return overrides[id];
     if (id === 'react' || id === 'react/jsx-runtime') return require(id);
+    if(id==='./seller-change-button')return {SellerChangeButton:()=>React.createElement('button',{type:'button'},'Trocar vendedor')};
     if(id==='./provider-report-panel')return {ProviderReportPanel:()=>null};
     if(id==='@/lib/domain/provider-services')return {providerKindLabel:value=>value};
     throw new Error('Unexpected dependency: ' + id);
@@ -430,4 +431,19 @@ test('baixa em lote filtra por cliente, usa saldo restante e preserva a chave na
  fail=false;await find(tree,n=>n.type==='form').props.onSubmit({preventDefault(){}});
  assert.equal(saved,1);assert.equal(calls.length,2);assert.equal(calls[0].key,calls[1].key);
  assert.deepEqual(calls[1].body.items,[{sourceKind:'sale',id:'sale-a',expectedBalanceCents:5000},{sourceKind:'freight',id:'operation-a',expectedBalanceCents:10000}]);assert.equal(calls[1].body.clientId,'a');
+});
+
+
+test('troca de vendedor nos detalhes carrega opções sob demanda, envia a atribuição anterior e mantém erro recuperável', async()=>{
+ const state=hooks(),calls=[],queries=[];let fail=true,refreshed=0;
+ const {SellerChangeButton}=compile('components/seller-change-button.tsx',{
+  react:state.react,'./ui':ui,'./use-api':{useApi:url=>{queries.push(url);return {loading:false,data:{sellers:[{id:'new',name:'NOVO'}]}};},apiMutation:async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});if(fail)throw new Error('O vendedor desta venda mudou.');return {accessTransferred:false};}}
+ });
+ const render=()=>{state.reset();return SellerChangeButton({source:'freight',id:'123',sellerId:'old',sellerName:'ANTIGO',onChanged:()=>refreshed++});};
+ let tree=render();assert.equal(queries.at(-1),null);
+ find(tree,n=>n.type==='button'&&n.props.children==='Trocar vendedor').props.onClick();tree=render();assert.equal(queries.at(-1),'/api/sales/sellers?assignment=1');
+ find(tree,n=>n.type==='select').props.onChange({target:{value:'new'}});tree=render();
+ await find(tree,n=>n.type==='button'&&n.props.children==='Salvar vendedor').props.onClick();tree=render();assert.equal(refreshed,0);assert.ok(find(tree,n=>n.props?.role==='alert'));
+ assert.deepEqual(calls[0],{url:'/api/fleet/freights/123/seller',body:{sellerId:'new',previousSellerId:'old'}});
+ fail=false;await find(tree,n=>n.type==='button'&&n.props.children==='Salvar vendedor').props.onClick();assert.equal(refreshed,1);
 });

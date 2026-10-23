@@ -131,7 +131,7 @@ export function FinanceScreen() {
           </section>
         </>
       )}
-      <Modal open={Boolean(selectedFreight)} onClose={()=>setSelectedFreight(null)} title="Detalhes do frete" wide><div className="modal-body">{detail.loading && <LoadingState label="Carregando frete…"/>}{detail.error && <ErrorState message={detail.error} retry={detail.refresh}/>} {!detail.loading && !detail.error && detail.data && <FleetFreightDetail freight={detail.data.freight}/>}</div></Modal>
+      <Modal open={Boolean(selectedFreight)} onClose={()=>setSelectedFreight(null)} title="Detalhes do frete" wide><div className="modal-body">{detail.loading && <LoadingState label="Carregando frete…"/>}{detail.error && <ErrorState message={detail.error} retry={detail.refresh}/>} {!detail.loading && !detail.error && detail.data && <FleetFreightDetail freight={detail.data.freight} onSellerChanged={()=>{detail.refresh();api.refresh();}}/>}</div></Modal>
     </>
   );
 }
