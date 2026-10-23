@@ -24,9 +24,9 @@ export function StatusBadge({ status, partial = false }: { status: string; parti
     .toLowerCase();
   return <span className={`status-badge status-${normalized}`}>{partial ? "PARCIAL · " : ""}{status.replace(/_/g, " ")}</span>;
 }
-export function Modal({ title, description, open, onClose, children, wide = false }: { title: string; description?: string; open: boolean; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
+export function Modal({ title, description, open, onClose, children, wide = false, titleId = "modal-title" }: { titleId?: string; title: string; description?: string; open: boolean; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
   if (!open) return null;
-  return <div className="modal-layer" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><section className={`modal ${wide ? "modal-wide" : ""}`} role="dialog" aria-modal="true" aria-labelledby="modal-title"><header><div><h2 id="modal-title">{title}</h2>{description && <p>{description}</p>}</div><button className="icon-button" onClick={onClose} aria-label="Fechar"><Icons.close /></button></header>{children}</section></div>;
+  return <div className="modal-layer" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><section className={`modal ${wide ? "modal-wide" : ""}`} role="dialog" aria-modal="true" aria-labelledby={titleId}><header><div><h2 id={titleId}>{title}</h2>{description && <p>{description}</p>}</div><button className="icon-button" onClick={onClose} aria-label="Fechar"><Icons.close /></button></header>{children}</section></div>;
 }
 export function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return <label className="field"><span>{label}</span>{children}{hint && <small>{hint}</small>}</label>;

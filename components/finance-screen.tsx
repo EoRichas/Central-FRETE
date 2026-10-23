@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { BulkPaymentPanel } from "./bulk-payment-panel";
 import { useMemo, useState } from "react";
 import { partialResultMessage, type SalesReport } from "@/lib/domain/reports";
 import type { FleetFreight } from "@/lib/domain/fleet";
@@ -87,6 +88,7 @@ export function FinanceScreen() {
               <strong>{formatMoney(totals.costs)}</strong>
             </div>
           </section>
+          <BulkPaymentPanel sales={!api.loading&&!api.error?sales:[]} onSaved={api.refresh} />
           <section className="panel table-panel">
             <div className="responsive-table">
               <table>
@@ -129,7 +131,7 @@ export function FinanceScreen() {
           </section>
         </>
       )}
-      <Modal open={Boolean(selectedFreight)} onClose={()=>setSelectedFreight(null)} title="Detalhes do frete" wide><div className="modal-body">{detail.loading && <LoadingState label="Carregando frete…"/>}{detail.error && <ErrorState message={detail.error} retry={detail.refresh}/>} {!detail.loading && !detail.error && detail.data && <FleetFreightDetail freight={detail.data.freight}/>}</div></Modal>
+      <Modal open={Boolean(selectedFreight)} onClose={()=>setSelectedFreight(null)} title="Detalhes do frete" wide><div className="modal-body">{detail.loading && <LoadingState label="Carregando frete…"/>}{detail.error && <ErrorState message={detail.error} retry={detail.refresh}/>} {!detail.loading && !detail.error && detail.data && <FleetFreightDetail freight={detail.data.freight} onSellerChanged={()=>{detail.refresh();api.refresh();}}/>}</div></Modal>
     </>
   );
 }

@@ -1,3 +1,6 @@
+import { parseProviderServices } from '@/lib/server/provider-services';
+import { resolveSaleSeller } from '@/lib/server/seller-commission';
+import { booleanValue } from '@/lib/server/fleet-validation';
 import { assertFleetAccess, freightForViewer, saleCommissionOverride } from "@/lib/server/seller-commission";
 import { loadFleetData } from "@/lib/server/fleet";
 import { resolveFreightClient } from "@/lib/server/registry-validation";
@@ -11,6 +14,10 @@ import { asObject } from "@/lib/server/validation";
 type RouteContext = { params: Promise<{ id: string }> };
 
 type FreightSnapshot = {
+  providerServices: import("@/lib/domain/provider-services").ProviderService[];
+  returnFreight: boolean;
+  sellerName: string|null;
+  sellerCommissionBasisPoints: number;
   serviceSituation: import("@/lib/domain/fleet-client-report").FleetServiceSituation | null;
   sellerId: string | null;
   sellerCommissionOverrideCents: number | null;
@@ -62,7 +69,7 @@ type FreightSnapshot = {
 
 async function freightSnapshot(id: string) {
   return queryFirst<FreightSnapshot>(
-    `select service_situation as serviceSituation,seller_id as sellerId,seller_commission_override_cents as sellerCommissionOverrideCents,notes,trip_id as tripId, yard_cost_cents as yardCostCents, pickup_cost_cents as pickupCostCents,
+    `select provider_services as providerServices,return_freight as returnFreight,seller_name as sellerName,seller_commission_basis_points as sellerCommissionBasisPoints,service_situation as serviceSituation,seller_id as sellerId,seller_commission_override_cents as sellerCommissionOverrideCents,notes,trip_id as tripId, yard_cost_cents as yardCostCents, pickup_cost_cents as pickupCostCents,
       delivery_cost_cents as deliveryCostCents, other_cost_cents as otherCostCents, insurance_cost_cents as insuranceCostCents, invoice_cost_cents as invoiceCostCents, damages_cost_cents as damagesCostCents, icms_cost_cents as icmsCostCents, cte_mdfe_cost_cents as cteMdfeCostCents, actual_fuel_cost_cents as actualFuelCostCents, cargo_vehicles as cargoVehicles,
           fuel_liters_milli as fuelLitersMilli, fuel_pump_amount_cents as fuelPumpAmountCents,
       id, vehicle_id as vehicleId, vehicle_plate as vehiclePlate,
@@ -89,11 +96,18 @@ export async function PATCH(request: Request, context: RouteContext) {
     if (!previous) throw new ApiError(404, "Frete da frota não encontrado.");
     const payload = asObject(await request.json());
     if (payload.saleNumber !== undefined) throw new ApiError(400, "O número da venda não pode ser alterado.");
+    const providerServices=await parseProviderServices(payload.providerServices,previous.providerServices);
+    const returnFreight=payload.returnFreight===undefined?previous.returnFreight:booleanValue(payload.returnFreight,'Frete retorno');
+    let sellerAssignment: Awaited<ReturnType<typeof resolveSaleSeller>>|null=null;
+    if(!previous.sellerId&&!previous.sellerName&&payload.sellerId){
+      if(!['ADMIN','FINANCEIRO','OPERACIONAL'].includes(user.role)||(user.role==='OPERACIONAL'&&payload.sellerId!==user.id))throw new ApiError(403,'Seu perfil não pode atribuir este vendedor.');
+      sellerAssignment=await resolveSaleSeller(user,payload);
+    }
     const submitted = parseFleetFreightPayload({ ...previous, ...payload,
       cargoVehicles: payload.cargoVehicles === undefined ? previous.cargoVehicles ?? undefined : payload.cargoVehicles });
     if (user.role === "VENDEDOR" && submitted.tripId !== previous.tripId) throw new ApiError(403, "Seu perfil não pode alterar o vínculo de viagem administrativa.");
     const data = submitted;
-    const commissionOverrideCents = saleCommissionOverride(user, payload.sellerCommissionOverrideCents, previous.sellerCommissionOverrideCents, previous.sellerId);
+    const commissionOverrideCents = saleCommissionOverride(user, payload.sellerCommissionOverrideCents, previous.sellerCommissionOverrideCents, sellerAssignment?.id??previous.sellerId);
     Object.assign(data, await resolveFreightClient(data, previous));
     const { vehicle, driver } = await resolveFleetReferences(
       data.vehicleId,
@@ -101,7 +115,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     );
     const db = await getD1();
     const next = {
-      ...data, sellerCommissionOverrideCents: commissionOverrideCents,
+      ...data, providerServices, returnFreight, sellerAssignment, sellerCommissionOverrideCents: commissionOverrideCents,
       vehiclePlate: vehicle.plate,
       driverName: driver.name,
     };
@@ -148,6 +162,11 @@ export async function PATCH(request: Request, context: RouteContext) {
           data.insuranceCostCents, data.invoiceCostCents, data.icmsCostCents, data.cteMdfeCostCents, data.damagesCostCents,
           id,
         ),
+      db.prepare("update fleet_freights set provider_services=?::text::jsonb,return_freight=? where id=?").bind(JSON.stringify(providerServices),returnFreight,id),
+      ...(sellerAssignment?[
+        db.prepare("update fleet_freights set seller_id=?,seller_name=?,seller_commission_basis_points=? where id=?").bind(sellerAssignment.id,sellerAssignment.name,sellerAssignment.commissionBasisPoints,id),
+        db.prepare("update freight_sales set seller_id=?,seller_name=?,commission_basis_points=? where fleet_freight_id=? and sale_channel='FROTA'").bind(sellerAssignment.id,sellerAssignment.name,sellerAssignment.commissionBasisPoints,id),
+      ]:[]),
       db.prepare("update freight_sales set commission_override_cents=? where fleet_freight_id=? and sale_channel='FROTA'").bind(commissionOverrideCents,id),
       db
         .prepare(

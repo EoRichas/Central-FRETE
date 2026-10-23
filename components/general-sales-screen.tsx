@@ -42,6 +42,7 @@ export function GeneralSalesScreen() {
             >
               <Icons.receipt /> Exportar CSV
             </a>
+            <a className="button secondary" href={`/api/reports/sales?${query}&format=xlsx`}>Exportar Excel</a>
             <PdfDownloadButton url={`/api/reports/sales?${query}&format=pdf`} filename="Vendas-Geral-Central.pdf" />
           </>
         }

@@ -59,6 +59,8 @@ type VehicleCostRow = {
 };
 
 type FreightRow = {
+  providerServices: import("@/lib/domain/provider-services").ProviderService[];
+  returnFreight: boolean;
   originLocationType?: import("@/lib/domain/operations").OriginLocationType | null;
   destinationLocationType?: import("@/lib/domain/operations").OriginLocationType | null;
 
@@ -176,7 +178,7 @@ export async function loadFleetData(
          order by competency desc, id`,
       ),
       queryAll<FreightRow>(
-        `${scope} select service_situation as serviceSituation,seller_id as sellerId,seller_name as sellerName,seller_commission_basis_points as sellerCommissionBasisPoints,seller_commission_override_cents as sellerCommissionOverrideCents,notes,created_by as createdBy,trip_id as tripId, yard_cost_cents as yardCostCents, pickup_cost_cents as pickupCostCents,
+        `${scope} select provider_services as providerServices,return_freight as returnFreight,service_situation as serviceSituation,seller_id as sellerId,seller_name as sellerName,seller_commission_basis_points as sellerCommissionBasisPoints,seller_commission_override_cents as sellerCommissionOverrideCents,notes,created_by as createdBy,trip_id as tripId, yard_cost_cents as yardCostCents, pickup_cost_cents as pickupCostCents,
           delivery_cost_cents as deliveryCostCents, other_cost_cents as otherCostCents, insurance_cost_cents as insuranceCostCents, invoice_cost_cents as invoiceCostCents, damages_cost_cents as damagesCostCents, icms_cost_cents as icmsCostCents, cte_mdfe_cost_cents as cteMdfeCostCents, actual_fuel_cost_cents as actualFuelCostCents, cargo_vehicles as cargoVehicles,
           fuel_liters_milli as fuelLitersMilli, fuel_pump_amount_cents as fuelPumpAmountCents,
           id, sale_number as saleNumber, vehicle_id as vehicleId, vehicle_plate as vehiclePlate,

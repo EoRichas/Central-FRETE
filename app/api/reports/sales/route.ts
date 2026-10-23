@@ -1,3 +1,5 @@
+import { renderGeneralSalesXlsx } from '@/lib/server/reports/sales-xlsx';
+import { xlsxResponse } from '@/lib/server/reports/xlsx';
 import { authorize } from '@/lib/server/auth';
 import { jsonError } from '@/lib/server/d1';
 import { loadSalesReport } from '@/lib/server/sales-report';
@@ -13,6 +15,7 @@ export async function GET(request:Request){try{
   const user=await authorize(request,['ADMIN','GERENCIA','FINANCEIRO','VENDEDOR','OPERACIONAL']);
   const params=new URL(request.url).searchParams;
   const {report,showCommission,sellers,period,channel,seller}=await loadSalesReport(user,params);
+  if(params.get('format')==='xlsx')return xlsxResponse(renderGeneralSalesXlsx(report,showCommission),'Vendas-Geral-Central.xlsx');
   if(params.get('format')==='pdf')return pdfResponse(await renderSalesReportPdf(report,period,channel,showCommission,seller),'Vendas-Geral-Central.pdf');
   if(params.get('format')==='csv') {
     const money=(n:number)=>(n/100).toFixed(2).replace('.',',');

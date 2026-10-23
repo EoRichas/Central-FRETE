@@ -23,6 +23,10 @@ const bucket = {
 };
 mock.module('../../lib/server/d1.ts', { namedExports: {
  ApiError, queryAll, queryFirst, getBucket: async () => bucket,
+ withDatabaseTransaction: async (work: (db: {queryAll: <T>(q:string,p?:unknown[])=>Promise<T[]>;queryFirst: <T>(q:string,p?:unknown[])=>Promise<T|null>})=>Promise<unknown>)=>pg.transaction(async tx=>{
+  const all=async <T>(q:string,p:unknown[]=[])=>((await tx.query(toPostgresSql(q),p)).rows.map(normalizeDatabaseValue) as T[]);
+  return work({queryAll:all,queryFirst:async <T>(q:string,p:unknown[]=[])=>((await all<T>(q,p))[0]??null)});
+ }),
  getD1: async () => ({prepare, batch: async (statements: ReturnType<typeof prepare>[]) => pg.transaction(async tx => {
   const results = [];
   for (const s of statements) results.push({success: true, results: (await tx.query(toPostgresSql(s.query), s.params)).rows.map(normalizeDatabaseValue)});
@@ -33,7 +37,7 @@ mock.module('../../lib/server/d1.ts', { namedExports: {
 
 before(async () => {
  await pg.exec('CREATE ROLE anon; CREATE ROLE authenticated;');
- for (let pass = 0; pass < 2; pass++) for (const file of ['001_central_frete_postgres.sql', '002_fleet.sql', '003_fleet_billing.sql', '004_operational_role.sql', '005_detach_driver_vehicle.sql', '006_fleet_vehicle_cost_average_flag.sql', '008_fleet_results.sql', '009_direct_paid_operation_costs.sql', '010_fleet_cargo_sales_orders.sql', '011_sale_origin_location_type.sql', '../supabase/migrations/20260923220518_fleet_operation_integrity.sql', '012_sales_channels_global_numbering_costs.sql', '013_fleet_document_costs.sql', '015_fleet_numbers_and_orders.sql', '../supabase/migrations/20260928224007_user_phone_vehicle_deletion.sql', '016_fleet_monthly_scope.sql', '017_fleet_service_situation.sql', '../supabase/migrations/20260929161711_registry_channels_addresses.sql', '../supabase/migrations/20260929175656_fleet_client_reference.sql', '../supabase/migrations/20260930164106_seller_commission_access.sql', '../supabase/migrations/20260930172047_cegonha_monthly_scope.sql', '../supabase/migrations/20260930183118_fleet_vehicle_model.sql', '../supabase/migrations/20260930184218_fleet_location_types.sql', '../supabase/migrations/20261005122915_security_sessions_and_login_limits.sql', '../supabase/migrations/20261014180528_negotiated_commissions_fleet_notes.sql', '../supabase/migrations/20261016133115_preserve_deleted_user_history.sql', '../supabase/migrations/20261021201125_fleet_report_observations_damages_fuel.sql']) await pg.exec(await readFile(new URL(`../../database/${file}`, import.meta.url), 'utf8'));
+ for (let pass = 0; pass < 2; pass++) for (const file of ['001_central_frete_postgres.sql', '002_fleet.sql', '003_fleet_billing.sql', '004_operational_role.sql', '005_detach_driver_vehicle.sql', '006_fleet_vehicle_cost_average_flag.sql', '008_fleet_results.sql', '009_direct_paid_operation_costs.sql', '010_fleet_cargo_sales_orders.sql', '011_sale_origin_location_type.sql', '../supabase/migrations/20260923220518_fleet_operation_integrity.sql', '012_sales_channels_global_numbering_costs.sql', '013_fleet_document_costs.sql', '015_fleet_numbers_and_orders.sql', '../supabase/migrations/20260928224007_user_phone_vehicle_deletion.sql', '016_fleet_monthly_scope.sql', '017_fleet_service_situation.sql', '../supabase/migrations/20260929161711_registry_channels_addresses.sql', '../supabase/migrations/20260929175656_fleet_client_reference.sql', '../supabase/migrations/20260930164106_seller_commission_access.sql', '../supabase/migrations/20260930172047_cegonha_monthly_scope.sql', '../supabase/migrations/20260930183118_fleet_vehicle_model.sql', '../supabase/migrations/20260930184218_fleet_location_types.sql', '../supabase/migrations/20261005122915_security_sessions_and_login_limits.sql', '../supabase/migrations/20261014180528_negotiated_commissions_fleet_notes.sql', '../supabase/migrations/20261016133115_preserve_deleted_user_history.sql', '../supabase/migrations/20261021201125_fleet_report_observations_damages_fuel.sql','../supabase/migrations/20261023142114_finance_reports_providers_annual_numbers.sql']) await pg.exec(await readFile(new URL(`../../database/${file}`, import.meta.url), 'utf8'));
  await pg.exec("INSERT INTO users(id,email,name,role) VALUES ('admin','admin@example.test','Admin','ADMIN'),('finance','finance@example.test','Finance','FINANCEIRO'),('seller','seller@example.test','Seller','VENDEDOR');");
  await pg.exec("INSERT INTO clients(id,type,legal_name,sale_channel) VALUES ('freight-client-0','PJ','CLIENTE DE TESTE','FROTA'),('freight-client-1','PJ','CLIENTE TESTE','FROTA'),('freight-client-2','PJ','CLIENTE CARGA','FROTA'),('freight-client-3','PJ','ODOMETRO','FROTA'),('freight-client-4','PJ','CLIENTE CUSTOS','FROTA'),('freight-client-5','PJ','CLIENTE OS FROTA','FROTA'),('freight-client-6','PJ','CLIENTE ATUALIZADO','FROTA');");
  process.env.CENTRAL_FRETE_SESSION_SECRET = 'test-secret-never-use-in-production-1234';
@@ -1986,4 +1990,175 @@ test('comissão zero recalcula competências anteriores sem apagar vendas, fatur
  assert.equal(report.report.clients.reduce((n:number,c:{freight:number})=>n+c.freight,0),300000);
  assert.equal(report.report.sales.find((r:{id:string})=>r.id==='credit-seller-override-zero').freightAmountCents,20000);
  assert.deepEqual(await queryAll("select * from freight_sales where competency='1999-03' order by id"),before);
+});
+
+const oct23Migration='../../supabase/migrations/20261023142114_finance_reports_providers_annual_numbers.sql';
+async function oct23Fixtures(){
+ await pg.exec(`insert into users(id,email,name,role,commission_basis_points) values ('oct23-seller','oct23-seller@example.test','VENDEDOR NOVO','VENDEDOR',700),('oct23-op','oct23-op@example.test','OPERADOR NOVO','OPERACIONAL',500) on conflict(id) do nothing;
+ insert into clients(id,type,legal_name,sale_channel) values ('oct23-client-a','PJ','HOMÔNIMO','AMBOS'),('oct23-client-b','PJ','HOMÔNIMO','AMBOS') on conflict(id) do nothing;
+ insert into fleet_vehicles(id,plate) values ('oct23-truck','NOV1A23') on conflict(id) do nothing;
+ insert into fleet_drivers(id,name,active) values ('oct23-driver','MOTORISTA NOVO',1) on conflict(id) do nothing;
+ insert into providers(id,name,reference_name,active) values ('oct23-provider-a','PRESTADOR UM','CONTATO UM',1),('oct23-provider-b','PRESTADOR DOIS','CONTATO DOIS',1) on conflict(id) do nothing;`);
+}
+const oct23Freight={vehicleId:'oct23-truck',driverId:'oct23-driver',clientId:'oct23-client-a',clientName:'HOMÔNIMO',origin:'ORIGEM',destination:'DESTINO',pickupDate:'2092-02-10',operationalStatus:'SEM_PREVISAO',priority:'NORMAL',freightAmountCents:100000,distanceMeters:100000,tollCents:0,driverCommissionCents:0,actualFuelCostCents:1000,cargoVehicles:[{model:'UNO',plate:'AAA1A11'}]};
+
+test('oct23: prestadores persistem, compõem custos e fechamento, filtram transportador e não expõem vendas alheias',async()=>{
+ await oct23Fixtures();
+ const create=await import('../../app/api/fleet/freights/route.ts'),edit=await import('../../app/api/fleet/freights/[id]/route.ts');
+ const reportApi=await import('../../app/api/reports/providers/route.ts');
+ const {loadMonthlyReport}=await import('../../lib/server/monthly-results.ts');
+ const services=[{id:'service-pickup',providerId:'oct23-provider-a',kind:'COLETA',amountCents:1234,providerName:'NOME FORJADO'},{id:'service-delivery',providerId:'oct23-provider-b',kind:'ENTREGA',amountCents:4567}];
+ const response=await create.POST(await request('/api/fleet/freights','oct23-seller','POST',{...oct23Freight,providerServices:services,returnFreight:true}));assert.equal(response.status,201,await response.clone().text());const {id}=await response.json();const ctx={params:Promise.resolve({id})};
+ const read=async()=> (await (await edit.GET(await request('/api/fleet/freights/x','oct23-seller'),ctx)).json()).freight;
+ const f=await read();assert.equal(f.providerServices.length,2);assert.equal(f.providerServices[0].providerName,'PRESTADOR UM');assert.equal(f.returnFreight,true);assert.equal(f.directCostCents,7000+1234+4567);assert.equal(f.totalCostCents,7000+1234+4567+1000);
+ const monthly=(await loadMonthlyReport('2092-02')).current.freights.find(r=>r.id===id)!;assert.equal(monthly.directCostCents,f.directCostCents);
+ assert.equal((await edit.PATCH(await request('/api/fleet/freights/x','oct23-seller','PATCH',{notes:'EDITEI'}),ctx)).status,200);assert.deepEqual((await read()).providerServices,f.providerServices);assert.equal((await read()).returnFreight,true);
+ for(const providerServices of [[{...services[0],amountCents:-1}],[{...services[0],providerId:'missing'}],[{...services[0],kind:'INVALID'}],[services[0],services[0]]])assert.equal((await edit.PATCH(await request('/api/fleet/freights/x','admin','PATCH',{providerServices}),ctx)).status,400);
+ await pg.exec("update providers set active=0 where id='oct23-provider-a'");
+ assert.equal((await edit.PATCH(await request('/api/fleet/freights/x','admin','PATCH',{providerServices:f.providerServices,notes:'MANTÉM HISTÓRICO'}),ctx)).status,200);
+ const path='/api/reports/providers?from=2092-02-01&to=2092-02-28';
+ const r=await (await reportApi.GET(await request(path,'oct23-seller'))).json();assert.equal(r.report.totalCents,5801);assert.equal(r.report.providers.find((p:{id:string})=>p.id==='oct23-provider-a').pickupCents,1234);assert.equal(r.report.providers.find((p:{id:string})=>p.id==='oct23-provider-b').deliveryCents,4567);assert.equal(r.report.rows.length,2);
+ assert.equal((await (await reportApi.GET(await request(path+'&providerId=oct23-provider-b','admin'))).json()).report.totalCents,4567);
+ assert.equal((await (await reportApi.GET(await request(path,'seller'))).json()).report.rows.length,0);
+ for(const format of ['pdf','xlsx']){const exportResponse=await reportApi.GET(await request(path+'&format='+format,'admin'));assert.equal(exportResponse.status,200,await exportResponse.clone().text());assert.equal(exportResponse.headers.get('cache-control'),'private, no-store');}
+ await pg.exec("update providers set active=1 where id='oct23-provider-a'");
+});
+
+test('oct23: comissão paga individualmente não quita outras vendas ou competências; histórico antigo é preservado',async()=>{
+ await oct23Fixtures();
+ const sales=await import('../../app/api/sales/route.ts'),commissions=await import('../../app/api/sellers/commissions/route.ts');
+ const ids:string[]=[];for(let i=0;i<2;i++){const created=await sales.POST(await request('/api/sales','oct23-seller','POST',{...salePayload,clientId:'oct23-client-a',saleDate:'2092-03-01',financialDueDate:'2092-03-31'}));assert.equal(created.status,201,await created.clone().text());ids.push((await created.json()).id);}
+ const body={sourceKind:'sale',saleId:ids[0],sellerName:'OUTRO NOME',competency:'2092-03',status:'PAGO',paidAt:'2092-03-10',pixDetails:'PIX APENAS TESTE'};
+ assert.equal((await commissions.PATCH(await request('/api/sellers/commissions','finance','PATCH',body))).status,403);
+ assert.equal((await commissions.PATCH(await request('/api/sellers/commissions','admin','PATCH',{...body,saleId:undefined}))).status,400);
+ assert.equal((await commissions.PATCH(await request('/api/sellers/commissions','admin','PATCH',{...body,competency:'2092-04'}))).status,404);
+ const paid=await commissions.PATCH(await request('/api/sellers/commissions','admin','PATCH',body));assert.equal(paid.status,200,await paid.clone().text());
+ const list=async()=> (await (await commissions.GET(await request('/api/sellers/commissions?competency=2092-03','oct23-seller'))).json()).commissions;
+ const result=await list();assert.equal(result.find((r:{saleId:string})=>r.saleId===ids[0]).status,'PAGO');assert.equal(result.find((r:{saleId:string})=>r.saleId===ids[1]).status,'EM_ABERTO');
+ await pg.query("insert into seller_commission_statuses(id,seller_name,competency,status,paid_at,paid_by) values('oct23-old-status','VENDEDOR NOVO','2092-03','PAGO','2092-03-01','admin')");
+ await pg.exec(await readFile(new URL(oct23Migration,import.meta.url),'utf8'));
+ const after=await list();assert.equal(after.find((r:{saleId:string})=>r.saleId===ids[0]).status,'PAGO');
+ // Backfill only touches previously absent statuses; a recorded individual reopening is immutable to re-application.
+ assert.equal((await commissions.PATCH(await request('/api/sellers/commissions','admin','PATCH',{...body,status:'EM_ABERTO'}))).status,200);
+ await pg.exec(await readFile(new URL(oct23Migration,import.meta.url),'utf8'));
+ assert.equal((await list()).find((r:{saleId:string})=>r.saleId===ids[0]).status,'EM_ABERTO');
+});
+
+test('oct23: baixa Frota dispensa comprovante e atribuição do vendedor ausente preserva fretes já atribuídos',async()=>{
+ await oct23Fixtures();const create=await import('../../app/api/fleet/freights/route.ts'),edit=await import('../../app/api/fleet/freights/[id]/route.ts'),payment=await import('../../app/api/fleet/freights/[id]/payment/route.ts');
+ const made=await create.POST(await request('/api/fleet/freights','admin','POST',oct23Freight));assert.equal(made.status,201);const {id}=await made.json(),ctx={params:Promise.resolve({id})};
+ const before=await queryFirst('select sale_number,seller_id from fleet_freights where id=?',[id]) as {sale_number:string;seller_id:null};assert.equal(before.seller_id,null);
+ assert.equal((await edit.PATCH(await request('/api/fleet/freights/x','oct23-op','PATCH',{sellerId:'oct23-seller'}),ctx)).status,403);
+ const assigned=await edit.PATCH(await request('/api/fleet/freights/x','admin','PATCH',{sellerId:'oct23-seller'}),ctx);assert.equal(assigned.status,200,await assigned.clone().text());
+ const saved=await queryFirst('select seller_id,seller_name,seller_commission_basis_points,sale_number from fleet_freights where id=?',[id]);assert.deepEqual(saved,{seller_id:'oct23-seller',seller_name:'VENDEDOR NOVO',seller_commission_basis_points:700,sale_number:before.sale_number});
+ assert.equal((await edit.PATCH(await request('/api/fleet/freights/x','admin','PATCH',{sellerId:'oct23-op',notes:'NÃO TRANSFERE VENDEDOR'}),ctx)).status,200);
+ assert.equal((await queryFirst('select seller_id from fleet_freights where id=?',[id]) as {seller_id:string}).seller_id,'oct23-seller');
+ assert.equal((await payment.PATCH(await request('/api/fleet/freights/x/payment','finance','PATCH',{status:'PAGO',paidAt:'2092-02-11',proofId:'fake'}),ctx)).status,400);
+ const paid=await payment.PATCH(await request('/api/fleet/freights/x/payment','finance','PATCH',{status:'PAGO',paidAt:'2092-02-11'}),ctx);assert.equal(paid.status,200,await paid.clone().text());
+ assert.deepEqual(await queryFirst('select payment_status,proof_attachment_id from fleet_freights where id=?',[id]),{payment_status:'PAGO',proof_attachment_id:null});
+});
+
+test('oct23: baixa em lote é atômica, considera saldo parcial e rejeita homônimos, espelhos e tentativas duplicadas',async()=>{
+ await oct23Fixtures();const createSale=await import('../../app/api/sales/route.ts'),createFreight=await import('../../app/api/fleet/freights/route.ts'),batch=await import('../../app/api/finance/payments/batch/route.ts');
+ const made=await createSale.POST(await request('/api/sales','oct23-seller','POST',{...salePayload,clientId:'oct23-client-a',freightAmountCents:10000}));assert.equal(made.status,201);const sale=(await made.json()).id;
+ const f=await createFreight.POST(await request('/api/fleet/freights','oct23-seller','POST',oct23Freight));assert.equal(f.status,201);const freight=(await f.json()).id;
+ await queryFirst(`insert into payment_transactions(id,sale_id,type,status,amount_cents,occurred_at,payment_method,idempotency_key,created_by) values ('oct23-partial',?,'RECEBIMENTO','CONFIRMADO',3000,'2026-10-23T12:00:00Z','PIX','oct23-partial','admin') returning id`,[sale]);
+ const body={clientId:'oct23-client-a',paidAt:'2026-10-23',paymentMethod:'PIX',items:[{sourceKind:'sale',id:sale,expectedBalanceCents:7000},{sourceKind:'freight',id:freight,expectedBalanceCents:100000}]};
+ const send=async(data=body,key='oct23-bulk',role='finance')=>{const req=await request('/api/finance/payments/batch',role,'POST',data);req.headers.set('idempotency-key',key);return batch.POST(req);};
+ assert.equal((await send(body,'unauthorized','seller')).status,403);assert.equal((await send({...body,items:[body.items[0],body.items[0]]},'dupe-item')).status,400);
+ assert.equal((await send({...body,clientId:'oct23-client-b'},'wrong-client')).status,400);
+ assert.equal((await send({...body,items:[body.items[0],{...body.items[1],expectedBalanceCents:999}]},'stale')).status,409);
+ assert.equal((await queryFirst('select payment_status from fleet_freights where id=?',[freight]) as {payment_status:string}).payment_status,'EM_ABERTO');
+ assert.equal((await queryAll('select * from payment_transactions where sale_id=?',[sale])).length,1);
+ // Failure in the audit INSERT must roll back every sale and freight change.
+ await pg.exec("alter table audit_logs add constraint oct23_block_batch check(action<>'BATCH_SETTLED')");
+ try{const rejected=await send(body,'audit-fails');assert.equal(rejected.status,500,await rejected.clone().text());}finally{await pg.exec('alter table audit_logs drop constraint oct23_block_batch');}
+ assert.equal((await queryAll('select * from payment_transactions where sale_id=?',[sale])).length,1);
+ assert.equal((await queryFirst('select payment_status from fleet_freights where id=?',[freight]) as {payment_status:string}).payment_status,'EM_ABERTO');
+ const result=await send();assert.equal(result.status,200,await result.clone().text());assert.deepEqual(await result.json(),{updated:true,count:2,totalCents:107000});
+ const retry=await send();assert.equal(retry.status,200);assert.equal((await retry.json()).duplicate,true);
+ assert.equal((await queryAll('select * from payment_transactions where sale_id=?',[sale])).length,2);
+ assert.equal((await queryFirst('select payment_status from fleet_freights where id=?',[freight]) as {payment_status:string}).payment_status,'PAGO');
+ assert.equal((await send(body,'already-paid-new-key')).status,409);
+ assert.equal((await send({...body,paidAt:'2026-10-24'})).status,409);
+ const r=await createSale.POST(await request('/api/sales','oct23-seller','POST',{...salePayload,clientId:'oct23-client-a',freightAmountCents:12345}));const one=(await r.json()).id;
+ const concurrent={...body,items:[{sourceKind:'sale',id:one,expectedBalanceCents:12345}]};
+ const results=await Promise.all([send(concurrent,'concurrent-a'),send(concurrent,'concurrent-b')]);assert.deepEqual(results.map(r=>r.status).sort(),[200,409]);assert.equal((await queryAll('select * from payment_transactions where sale_id=?',[one])).length,1);
+});
+
+test('oct23: todos os clientes, prestadores e Excel mantêm filtros, nomes completos e escopo por ID',async()=>{
+ await oct23Fixtures();
+ const create=await import('../../app/api/fleet/freights/route.ts'),report=await import('../../app/api/fleet/client-report/route.ts');
+ const a=await create.POST(await request('/api/fleet/freights','oct23-seller','POST',{...oct23Freight,providerServices:[{id:'export-provider',providerId:'oct23-provider-a',kind:'COLETA',amountCents:3210}]}));assert.equal(a.status,201);const aId=(await a.json()).id;
+ const b=await create.POST(await request('/api/fleet/freights','admin','POST',{...oct23Freight,clientId:'oct23-client-b'}));assert.equal(b.status,201);const bId=(await b.json()).id;
+ await pg.query("update fleet_freights set created_at='2092-04-10T15:00:00Z',order_observation='OBSERVAÇÃO EXCEL',order_include_observation=true where id in ($1,$2)",[aId,bId]);
+ const path='/api/fleet/client-report?clientId=*&from=2092-04-01&to=2092-04-30';
+ const all=await report.GET(await request(path));assert.equal(all.status,200);const data=await all.json();assert.equal(data.report.rows.length,2);assert.equal(data.report.totals.amountCents,200000);assert.equal(data.report.client.name,'Todos os clientes');
+ assert.equal((await (await report.GET(await request(path,'oct23-seller'))).json()).report.rows.length,1);
+ assert.equal((await (await report.GET(await request(path.replace('clientId=*','clientId=oct23-client-a')))).json()).report.rows.length,1);
+ const xlsx=await report.GET(await request(path+'&format=xlsx&includeProviders=1'));assert.equal(xlsx.status,200,await xlsx.clone().text());assert.match(xlsx.headers.get('content-type')!,/spreadsheetml/);
+ const {unzipSync,strFromU8}=await import('fflate');const files=unzipSync(new Uint8Array(await xlsx.arrayBuffer()));
+ assert.match(strFromU8(files['xl/worksheets/sheet1.xml']),/OBSERVAÇÃO EXCEL/);assert.match(strFromU8(files['xl/worksheets/sheet2.xml']),/PRESTADOR UM/);assert.match(strFromU8(files['xl/worksheets/sheet2.xml']),/32.1/);
+ const noProviders=await report.GET(await request(path+'&format=xlsx'));const hidden=unzipSync(new Uint8Array(await noProviders.arrayBuffer()));assert.equal(hidden['xl/worksheets/sheet2.xml'],undefined);
+ const {PDFPage}=await import('pdf-lib');const texts:string[]=[],draw=PDFPage.prototype.drawText;PDFPage.prototype.drawText=function(text,options){texts.push(text);return draw.call(this,text,options);};
+ try{const exported=await report.POST(await request(path,'admin','POST',{useOrderObservations:true,includeProviders:true}));assert.equal(exported.status,200);assert.ok(texts.join(' ').includes('PRESTADOR UM'));assert.ok(texts.join(' ').includes('32,10'));}finally{PDFPage.prototype.drawText=draw;}
+});
+
+test('oct23: virada anual reserva sequências concorrentes sem renumerar vendas antigas e mantém papel restrito',async()=>{
+ const previous=await queryAll('select id,sale_number from freight_sales order by id');
+ const reserved=await Promise.all(Array.from({length:12},()=>queryFirst('select reserve_sale_number_for_year(2027) as number')));
+ assert.deepEqual(reserved.map(r=>(r as {number:string}).number).sort((a,b)=>Number(a.split('-')[1])-Number(b.split('-')[1])),Array.from({length:12},(_,i)=>`2027-${i+1}`));
+ assert.deepEqual(await queryFirst('select reserve_sale_number_for_year(2028) as number'),{number:'2028-1'});
+ assert.deepEqual(await queryAll('select id,sale_number from freight_sales order by id'),previous);
+ await pg.exec(await readFile(new URL('../../supabase/migrations/20261016124849_restricted_runtime_role.sql',import.meta.url),'utf8'));
+ await pg.exec(await readFile(new URL(oct23Migration,import.meta.url),'utf8'));
+ await pg.exec('SET ROLE central_app');
+ try{
+  assert.deepEqual(await queryFirst('select reserve_sale_number_for_year(2028) as number'),{number:'2028-2'});
+  assert.ok(await queryFirst('select count(*) as n from sale_commission_payments'));
+  await assert.rejects(pg.exec('DELETE FROM audit_logs'),/permission/i);
+ }finally{await pg.exec('RESET ROLE');}
+ const grants=await queryAll("select * from information_schema.role_table_grants where grantee in ('anon','authenticated') and table_name in ('sale_commission_payments','finance_payment_batches','annual_sale_number_counters')");assert.equal(grants.length,0);
+});
+
+test('troca de vendedor: todos os perfis transferem registros acessíveis, sem mudar valores combinados ou expor vendas alheias',async()=>{
+ await oct23Fixtures();
+ await pg.exec("insert into users(id,email,name,role) values ('change-admin','change-admin@example.test','ADMIN TROCA','ADMIN'),('change-finance','change-finance@example.test','FINANCEIRO TROCA','FINANCEIRO'),('change-manager','change-manager@example.test','GERÊNCIA TROCA','GERENCIA'),('change-operator','change-operator@example.test','OPERACIONAL TROCA','OPERACIONAL')");
+ const sales=await import('../../app/api/sales/route.ts'),freights=await import('../../app/api/fleet/freights/route.ts');
+ const transferSale=await import('../../app/api/sales/[id]/seller/route.ts'),transferFreight=await import('../../app/api/fleet/freights/[id]/seller/route.ts');
+ const saleDetail=await import('../../app/api/sales/[id]/route.ts'),freightDetail=await import('../../app/api/fleet/freights/[id]/route.ts'),directory=await import('../../app/api/sales/sellers/route.ts');
+ for(const actor of ['change-admin','change-finance','change-manager','change-operator','oct23-seller']) {
+  const options=await directory.GET(await request('/api/sales/sellers?assignment=1',actor));assert.equal(options.status,200);const {sellers}=await options.json();assert.ok(sellers.some((s:{id:string})=>s.id==='oct23-op'));assert.ok(sellers.every((s:object)=>Object.keys(s).sort().join(',')==='id,name'));
+  const created=await sales.POST(await request('/api/sales','oct23-seller','POST',{...salePayload,saleDate:'2093-01-10',financialDueDate:'2093-01-31',commissionOverrideCents:0}));assert.equal(created.status,201,await created.clone().text());
+  const {id}=await created.json(),ctx={params:Promise.resolve({id})};
+  await pg.query("insert into sale_commission_payments(source_kind,source_id,status,paid_at,paid_by) values('sale',$1,'PAGO','2093-01-10','admin')",[id]);
+  const before=await queryFirst('select sale_number,commission_override_cents,freight_amount_cents from freight_sales where id=?',[id]);
+  const r=await transferSale.PATCH(await request('/api/sales/x/seller',actor,'PATCH',{sellerId:'oct23-op',previousSellerId:'oct23-seller'}),ctx);assert.equal(r.status,200,await r.clone().text());assert.equal((await r.json()).accessTransferred,actor==='oct23-seller');
+  assert.deepEqual(await queryFirst('select sale_number,commission_override_cents,freight_amount_cents from freight_sales where id=?',[id]),before);
+  assert.deepEqual(await queryFirst('select seller_id,commission_basis_points from freight_sales where id=?',[id]),{seller_id:'oct23-op',commission_basis_points:500});
+  assert.equal((await queryFirst('select status from sale_commission_payments where source_id=?',[id]) as {status:string}).status,'PAGO');
+  assert.equal((await saleDetail.GET(await request('/api/sales/x','oct23-seller'),ctx)).status,404);
+  assert.equal((await transferSale.PATCH(await request('/api/sales/x/seller','oct23-seller','PATCH',{sellerId:'oct23-seller',previousSellerId:'oct23-op'}),ctx)).status,404);
+  const f=await freights.POST(await request('/api/fleet/freights','oct23-seller','POST',{...oct23Freight,sellerCommissionOverrideCents:1234}));assert.equal(f.status,201);const fid=(await f.json()).id,fctx={params:Promise.resolve({id:fid})};
+  const changed=await transferFreight.PATCH(await request('/api/fleet/freights/x/seller',actor,'PATCH',{sellerId:'oct23-op',previousSellerId:'oct23-seller'}),fctx);assert.equal(changed.status,200,await changed.clone().text());
+  assert.deepEqual(await queryFirst('select seller_id,seller_commission_basis_points,seller_commission_override_cents from fleet_freights where id=?',[fid]),{seller_id:'oct23-op',seller_commission_basis_points:500,seller_commission_override_cents:1234});
+  assert.equal((await freightDetail.GET(await request('/api/fleet/freights/x','oct23-seller'),fctx)).status,404);
+ }
+ const made=await freights.POST(await request('/api/fleet/freights','oct23-seller','POST',oct23Freight));const id=(await made.json()).id,ctx={params:Promise.resolve({id})};
+ const link=await sales.POST(await request('/api/sales','admin','POST',{...salePayload,saleChannel:'FROTA',fleetFreightId:id,sellerId:'oct23-seller'}));assert.equal(link.status,201,await link.clone().text());const sid=(await link.json()).id,sctx={params:Promise.resolve({id:sid})};
+ const send=(body:object,actor='change-manager')=>request('/api/sales/x/seller',actor,'PATCH',body).then(req=>transferSale.PATCH(req,sctx));
+ assert.equal((await send({sellerId:'admin',previousSellerId:'oct23-seller'})).status,400);
+ assert.equal((await send({sellerId:'inactive',previousSellerId:'oct23-seller'})).status,400);
+ assert.equal((await send({sellerId:'oct23-op'})).status,400);
+ assert.equal((await send({sellerId:'oct23-op',previousSellerId:'oct23-seller',freightAmountCents:1})).status,400);
+ const cross=await request('/api/sales/x/seller','change-manager','PATCH',{sellerId:'oct23-op',previousSellerId:'oct23-seller'});cross.headers.set('origin','https://untrusted.example');assert.equal((await transferSale.PATCH(cross,sctx)).status,403);
+ await pg.exec("alter table audit_logs add constraint seller_transfer_rollback check(action<>'SELLER_CHANGED') not valid");
+ try {assert.equal((await send({sellerId:'oct23-op',previousSellerId:'oct23-seller'})).status,500);}finally {await pg.exec('alter table audit_logs drop constraint seller_transfer_rollback');}
+ for(const [table,rid] of [['freight_sales',sid],['fleet_freights',id]])assert.equal((await queryFirst(`select seller_id from ${table} where id=?`,[rid]) as {seller_id:string}).seller_id,'oct23-seller');
+ const ok=await send({sellerId:'oct23-op',previousSellerId:'oct23-seller'});assert.equal(ok.status,200,await ok.clone().text());
+ for(const [table,rid] of [['freight_sales',sid],['fleet_freights',id]])assert.equal((await queryFirst(`select seller_id from ${table} where id=?`,[rid]) as {seller_id:string}).seller_id,'oct23-op');
+ assert.equal((await send({sellerId:'oct23-seller',previousSellerId:'oct23-seller'})).status,409);
+ assert.equal((await transferFreight.PATCH(await request('/api/fleet/freights/x/seller','change-finance','PATCH',{sellerId:'oct23-seller',previousSellerId:'oct23-op'}),ctx)).status,200);
+ assert.equal((await queryFirst('select seller_id from freight_sales where id=?',[sid]) as {seller_id:string}).seller_id,'oct23-seller');
+ assert.ok((await queryAll("select id from audit_logs where action='SELLER_CHANGED' and entity_id=?",[id])).length>=2);
 });

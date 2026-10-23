@@ -1,3 +1,5 @@
+import { parseProviderServices } from '@/lib/server/provider-services';
+import { booleanValue } from '@/lib/server/fleet-validation';
 import { resolveSaleSeller, saleCommissionOverride } from "@/lib/server/seller-commission";
 import { resolveFreightClient } from "@/lib/server/registry-validation";
 import { authorize } from "@/lib/server/auth";
@@ -12,6 +14,8 @@ export async function POST(request: Request) {
     const payload = asObject(await request.json());
     if (payload.saleNumber != null) throw new ApiError(400, "O número da venda é gerado automaticamente.");
     if ((user.role === "VENDEDOR" || user.role === "OPERACIONAL") && payload.tripId) throw new ApiError(403, "Seu perfil não pode vincular viagens administrativas.");
+    const providerServices=await parseProviderServices(payload.providerServices);
+    const returnFreight=payload.returnFreight===undefined?false:booleanValue(payload.returnFreight,'Frete retorno');
     const parsed = parseFleetFreightPayload(payload);
     const data = { ...parsed, ...await resolveFreightClient(parsed) };
     const { vehicle, driver } = await resolveFleetReferences(
@@ -65,6 +69,7 @@ export async function POST(request: Request) {
           data.routeDistanceMeters, data.odometerStartMeters, data.odometerEndMeters,
           data.insuranceCostCents, data.invoiceCostCents, data.icmsCostCents, data.cteMdfeCostCents,
         ),
+      db.prepare("update fleet_freights set provider_services=?::text::jsonb,return_freight=? where id=?").bind(JSON.stringify(providerServices),returnFreight,id),
       db.prepare("update fleet_freights set service_situation=?,notes=?,seller_commission_override_cents=?,damages_cost_cents=? where id=?").bind(data.serviceSituation,data.notes,commissionOverrideCents,data.damagesCostCents,id),
       db
         .prepare(
@@ -79,7 +84,7 @@ export async function POST(request: Request) {
           user.id,
           user.email,
           JSON.stringify({
-            ...data, sellerCommissionOverrideCents: commissionOverrideCents, sellerId: seller.id, sellerName: seller.name, sellerCommissionBasisPoints: seller.commissionBasisPoints,
+            ...data, providerServices, returnFreight, sellerCommissionOverrideCents: commissionOverrideCents, sellerId: seller.id, sellerName: seller.name, sellerCommissionBasisPoints: seller.commissionBasisPoints,
             vehiclePlate: vehicle.plate,
             driverName: driver.name,
           }),

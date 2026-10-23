@@ -62,3 +62,19 @@ test('relação compacta comporta cinco vendas com totais e preserva notas ao pa
   if(process.env.CENTRAL_DENSE_QA_OUTPUT){await mkdir(process.env.CENTRAL_DENSE_QA_OUTPUT,{recursive:true});await writeFile(`${process.env.CENTRAL_DENSE_QA_OUTPUT}/cinco-vendas.pdf`,five);await writeFile(`${process.env.CENTRAL_DENSE_QA_OUTPUT}/dez-vendas.pdf`,ten);}
  }finally{PDFPage.prototype.drawText=original;}
 });
+
+test('cabeçalho de cobrança fica só na primeira e última página e intermediárias ganham espaço',async()=>{
+ const rows=Array.from({length:32},(_,i)=>({...row,id:`headers:${i}`,driverName:`MOTORISTA ${i+1}`,receivedDates:['2026-10-02'],notes:`NOTA ${i+1}`}));
+ const report=buildFleetClientReport({id:'test',name:row.clientName},'2026-10-01','2026-10-31',rows);
+ const pages=new Map<PDFPage,{text:string;y:number}[]>(),draw=PDFPage.prototype.drawText;
+ PDFPage.prototype.drawText=function(value,options){const items=pages.get(this)??[];items.push({text:value,y:options?.y??0});pages.set(this,items);return draw.call(this,value,options);};
+ try{
+  const bytes=await renderFleetClientPdf(report,rows.map(r=>({saleId:r.id,text:r.notes})));
+  const pdf=await PDFDocument.load(bytes),texts=[...pages.values()];assert.ok(pdf.getPageCount()>=3);assert.equal(texts.length,pdf.getPageCount());
+  texts.forEach((items,i)=>{assert.equal(items.some(t=>t.text==='CENTRAL EXPRESS'),i===0||i===texts.length-1,`Cabeçalho da página ${i+1}`);assert.ok(items.every(t=>t.y>=20),'Texto fora da página');});
+  for(const items of texts.slice(1,-1))assert.ok(items.some(t=>t.text.startsWith('MOTORISTA')&&t.y>500),'Espaço superior recuperado');
+  for(let i=1;i<=32;i++)assert.equal(texts.flat().filter(t=>t.text===`NOTA ${i}`).length,1);
+  assert.ok(texts[texts.length-1].some(t=>t.text==='VALOR TOTAL'));
+  if(process.env.CENTRAL_DENSE_QA_OUTPUT)await writeFile(`${process.env.CENTRAL_DENSE_QA_OUTPUT}/cabecalhos.pdf`,bytes);
+ }finally{PDFPage.prototype.drawText=draw;}
+});

@@ -19,7 +19,7 @@ export function fleetOrderRelationSql(kind: 'fleet' | 'sale') {
     'createdDate',(${field('created_at', 's.created_at')}::timestamptz at time zone 'America/Sao_Paulo')::date::text,
     'clientId',coalesce(${field('client_id', 's.client_id')},${field('id', 's.id')}),'clientName',${name},
     'vehicles',coalesce(${cargo},jsonb_build_array(jsonb_build_object('model',${model},'plate',${plate},'identification',null))),
-    'driverName',${field('driver_name', 'null::text')},'serviceSituation',${field('service_situation', 's.service_situation')},
+    'returnFreight',${field('return_freight','false')},'driverName',${field('driver_name', 'null::text')},'serviceSituation',${field('service_situation', 's.service_situation')},
     'situation',${field('operational_status', 's.operational_status')},'departureDate',${field('pickup_date', 'null::text')},
     'amountCents',${amount},'receivedCents',${received},'receivedDates',${fleet ? dates : `case when f.id is not null then ${dates} else ${saleDates} end`},
     'paid',case when (${received})>=(${amount}) then 'Sim' when (${received})>0 then 'Parcial' else 'Não' end,

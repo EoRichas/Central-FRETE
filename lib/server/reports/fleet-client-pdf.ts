@@ -1,3 +1,4 @@
+import { providerKindLabel } from '@/lib/domain/provider-services';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { PDFDocument, rgb, type PDFPage } from 'pdf-lib';
@@ -11,7 +12,7 @@ const navy = rgb(.035, .09, .29), ink = rgb(.09, .14, .23), muted = rgb(.37, .44
 const green = rgb(.09, .4, .28), amber = rgb(.6, .36, .08);
 
 /** Customer relation: no cost, commission, margin or internal identity is exported. */
-export async function renderFleetClientPdf(report: FleetClientReport, observations: ClientReportObservation[], orderNumber?: string) {
+export async function renderFleetClientPdf(report: FleetClientReport, observations: ClientReportObservation[], orderNumber?: string, options:{includeProviders?:boolean}={}) {
   // The aggregate relation uses tighter spacing; individual OS keeps its layout.
   const compact = !orderNumber;
   const rowMin = compact ? 44 : 68, lineHeight = compact ? 9 : 11;
@@ -44,17 +45,19 @@ export async function renderFleetClientPdf(report: FleetClientReport, observatio
     }
     return out;
   };
-  let page!: PDFPage, y = 0;
-  const text = (s: string, x: number, yy: number, size = 8, strong = false, color = ink) => page.drawText(safe(s), {x, y: yy, size, font: strong ? bold : regular, color});
-  const rect = (x: number, yy: number, w: number, h: number, color = pale) => page.drawRectangle({x, y: yy, width: w, height: h, color});
+  let page!: PDFPage, y = 0, dryRun=true, lastHeaderIndex=Infinity, forceSummaryPage=false;
+  const text = (s: string, x: number, yy: number, size = 8, strong = false, color = ink) => {if(!dryRun)page.drawText(safe(s), {x, y: yy, size, font: strong ? bold : regular, color});};
+  const rect = (x: number, yy: number, w: number, h: number, color = pale) => {if(!dryRun)page.drawRectangle({x, y: yy, width: w, height: h, color});};
   const newPage = () => {
     page = doc.addPage([W, H]);
+    const pageIndex=doc.getPageCount()-1;
+    if(pageIndex!==0&&pageIndex!==lastHeaderIndex){y=H-M;return;}
     rect(0, H - 108, W, 108, navy); rect(M, H - 82, 3, 59, rgb(.8, .12, .16));
     text('CENTRAL EXPRESS', M + 15, H - 38, 19, true, white);
     text('TRANSPORTE DE VEÍCULOS', M + 15, H - 54, 8, false, white);
     text(orderNumber ? `OS ${orderNumber} | RELAÇÃO DE SERVIÇOS` : 'RELATÓRIO DE VENDAS | RELAÇÃO DE SERVIÇOS', M + 15, H - 81, 11, true, white);
     const logoSize = logo.scale(Math.min(88 / logo.width, 77 / logo.height));
-    page.drawImage(logo, {x: W - M - logoSize.width, y: H - 92, ...logoSize});
+    if(!dryRun)page.drawImage(logo, {x: W - M - logoSize.width, y: H - 92, ...logoSize});
     y = H - 133;
     const names = wrap(`CLIENTE: ${report.client.name}`, WIDTH, 9, true);
     names.forEach((name, i) => text(name, M, y - i * 13, 9, true)); y -= (names.length - 1) * 13 + 20;
@@ -73,6 +76,7 @@ export async function renderFleetClientPdf(report: FleetClientReport, observatio
     rect(M, y - headerHeight, WIDTH, headerHeight, navy); let x = M;
     columns.forEach(c => { wrap(c.label, c.width - 15, 6.8, true).forEach((s, i) => text(s, x + 8, y - 15 - i * 9, 6.8, true, white)); x += c.width; }); y -= headerHeight;
   };
+  const renderBody=()=>{
   newPage(); heading();
   for (const [index, row] of report.rows.entries()) {
     const models = row.vehicles.map(v => v.model || 'Não informado').join('\n');
@@ -82,12 +86,13 @@ export async function renderFleetClientPdf(report: FleetClientReport, observatio
     // Only explicitly selected observations enter a customer document.
     const cells = [formatDate(row.createdDate), row.driverName || 'Não informado', row.clientName,
       models || 'Não informado', plates || 'Não informada', row.serviceSituation || 'Não informada',
-      `${row.clientName}\n${notes.get(row.id) || 'Sem observação incluída.'}`, formatMoney(row.amountCents), confirmation];
+      `${row.clientName}\n${notes.get(row.id) || 'Sem observação incluída.'}${options.includeProviders&&(row.providerServices?.length)?'\nPRESTADORES: '+row.providerServices.map(p=>`${p.providerName}${p.referenceName?' / '+p.referenceName:''} · ${providerKindLabel(p.kind)}: ${formatMoney(p.amountCents)}`).join('\n'):''}${row.returnFreight?'\nFRETE RETORNO':''}`, formatMoney(row.amountCents), confirmation];
     const lines = cells.map((cell, i) => wrap(cell, columns[i].width - 15, 7.3, i === 7));
     const count = Math.max(...lines.map(l => l.length));
     // Move normal rows intact. Extremely long notes continue with repeated headings.
     const rowHeight = Math.max(rowMin, count * lineHeight + rowPadding);
-    const freshTop = H - 173 - (wrap(`CLIENTE: ${report.client.name}`, WIDTH, 9, true).length - 1) * 13 - headerHeight;
+    const nextFull=doc.getPageCount()===lastHeaderIndex;
+    const freshTop = nextFull ? H - 173 - (wrap(`CLIENTE: ${report.client.name}`, WIDTH, 9, true).length - 1) * 13 - headerHeight : H-M-headerHeight;
     if (y - rowHeight < 57 && rowHeight <= freshTop - 57) { newPage(); heading(); }
     let offset = 0;
     while (offset < count) {
@@ -110,7 +115,7 @@ export async function renderFleetClientPdf(report: FleetClientReport, observatio
       y -= height; page.drawLine({start: {x: M, y}, end: {x: W - M, y}, color: line, thickness: .5}); offset += n;
     }
   }
-  if (y < 145) newPage();
+  if (y < 145 || (forceSummaryPage&&doc.getPageCount()-1!==lastHeaderIndex)) newPage();
   y -= 17;
   const cards = [['SERVIÇOS', String(report.totals.sales)], ['VALOR TOTAL', formatMoney(report.totals.amountCents)], ['PAGAMENTO CONFIRMADO', formatMoney(report.totals.receivedCents)], ['SALDO PENDENTE', formatMoney(report.totals.balanceCents)]];
   const cardWidth = (WIDTH - 30) / 4;
@@ -121,6 +126,16 @@ export async function renderFleetClientPdf(report: FleetClientReport, observatio
   y -= 70;
   const basis = 'Data: criação da venda. Situação: tipo de serviço cadastrado na venda. Pagamentos confirmados, descontados os estornos; datas ausentes não são estimadas.';
   wrap(basis, WIDTH, 7).forEach((s, i) => text(s, M, y - i * 11, 7, false, muted));
+  };
+  // Measure without drawing text, then reserve the complete identity only on
+  // the first and last pages. If reserving the last header adds a page, place
+  // the totals there so intermediate pages keep their full table capacity.
+  renderBody();const measured=doc.getPageCount();
+  while(doc.getPageCount())doc.removePage(0);
+  lastHeaderIndex=measured-1;renderBody();
+  if(doc.getPageCount()>measured){lastHeaderIndex=measured;forceSummaryPage=true;}
+  while(doc.getPageCount())doc.removePage(0);
+  dryRun=false;renderBody();
   doc.getPages().forEach((p, i, pages) => {
     page = p; page.drawLine({start: {x: M, y: 34}, end: {x: W - M, y: 34}, color: line, thickness: .6});
     text('CENTRAL EXPRESS | TRANSPORTE DE VEÍCULOS', M, 21, 7, true, navy);

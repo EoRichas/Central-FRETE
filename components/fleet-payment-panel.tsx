@@ -50,7 +50,7 @@ export function FleetPaymentPanel({ id, status, paidAt, proofAttachmentId, canMa
     {canManagePayments && <form id={`fleet-payment-${id}`} onSubmit={confirm} className="form-stack">
       <div className="form-grid two">
         <Field label="Situação"><select value={paymentStatus} onChange={(event) => setPaymentStatus(event.target.value)} disabled={busy}><option value="EM_ABERTO">Em aberto</option><option value="PAGO">Pago</option></select></Field>
-        <Field label="Comprovante para a baixa"><select value={proofId} onChange={(event) => setProofId(event.target.value)} disabled={busy} required={paymentStatus === "PAGO"}><option value="">Selecione</option>{api.data?.attachments.map((attachment) => <option key={attachment.id} value={attachment.id}>{attachment.fileName}</option>)}</select></Field>
+        <Field label="Comprovante para a baixa"><select value={proofId} onChange={(event) => setProofId(event.target.value)} disabled={busy}><option value="">Sem comprovante (opcional)</option>{api.data?.attachments.map((attachment) => <option key={attachment.id} value={attachment.id}>{attachment.fileName}</option>)}</select></Field>
       </div>
       <button className="button primary" disabled={busy}>Salvar situação</button>
     </form>}

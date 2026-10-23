@@ -795,3 +795,6 @@ td > small { max-width: 270px; margin-top: 2px; overflow: hidden; color: var(--m
 @media (min-width: 1100px) { .report-kpis:has(> :nth-child(4)) { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 
 .cegonha-monthly-panel .fleet-monthly-filters { grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); }
+
+/* Scoped selection controls for freight flags and batch settlement. */
+input.selection-checkbox { width: 18px; height: 18px; min-height: 18px; padding: 0; margin: 0; flex: 0 0 18px; vertical-align: middle; accent-color: var(--teal); }

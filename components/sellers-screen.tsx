@@ -84,14 +84,15 @@ export function SellersScreen({
   ) {
     event.preventDefault();
     if (!selectedCommission) return;
-    setSavingSeller(selectedCommission.sellerName);
+    setSavingSeller(`${selectedCommission.sourceKind}:${selectedCommission.saleId}`);
     setMutationError(null);
     try {
       await apiMutation("/api/sellers/commissions", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          sellerName: selectedCommission.sellerName,
+          sourceKind: selectedCommission.sourceKind,
+          saleId: selectedCommission.saleId,
           competency,
           status: commissionStatus,
           paidAt: commissionStatus === "PAGO" ? commissionPaidAt : null,
@@ -193,9 +194,9 @@ export function SellersScreen({
                           <button
                             type="button"
                             className="table-action"
-                            aria-label={`Editar pagamento de comissão de ${item.sellerName}`}
+                            aria-label={`Editar comissão da venda ${item.saleNumber} de ${item.sellerName}`}
                             title="Editar pagamento"
-                            disabled={savingSeller === item.sellerName}
+                            disabled={savingSeller === `${item.sourceKind}:${item.saleId}`}
                             onClick={() => openCommissionPayment(item)}
                           >
                             <Icons.chevron />
@@ -216,7 +217,7 @@ export function SellersScreen({
         open={selectedCommission !== null}
         onClose={() => setSelectedCommission(null)}
         title="Pagamento da comissão"
-        description={selectedCommission ? `${selectedCommission.sellerName} · ${competencyLabel(competency)}` : undefined}
+        description={selectedCommission ? `${selectedCommission.sellerName} · Venda ${selectedCommission.saleNumber} · ${competencyLabel(competency)}` : undefined}
       >
         <form className="modal-body form-stack" onSubmit={saveCommissionPayment}>
           {selectedCommission && (
