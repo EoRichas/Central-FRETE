@@ -365,7 +365,7 @@ export function SaleDetailScreen({ id, onBack, onViewOrder, hideDeleteActions = 
       <section className="panel receivables-panel">
         <header>
           <div><span className="eyebrow">Financeiro</span><h2>Recebimentos</h2></div>
-          {canManagePayments && <button className="button primary" onClick={() => { setError(null); setPaymentOpen(true); }}><Icons.plus /> Novo recebimento</button>}
+          {canManagePayments && <button className="button secondary create-sale-action" onClick={() => { setError(null); setPaymentOpen(true); }}><Icons.plus /> Novo recebimento</button>}
         </header>
         <div className="receivable-summary">
           <div><span>Valor previsto</span><strong>{formatMoney(sale.freightAmountCents)}</strong></div>

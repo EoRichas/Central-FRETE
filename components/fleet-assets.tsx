@@ -299,7 +299,7 @@ export function FleetAssetsPanel({fleet,openVehicle,openDriver}: {
                   {fleet.canManage && (
                     <button
                       type="button"
-                      className="button primary"
+                      className="button secondary create-sale-action"
                       onClick={() => openVehicle(null)}
                     >
                       <Icons.plus /> Novo veículo
@@ -384,7 +384,7 @@ export function FleetAssetsPanel({fleet,openVehicle,openDriver}: {
                   {fleet.canManage && (
                     <button
                       type="button"
-                      className="button secondary"
+                      className="button secondary create-sale-action"
                       onClick={() => openDriver(null)}
                     >
                       <Icons.plus /> Novo motorista

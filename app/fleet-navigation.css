@@ -42,3 +42,6 @@
 .calculation-summary small { display: block; font-size: 11px; margin-top: 4px; font-weight: 400; }
 
 .page-actions .button.create-sale-action:not(.compact-button) { background: #fff; color: #233d53; border-color: #c8d5df; }
+
+/* All create actions use the same appearance as Novo frete, across roles. */
+.button.create-sale-action:not(.compact-button) { min-height: 42px; background: #fff; color: #233d53; border-color: #c8d5df; }

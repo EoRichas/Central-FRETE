@@ -2196,3 +2196,18 @@ test('editar frete permite trocar vendedor na Cegonha e Frota, salva vínculos j
  try{assert.equal((await freightEdit.PATCH(await request('/api/fleet/freights/x','edit-admin','PATCH',{sellerId:'edit-owner',previousSellerId:'edit-op',notes:'REVERTER TUDO'}),fctx)).status,500);}finally{await pg.exec('alter table audit_logs drop constraint edit_seller_rollback');}
  for(const [table,id] of [['freight_sales',sid],['fleet_freights',fid]])assert.equal((await queryFirst(`select seller_id from ${table} where id=?`,[id]) as {seller_id:string}).seller_id,'edit-op');
 });
+
+test('vendedor cadastra para outro vendedor ativo sem obter acesso à carteira ou percentual dele',async()=>{
+ await pg.exec("insert into users(id,email,name,role,commission_basis_points,active) values ('css-creator','css-creator@example.test','CRIADOR','VENDEDOR',700,1),('css-target','css-target@example.test','DESTINO','VENDEDOR',350,1),('css-inactive','css-inactive@example.test','INATIVO','VENDEDOR',900,0)");
+ const sales=await import('../../app/api/sales/route.ts'),fleets=await import('../../app/api/fleet/freights/route.ts'),saleDetail=await import('../../app/api/sales/[id]/route.ts'),freightDetail=await import('../../app/api/fleet/freights/[id]/route.ts'),directory=await import('../../app/api/sales/sellers/route.ts');
+ const options=await (await directory.GET(await request('/api/sales/sellers?assignment=1','css-creator'))).json();assert.ok(options.sellers.some((u:{id:string})=>u.id==='css-target'));assert.ok(options.sellers.every((u:object)=>!('commissionBasisPoints' in u)));
+ for(const kind of ['sale','fleet']){
+  const payload={...(kind==='sale'?salePayload:registeredFreight),clientId:'lookup-a',sellerId:'css-target',sellerName:'NOME FORJADO',commissionBasisPoints:9999,sellerCommissionBasisPoints:9999,assignSellerOnCreate:true};
+  const api=kind==='sale'?sales:fleets,path=kind==='sale'?'/api/sales':'/api/fleet/freights';
+  const result=await api.POST(await request(path,'css-creator','POST',payload));assert.equal(result.status,201,await result.clone().text());const {id}=await result.json();
+  const row=await queryFirst(kind==='sale'?'select seller_id as sellerId,seller_name as name,commission_basis_points as rate,created_by as creator from freight_sales where id=?':'select seller_id as sellerId,seller_name as name,seller_commission_basis_points as rate,created_by as creator from fleet_freights where id=?',[id]);assert.deepEqual(row,{sellerId:'css-target',name:'DESTINO',rate:350,creator:'css-creator'});
+  const detail=kind==='sale'?saleDetail:freightDetail,ctx={params:Promise.resolve({id})};assert.equal((await detail.GET(await request(path+'/'+id,'css-creator'),ctx)).status,404);assert.equal((await detail.GET(await request(path+'/'+id,'css-target'),ctx)).status,200);
+  for(const sellerId of ['css-inactive','admin','missing'])assert.equal((await api.POST(await request(path,'css-creator','POST',{...payload,sellerId}))).status,400);
+ }
+ const ownList=await (await fleets.GET(await request('/api/fleet/freights','css-target'))).json();assert.ok(ownList.freights.length);assert.ok(ownList.freights.every((f:{sellerId:string})=>f.sellerId==='css-target'));for(const f of ownList.freights){for(const key of ['vehiclePlate','driverName','priority','operationalStatus','paymentStatus','sellerName'])assert.ok(key in f);assert.ok(!('sellerCommissionBasisPoints' in f));}
+});

@@ -3,16 +3,16 @@ import { Icons } from "@/components/icons";
 import { StatusBadge } from "@/components/ui";
 import {
   FLEET_OPERATIONAL_STATUS_LABELS,
-  type FleetFreight,
+  type FleetFreightListRow,
 } from "@/lib/domain/fleet";
 import { formatDate, formatMoney } from "@/lib/format";
 
-export function FreightTable({
+export function FreightTable<T extends FleetFreightListRow>({
   freights,
   onOpen,
 }: {
-  freights: FleetFreight[];
-  onOpen: (freight: FleetFreight) => void;
+  freights: T[];
+  onOpen: (freight: T) => void;
 }) {
   if (!freights.length) {
     return (
