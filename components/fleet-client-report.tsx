@@ -7,7 +7,6 @@ import { formatDate, formatMoney } from '@/lib/format';
 import { useApi } from './use-api';
 import { EmptyState, ErrorState, LoadingState, Modal } from './ui';
 import { FleetReportSaleDetail } from './fleet-report-sale-detail';
-import { ProviderReportPanel } from "./provider-report-panel";
 import { providerKindLabel } from "@/lib/domain/provider-services";
 import { Icons } from './icons';
 import styles from './fleet-client-report.module.css';
@@ -73,7 +72,6 @@ export function FleetClientReportPanel() {
       </tbody></table></div></div>}
     </> : <EmptyState title="Consulte as vendas de um cliente" description="Escolha o cliente e o intervalo de criação para visualizar o relatório." />}
 
-    <ProviderReportPanel />
     <Modal open={Boolean(pdf)} onClose={closePreview} title="Relatório de vendas" description="Todos os serviços do cliente e período consultados, com as observações salvas nas OS individuais." wide>
       {pdf && <div className="modal-body form-stack"><div className="order-actions"><a className="button secondary" href={pdf.url} target="_blank" rel="noreferrer">Visualizar / imprimir</a><a className="button secondary" href={pdf.url} download={pdf.filename}>Salvar PDF</a><button type="button" className="button secondary" onClick={closePreview}>Fechar</button></div><iframe className="order-preview" title="Relatório de vendas" src={pdf.url} /></div>}
     </Modal>

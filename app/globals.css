@@ -545,7 +545,7 @@ td > small { max-width: 270px; margin-top: 2px; overflow: hidden; color: var(--m
 }
 
 @media print {
-  @page { size: A4 landscape; margin: 12mm; }
+  @page { size: A4 portrait; margin: 12mm; }
   body { background: white; color: black; }
   .sidebar, .topbar, .no-print, .page-header, .button { display: none !important; }
   .app-main { margin: 0 !important; }
@@ -814,3 +814,7 @@ input.selection-checkbox { width: 18px; height: 18px; min-height: 18px; padding:
  .finance-filters .filter-stat { padding-top: 0; justify-content: center; }
  .provider-selector { flex-basis: calc(100% - 54px); min-width: 0; }
 }
+
+.module-tabs button { background: transparent; border: 0; border-bottom: 3px solid transparent; padding: 12px 18px; color: var(--muted); font: inherit; font-weight: 600; cursor: pointer; }
+.module-tabs button.active { color: var(--teal); border-bottom-color: currentColor; }
+.module-tabs button:focus-visible { outline: 2px solid var(--teal); outline-offset: -2px; }

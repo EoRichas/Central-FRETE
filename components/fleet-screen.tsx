@@ -7,14 +7,11 @@ import type { CurrentUser } from "@/lib/contracts";
 
 import { StorageCleanupNotice } from "@/components/storage-cleanup-notice";
 import { useMemo, useState } from "react";
-import { FleetMonthlyPanel } from "@/components/fleet-monthly-panel";
 import { FleetBilling } from "@/components/fleet-billing";
-import { FleetClientReportPanel } from "@/components/fleet-client-report";
 import { currentCompetency } from "@/lib/domain/dates";
 import { cargoVehiclesOrLegacy } from "@/lib/domain/cargo-vehicles";
 import { Icons } from "@/components/icons";
 import {
-  EmptyState,
   ErrorState,
   LoadingState,
   PageHeader,
@@ -31,7 +28,7 @@ import {
   type FleetFreight,
   type FleetVehicle,
 } from "@/lib/domain/fleet";
-import { formatMoney, formatPercent } from "@/lib/format";
+import { formatMoney } from "@/lib/format";
 import { FreightTable } from "@/components/fleet-freight-table";
 import { FleetFreightDetail } from "@/components/fleet-freight-detail";
 import { FreightModal } from "@/components/fleet-freight-modal";
@@ -41,7 +38,7 @@ import {
   DriverModal,
 } from "@/components/fleet-assets";
 
-type FleetTab = "overview" | "freights" | "assets" | "monthly" | "billing" | "report";
+type FleetTab = "freights" | "assets" | "billing";
 
 function sellerFilterValue(freight: FleetFreight) {
   if (freight.sellerId) return `id:${freight.sellerId}`;
@@ -60,10 +57,10 @@ export function FleetScreen() {
 
 function FleetOperationsScreen() {
   const [calculationOpen, setCalculationOpen] = useState(false);
-  const [selectedTab, setTab] = useState<FleetTab>("overview");
+  const [selectedTab, setTab] = useState<FleetTab>("freights");
   const [periods, setPeriods] = useState<Record<FleetTab, string>>(() => {
     const month = currentCompetency();
-    return {overview: month, freights: month, assets: month, monthly: month, billing: month, report: month};
+    return {freights: month, assets: month, billing: month};
   });
   const competency = periods[selectedTab];
   const setCompetency = (value: string) => setPeriods(current => ({...current, [selectedTab]: value}));
@@ -71,7 +68,7 @@ function FleetOperationsScreen() {
     `/api/fleet?${competency ? `competency=${competency}` : "period=all"}`,
   );
   const fleet = api.data?.fleet;
-  const tab = fleet?.freightOnly && selectedTab !== "report" ? "freights" : selectedTab;
+  const tab = fleet?.freightOnly ? "freights" : selectedTab;
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
@@ -167,15 +164,12 @@ function FleetOperationsScreen() {
   }
 
   const allTabs: Array<{ id: FleetTab; label: string }> = [
-    { id: "overview", label: "Visão geral" },
     { id: "freights", label: "Fretes" },
     { id: "assets", label: "Veículos e motoristas" },
-    { id: "monthly", label: "Fechamento mensal" },
     { id: "billing", label: "Faturamento" },
-    { id: "report", label: "Relatório de vendas" },
   ];
   const tabs = fleet?.freightOnly
-    ? allTabs.filter((item) => item.id === "freights" || item.id === "report")
+    ? allTabs.filter((item) => item.id === "freights")
     : allTabs;
 
   const viewedFreight = fleet?.freights.find(f => f.id === viewingId) ?? fleet?.billing.freights.find(f => f.id === viewingId);
@@ -192,9 +186,9 @@ function FleetOperationsScreen() {
         description="Acompanhe os fretes, o resultado por caminhão e o fechamento mensal."
         actions={
           <>
-            {tab !== "report" && <label className="compact-filter">
+            {<label className="compact-filter">
               <span>
-                {tab === "monthly" || tab === "billing"
+                {tab === "billing"
                   ? "Mês de faturamento"
                   : "Competência"}
               </span>
@@ -231,7 +225,7 @@ function FleetOperationsScreen() {
       {fleet && (
         <div className="fleet-stack">
           <div
-            className="fleet-tabs"
+            className="cegonha-tabs module-tabs"
             role="tablist"
             aria-label="Áreas da Frota"
           >
@@ -248,72 +242,6 @@ function FleetOperationsScreen() {
               </button>
             ))}
           </div>
-          {tab === "overview" && !fleet.freightOnly && (
-            <>
-              <section className="kpi-grid fleet-kpis">
-                <article className="kpi-card">
-                  <span>Faturamento</span>
-                  <strong>{formatMoney(fleet.billing.revenueCents)}</strong>
-                  <small>
-                    {fleet.billing.freightCount} fretes e vendas Frota no período
-                  </small>
-                  <button
-                    className="text-button"
-                    onClick={() => setTab("billing")}
-                  >
-                    Ver detalhamento
-                  </button>
-                </article>
-                <article className="kpi-card">
-                  <span>Comissões dos motoristas</span>
-                  <strong>{formatMoney(fleet.billing.commissionCents)}</strong>
-                  <small>Fretes coletados no mês, mesmo sem faturamento</small>
-                  <button
-                    className="text-button"
-                    onClick={() => setTab("billing")}
-                  >
-                    Ver motoristas e fretes
-                  </button>
-                </article>
-                <article className="kpi-card accent">
-                  <span>Resultado das operações</span>
-                  <strong>{formatMoney(fleet.summary.netRevenueCents)}</strong>
-                  <small>
-                    {formatPercent(fleet.summary.averageMarginBasisPoints)} ·
-                    Fretes por mês da coleta; inclui combustível estimado quando
-                    não apurado.
-                  </small>
-                  <button type="button" className="button secondary" onClick={() => setCalculationOpen(true)}>Como é calculado?</button>
-                </article>
-              </section>
-              <section className="panel table-panel">
-                <header className="fleet-panel-header">
-                  <div>
-                    <span className="eyebrow">Atividade recente</span>
-                    <h2>Últimos fretes</h2>
-                  </div>
-                  <button
-                    type="button"
-                    className="text-button"
-                    onClick={() => setTab("freights")}
-                  >
-                    Ver todos
-                  </button>
-                </header>
-                {fleet.freights.length ? (
-                  <FreightTable
-                    freights={fleet.freights.slice(0, 6)}
-                    onOpen={f => setViewingId(f.id)}
-                  />
-                ) : (
-                  <EmptyState
-                    title="Nenhum frete cadastrado"
-                    description="Cadastre a primeira operação da Frota para iniciar os indicadores."
-                  />
-                )}
-              </section>
-            </>
-          )}
           {tab === "freights" && (
             <>
               <section className="filter-panel fleet-filter-panel">
@@ -382,13 +310,9 @@ function FleetOperationsScreen() {
             </>
           )}
           {tab === "assets" && !fleet.freightOnly && <FleetAssetsPanel fleet={fleet} openVehicle={openVehicle} openDriver={openDriver} />}
-        {tab === "monthly" && !fleet.freightOnly && (
-            <FleetMonthlyPanel key={competency} competency={competency} onCompetencyChange={setCompetency} />
-          )}
           {tab === "billing" && !fleet.freightOnly && (
             <FleetBilling data={fleet.billing} onOpen={f => setViewingId(f.id)} />
           )}
-          {tab === "report" && <FleetClientReportPanel />}
         </div>
       )}
       </>}

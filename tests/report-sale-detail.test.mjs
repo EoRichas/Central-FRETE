@@ -124,7 +124,7 @@ test('OS abre prévia inline, com impressão e download separados e sem emissão
   }
 });
 
-test('Novo frete aparece só em Fretes e a explicação abre e fecha em modal', () => {
+test('Frota inicia em Fretes e Novo frete não aparece nas demais abas', () => {
   const state=hooks(); state.react.useMemo=fn=>fn();
   const noOp=()=>null, mod=new Proxy({}, {get:()=>noOp});
   const source=readFileSync(new URL('../components/fleet-screen.tsx',import.meta.url),'utf8');
@@ -141,12 +141,10 @@ test('Novo frete aparece só em Fretes e a explicação abre e fecha em modal', 
   const inner=FleetScreen().type; const render=()=>{state.reset();return inner();};
   const walk=(node,match)=>{if(!node||typeof node!=='object')return null;if(Array.isArray(node)){for(const child of node){const result=walk(child,match);if(result)return result;}return null;}return match(node)?node:walk(node.props?.children,match)||walk(node.props?.actions,match);};
   const create=tree=>walk(tree,n=>n.type==='button'&&n.props.className?.includes('create-sale-action'));
-  let tree=render(); assert.equal(create(tree),null);
-  find(tree,n=>n.type==='button'&&n.props.children==='Como é calculado?').props.onClick();tree=render();
-  let modal=find(tree,n=>n.props?.title==='Como é calculado o resultado das operações?');assert.equal(modal.props.open,true);
-  find(modal,n=>n.type==='button'&&n.props.children==='Fechar').props.onClick();tree=render();
-  assert.equal(find(tree,n=>n.props?.title==='Como é calculado o resultado das operações?').props.open,false);
-  find(tree,n=>n.type==='button'&&n.props.children==='Ver todos').props.onClick();tree=render();assert.ok(create(tree));
+  let tree=render(); assert.ok(create(tree));
+  for(const label of ['Visão geral','Fechamento mensal','Relatório de vendas']) assert.equal(find(tree,n=>n.type==='button'&&n.props.children===label),null);
+  find(tree,n=>n.type==='button'&&n.props.children==='Faturamento').props.onClick();tree=render();assert.equal(create(tree),null);
+
 });
 
 test('fretes filtra vendedor ao lado de prioridade, combinando filtros e preservando identidades e histórico', () => {
@@ -427,7 +425,7 @@ test('troca de senha confirma antes do envio, mostra erro e redireciona após su
  }finally{globalThis.FormData=original;}
 });
 
-test('operacional encontra relatório na Frota e continua sem abas de administração',()=>{
+test('operacional permanece em Fretes sem abas removidas ou de administração',()=>{
  const state=hooks();state.react.useMemo=fn=>fn();const noOp=()=>null,mod=new Proxy({},{get:()=>noOp});
  const source=readFileSync(new URL('../components/fleet-screen.tsx',import.meta.url),'utf8');
  const overrides=Object.fromEntries([...source.matchAll(/from\s+["']([^"']+)["']/g)].map(m=>[m[1],mod]));const ReportPanel=()=>null;
@@ -439,9 +437,10 @@ test('operacional encontra relatório na Frota e continua sem abas de administra
   '@/components/use-api':{useApi:url=>url==='/api/me'?{data:{user:{role:'OPERACIONAL'}}}:{data:{fleet:{freightOnly:true,canEditFreights:true,freights:[],vehicles:[],drivers:[],summary:{},billing:{freights:[],drivers:[]}}}}},
  });
  const {FleetScreen}=compile('components/fleet-screen.tsx',overrides);const inner=FleetScreen().type,render=()=>{state.reset();return inner();};
- let tree=render();const button=find(tree,n=>n.type==='button'&&n.props.children==='Relatório de vendas');assert.ok(button);
- for(const label of ['Visão geral','Faturamento','Fechamento mensal'])assert.equal(find(tree,n=>n.type==='button'&&n.props.children===label),null);
- button.props.onClick();tree=render();assert.ok(find(tree,n=>n.type===ReportPanel));
+ const tree=render();
+ for(const label of ['Visão geral','Faturamento','Fechamento mensal','Relatório de vendas'])assert.equal(find(tree,n=>n.type==='button'&&n.props.children===label),null);
+ assert.ok(find(tree,n=>n.type==='button'&&n.props.children==='Fretes'));
+
 });
 
 test('comissão envia somente a origem e o ID da venda selecionada',async()=>{
@@ -530,4 +529,19 @@ test('editar frete mantém seleção de vendedor na Frota e Cegonha e envia a tr
    if(role!=='ADMIN')assert.equal(Object.hasOwn(calls[0].body,kind==='fleet'?'sellerCommissionOverrideCents':'commissionOverrideCents'),false);
   }
  }finally{globalThis.FormData=OriginalFormData;}
+});
+
+test('Relatórios centraliza resultado existente, vendas e prestadores em abas independentes', () => {
+ const state=hooks(), Sales=()=>null, Providers=()=>null;
+ const source=readFileSync(new URL('../components/general-sales-screen.tsx',import.meta.url),'utf8');
+ const mod=new Proxy({},{get:()=>()=>null});
+ const overrides=Object.fromEntries([...source.matchAll(/from\s+["']([^"']+)["']/g)].map(m=>[m[1],mod]));
+ Object.assign(overrides,{react:state.react,'./fleet-client-report':{FleetClientReportPanel:Sales},'./provider-report-panel':{ProviderReportPanel:Providers},'@/components/ui':ui});
+ const {GeneralSalesScreen}=compile('components/general-sales-screen.tsx',overrides);
+ const render=()=>{state.reset();return GeneralSalesScreen();};let tree=render();
+ assert.ok(find(tree,n=>n.type?.name==='ExistingSalesReport'));
+ find(tree,n=>n.type==='button'&&n.props.children==='Relatório de vendas').props.onClick();tree=render();
+ assert.ok(find(tree,n=>n.type===Sales));assert.equal(find(tree,n=>n.type===Providers),null);
+ find(tree,n=>n.type==='button'&&n.props.children==='Relatório de prestadores').props.onClick();tree=render();assert.ok(find(tree,n=>n.type===Providers));
+ find(tree,n=>n.type==='button'&&n.props.children==='Fechamento / resultado').props.onClick();tree=render();assert.ok(find(tree,n=>n.type?.name==='ExistingSalesReport'));
 });

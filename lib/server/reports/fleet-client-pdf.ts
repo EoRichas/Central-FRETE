@@ -7,7 +7,7 @@ import type { FleetClientReport } from '@/lib/domain/fleet-client-report';
 import { formatDate, formatMoney } from '@/lib/format';
 
 export type ClientReportObservation = {saleId: string; text: string};
-const W = 841.89, H = 595.28, M = 28, WIDTH = W - 2 * M;
+const W = 595.28, H = 841.89, M = 28, WIDTH = W - 2 * M;
 const navy = rgb(.035, .09, .29), ink = rgb(.09, .14, .23), muted = rgb(.37, .44, .54), pale = rgb(.94, .96, .98), white = rgb(1, 1, 1), line = rgb(.83, .87, .93);
 const green = rgb(.09, .4, .28), amber = rgb(.6, .36, .08);
 
@@ -28,7 +28,7 @@ export async function renderFleetClientPdf(report: FleetClientReport, observatio
   const regular = await doc.embedFont(regularBytes, {subset: true}), bold = await doc.embedFont(boldBytes, {subset: true}), logo = await doc.embedPng(logoBytes);
   const charset = new Set(regular.getCharacterSet());
   const safe = (s: string) => [...s.normalize('NFC').replace(/[\u0000-\u0008\u000b-\u001f]/g, '')].map(c => c === '\n' || charset.has(c.codePointAt(0)!) ? c : '?').join('');
-  const wrap = (value: string, width: number, size = 7.3, strong = false) => {
+  const wrap = (value: string, width: number, size = 6.4, strong = false) => {
     const font = strong ? bold : regular, out: string[] = [];
     for (const paragraph of safe(value).split('\n')) {
       let current = '';
@@ -67,14 +67,14 @@ export async function renderFleetClientPdf(report: FleetClientReport, observatio
     y -= 20;
   };
   const columns = [
-    {label: 'DATA', width: 64}, {label: 'MOTORISTA', width: 73}, {label: 'CLIENTE', width: 81},
-    {label: 'VEÍCULO', width: 84}, {label: 'PLACA', width: 63}, {label: 'SITUAÇÃO', width: 72},
-    {label: 'CLIENTE / OBSERVAÇÃO', width: 139}, {label: 'VALOR\nSERVIÇO', width: 85},
-    {label: 'CONFIRMAÇÃO\nDO PAGAMENTO', width: WIDTH - 661},
+    {label: 'DATA', width: 54}, {label: 'MOTORISTA', width: 54}, {label: 'CLIENTE', width: 55},
+    {label: 'VEÍCULO', width: 54}, {label: 'PLACA', width: 46}, {label: 'SITUAÇÃO', width: 62},
+    {label: 'CLIENTE / OBSERVAÇÃO', width: 90}, {label: 'VALOR\nSERVIÇO', width: 62},
+    {label: 'CONFIRMAÇÃO\nDO PAGAMENTO', width: WIDTH - 477},
   ];
   const heading = () => {
     rect(M, y - headerHeight, WIDTH, headerHeight, navy); let x = M;
-    columns.forEach(c => { wrap(c.label, c.width - 15, 6.8, true).forEach((s, i) => text(s, x + 8, y - 15 - i * 9, 6.8, true, white)); x += c.width; }); y -= headerHeight;
+    columns.forEach(c => { wrap(c.label, c.width - 10, 5.6, true).forEach((s, i) => text(s, x + 5, y - 13 - i * 8, 5.6, true, white)); x += c.width; }); y -= headerHeight;
   };
   const renderBody=()=>{
   newPage(); heading();
@@ -86,8 +86,8 @@ export async function renderFleetClientPdf(report: FleetClientReport, observatio
     // Only explicitly selected observations enter a customer document.
     const cells = [formatDate(row.createdDate), row.driverName || 'Não informado', row.clientName,
       models || 'Não informado', plates || 'Não informada', row.serviceSituation || 'Não informada',
-      `${row.clientName}\n${notes.get(row.id) || 'Sem observação incluída.'}${options.includeProviders&&(row.providerServices?.length)?'\nPRESTADORES: '+row.providerServices.map(p=>`${p.providerName}${p.referenceName?' / '+p.referenceName:''} · ${providerKindLabel(p.kind)}: ${formatMoney(p.amountCents)}`).join('\n'):''}`, formatMoney(row.amountCents), confirmation];
-    const lines = cells.map((cell, i) => wrap(cell, columns[i].width - 15, 7.3, i === 7));
+      `${row.clientName}\n${notes.get(row.id) || 'Sem observação incluída.'}${orderNumber && row.returnFreight ? '\nFrete retorno aproveitado' : ''}${options.includeProviders&&(row.providerServices?.length)?'\nPRESTADORES: '+row.providerServices.map(p=>`${p.providerName}${p.referenceName?' / '+p.referenceName:''} · ${providerKindLabel(p.kind)}: ${formatMoney(p.amountCents)}`).join('\n'):''}`, formatMoney(row.amountCents), confirmation];
+    const lines = cells.map((cell, i) => wrap(cell, columns[i].width - 15, 6.4, i === 7));
     const count = Math.max(...lines.map(l => l.length));
     // Move normal rows intact. Extremely long notes continue with repeated headings.
     const rowHeight = Math.max(rowMin, count * lineHeight + rowPadding);
@@ -108,8 +108,8 @@ export async function renderFleetClientPdf(report: FleetClientReport, observatio
         if (!visible.length && offset > 0 && i !== 6) visible.push(...lines[i].slice(0, n));
         visible.forEach((s, j) => {
           const strong = i === 7, color = i === 8 && offset + j === 0 ? (row.paid === 'Sim' ? green : amber) : ink;
-          const xx = i === 7 ? x + c.width - 7 - bold.widthOfTextAtSize(s, 7.3) : x + 8;
-          text(s, xx, y - textTop - j * lineHeight, 7.3, strong, color);
+          const xx = i === 7 ? x + c.width - 7 - bold.widthOfTextAtSize(s, 6.4) : x + 8;
+          text(s, xx, y - textTop - j * lineHeight, 6.4, strong, color);
         }); x += c.width;
       });
       y -= height; page.drawLine({start: {x: M, y}, end: {x: W - M, y}, color: line, thickness: .5}); offset += n;

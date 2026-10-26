@@ -370,7 +370,7 @@ export function FreightModal({
         tollCents: moneyInputToCents(toll || "0"),
         driverCommissionCents: moneyInputToCents(driverCommission || "0"),
         sellerId,...(editing?{previousSellerId:freight?.sellerId??null}:{}),
-        providerServices,
+        providerServices, returnFreight: financialOnly ? freight?.returnFreight ?? false : form.get("returnFreight") === "on",
         serviceSituation: financialOnly ? freight?.serviceSituation : form.get("serviceSituation"),
         notes: form.get("notes"),
         ...(canSeeCommission ? {sellerCommissionOverrideCents: commissionValue?.trim() ? moneyInputToCents(commissionValue) : null} : {}),
@@ -704,6 +704,7 @@ export function FreightModal({
             <Field label="Avarias (R$)"><input value={damagesCostCents} onChange={e => setDamagesCostCents(e.target.value)} inputMode="decimal" placeholder="0,00" /></Field>
           </div>
           <ProviderServicesEditor services={providerServices} onChange={setProviderServices} mode="costs" />
+          <label className="fleet-check-field"><input className="selection-checkbox" type="checkbox" name="returnFreight" defaultChecked={freight?.returnFreight ?? false} disabled={financialOnly} /> Aproveitamento frete retorno</label>
           <Field label="Observações" hint="Anotações sobre despesas à parte. Para incluir um valor no resultado, registre-o no custo correspondente."><textarea name="notes" rows={4} maxLength={5000} defaultValue={freight?.notes ?? ''} /></Field>
           {canSeeCommission && <Field label="Valor da comissão (R$)" hint="Preenchido automaticamente. Altere o valor se houver uma comissão combinada."><input inputMode="decimal" value={commissionValue ?? centsToInput(calculatedCommission ?? 0)} onChange={e=>setCommissionValue(e.target.value)} onBlur={()=>{if (!commissionValue?.trim()) setCommissionValue(null);}} required /></Field>}
           {preview && (!editing || freight?.sellerCommissionBasisPoints != null) && (
