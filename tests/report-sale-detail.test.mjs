@@ -363,7 +363,7 @@ test('vendedor abre edição e baixa pela própria lista Frota e atualiza detalh
 });
 
 test('barra lateral permite edição e configurações pessoais, mas preserva o fechamento restrito', () => {
- for (const role of ['VENDEDOR','OPERACIONAL']) for (const path of ['/vendas/234/editar','/configuracoes','/vendas-gerais','/vendas/fechamento']) {
+ for (const role of ['VENDEDOR','OPERACIONAL']) for (const path of ['/vendas/234/editar','/configuracoes','/vendas-gerais','/vendas/fechamento','/clientes']) {
   const state=hooks([false,false,{id:'seller',name:'USUÁRIO',role},true,0]);state.react.useSyncExternalStore=()=>false;
   const marker=React.createElement('div',null,'FORMULÁRIO DA VENDA');const noOp=()=>null,mod=new Proxy({},{get:()=>noOp});
   const src=readFileSync(new URL('../components/app-shell.tsx',import.meta.url),'utf8');const overrides=Object.fromEntries([...src.matchAll(/from\s+["']([^"']+)["']/g)].map(m=>[m[1],mod]));
