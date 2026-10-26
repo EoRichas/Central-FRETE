@@ -36,11 +36,9 @@ export const metadata: Metadata = {
 const themeBootstrap = `
 (function () {
   try {
-    var saved = window.localStorage.getItem("cf-theme");
-    var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-    var theme = saved === "dark" || (!saved && prefersDark) ? "dark" : "light";
-    document.documentElement.dataset.theme = theme;
-    document.documentElement.style.colorScheme = theme;
+    document.documentElement.dataset.theme = "light";
+    document.documentElement.style.colorScheme = "light";
+    window.localStorage.removeItem("cf-theme");
   } catch (_) {
     document.documentElement.dataset.theme = "light";
     document.documentElement.style.colorScheme = "light";

@@ -21,9 +21,9 @@ test('relatório usa criação em São Paulo, cliente por ID e inclui os dois li
 
 test('combustível é motivo exclusivo da Frota; custos reais da Cegonha não são escondidos', () => {
   const sale: ReportSale & {fleetFreightId: null} = {id: 'c', fleetFreightId: null, saleChannel: 'CEGONHA', saleNumber: '201', saleDate: '2026-10-01', sellerId: null, sellerName: 'Nome', clientName: 'Cliente', freightAmountCents: 10000, commissionBasisPoints: 0, costsPending: true, costs: [], financial: {commissionCents: 0, transportCostCents: 1000, marginCents: 9000, marginBasisPoints: 9000}};
-  const freight = {id: 'f', saleNumber: '202', pickupDate: '2026-10-01', clientName: 'Cliente', freightAmountCents: 5000, totalCostCents: 2000, netRevenueCents: 3000, marginBasisPoints: 6000, fuelCostSource: 'ESTIMADO'} as FleetFreight;
+  const freight = {id: 'f', saleNumber: '202', pickupDate: '2026-10-01', clientName: 'Cliente', freightAmountCents: 5000, totalCostCents: 2000, netRevenueCents: 3000, marginBasisPoints: 6000, fuelCostSource: 'ESTIMADO',returnFreight:true,vehiclePlate:'AAA1A11'} as FleetFreight;
   const report = buildSalesReport(consolidateReportSales([sale], [freight]));
-  assert.equal(report.pendingCosts, 2); assert.equal(report.pendingCostCount, 1); assert.equal(report.pendingFuelCount, 1);
+  assert.equal(report.returnFreightCount,1);assert.equal(report.returnFreights[0].vehiclePlate,'AAA1A11');assert.equal(report.pendingCosts, 2); assert.equal(report.pendingCostCount, 1); assert.equal(report.pendingFuelCount, 1);
   assert.match(partialResultMessage(report), /1 venda\(s\) com custos pendentes/);
   assert.match(partialResultMessage(report), /1 frete\(s\) da Frota com combustível estimado/);
   const cegonha = buildSalesReport(consolidateReportSales([sale], []));

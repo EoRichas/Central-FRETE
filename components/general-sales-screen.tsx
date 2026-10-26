@@ -5,9 +5,10 @@ import { FleetClientReportPanel } from "./fleet-client-report";
 import { ProviderReportPanel } from "./provider-report-panel";
 import { useState } from "react";
 import type { ReportSale } from "@/lib/domain/reports";
-import { partialResultMessage, type SalesReport } from "@/lib/domain/reports";
+import { type SalesReport } from "@/lib/domain/reports";
 import { PdfDownloadButton } from "@/components/pdf-download-button";
 import {
+  competencyLabel,
   formatDate,
   formatMoney,
   formatPercent,
@@ -72,7 +73,6 @@ function ExistingSalesReport() {
             <span>Central Express</span>
             <h1>Relatórios</h1>
           </div>
-          {Boolean(api.data?.report.pendingCosts) && <p className="form-error" role="status">{api.data && partialResultMessage(api.data.report)}</p>}
           <section className="kpi-grid report-kpis">
             <article className="kpi-card">
               <span>Receita das vendas</span>
@@ -90,6 +90,9 @@ function ExistingSalesReport() {
               </strong>
             </article>
             {api.data?.showCommission && <article className="kpi-card"><span>Comissões dos vendedores</span><strong>{formatMoney(api.data.report.commissions)}</strong></article>}
+          </section>
+          <section className="panel table-panel"><header className="fleet-panel-header"><div><h2>Fretes retorno aproveitados</h2><p>{api.data?.report.returnFreightCount ?? 0} retorno(s) no período consultado. Agrupamento pelo mês da coleta e pela placa do caminhão da Frota.</p></div></header>
+            {api.data?.report.returnFreights?.length ? <div className="responsive-table"><table><thead><tr><th>Mês</th><th>Caminhão / placa</th><th>Quantidade de retornos</th></tr></thead><tbody>{api.data.report.returnFreights.map(r=><tr key={`${r.competency}:${r.vehiclePlate}`}><td>{r.competency?competencyLabel(r.competency):'Não informada'}</td><td>{r.vehiclePlate}</td><td>{r.count}</td></tr>)}</tbody></table></div> : <p>Nenhum frete retorno aproveitado neste período.</p>}
           </section>
           <section className="panel table-panel"><header className="fleet-panel-header"><div><span className="eyebrow">Comparativo</span><h2>Resultado por vendedor</h2><p>Somente vendas com comissão entram no resultado individual. A listagem e os totais da empresa incluem todas as vendas.</p></div></header>
             <div className="responsive-table"><table><thead><tr><th>Vendedor</th><th>Vendas</th><th>Receita</th><th>Custo</th><th>Margem</th>{api.data?.showCommission && <th>Comissão</th>}</tr></thead><tbody>{api.data?.report.sellers.map(s=><tr key={s.id}><td data-label="Vendedor"><strong>{s.name}</strong></td><td data-label="Vendas">{s.sales}</td><td data-label="Receita">{formatMoney(s.freight)}</td><td data-label="Custo">{formatMoney(s.cost)}</td><td data-label="Margem">{formatMoney(s.margin)}</td>{api.data?.showCommission && <td data-label="Comissão">{formatMoney(s.commission??0)}</td>}</tr>)}</tbody></table></div>
