@@ -35,7 +35,7 @@ const navigation: Array<{
   { href: "/frota", label: "Frota", icon: Icons.fleet, roles: ["ADMIN", "GERENCIA", "FINANCEIRO", "OPERACIONAL", "VENDEDOR"] },
   { href: "/financeiro", label: "Financeiro", icon: Icons.wallet, roles: ["ADMIN", "GERENCIA", "FINANCEIRO"] },
   { href: "/vendedores", label: "Comissões", icon: Icons.users, roles: ["ADMIN", "VENDEDOR", "OPERACIONAL"] },
-  { href: "/vendas-gerais", label: "Vendas Geral", icon: Icons.chart, roles: ["ADMIN", "GERENCIA", "FINANCEIRO", "VENDEDOR", "OPERACIONAL"] },
+  { href: "/vendas-gerais", label: "Relatórios", icon: Icons.chart, roles: ["ADMIN", "GERENCIA", "FINANCEIRO", "VENDEDOR", "OPERACIONAL"] },
   { href: "/suporte", label: "Suporte", icon: Icons.support, roles: ["ADMIN", "GERENCIA", "VENDEDOR", "FINANCEIRO", "OPERACIONAL"] },
   { href: "/configuracoes", label: "Configurações", icon: Icons.settings, roles: ["ADMIN", "GERENCIA", "VENDEDOR", "FINANCEIRO", "OPERACIONAL"] },
 ];

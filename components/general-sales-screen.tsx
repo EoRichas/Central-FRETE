@@ -1,6 +1,8 @@
 "use client";
 
 
+import { FleetClientReportPanel } from "./fleet-client-report";
+import { ProviderReportPanel } from "./provider-report-panel";
 import { useState } from "react";
 import type { ReportSale } from "@/lib/domain/reports";
 import { partialResultMessage, type SalesReport } from "@/lib/domain/reports";
@@ -19,7 +21,7 @@ import {
 } from "@/components/ui";
 import { useApi } from "@/components/use-api";
 
-export function GeneralSalesScreen() {
+function ExistingSalesReport() {
   const [draft,setDraft]=useState({from:'',to:'',saleChannel:'',seller:''});
   const [filters,setFilters]=useState(draft);
   const [page,setPage]=useState(0);
@@ -32,7 +34,7 @@ export function GeneralSalesScreen() {
     <>
       <PageHeader
         eyebrow="Vendas"
-        title="Vendas Geral"
+        title="Relatórios"
         description="Todas as vendas da Frota e da Cegonha, com resultado e comissões por vendedor."
         actions={
           <>
@@ -68,7 +70,7 @@ export function GeneralSalesScreen() {
         <div className="report-stack">
           <div className="print-report-heading">
             <span>Central Express</span>
-            <h1>Vendas Geral</h1>
+            <h1>Relatórios</h1>
           </div>
           {Boolean(api.data?.report.pendingCosts) && <p className="form-error" role="status">{api.data && partialResultMessage(api.data.report)}</p>}
           <section className="kpi-grid report-kpis">
@@ -143,4 +145,9 @@ function PortfolioSalesTable({ sales,showCommission }: { sales: ReportSale[];sho
       </table>
     </div>
   );
+}
+
+export function GeneralSalesScreen() {
+  const [tab, setTab] = useState("existing");
+  return <><nav className="cegonha-tabs module-tabs no-print" aria-label="Relatórios">{[["existing", "Fechamento / resultado"], ["sales", "Relatório de vendas"], ["providers", "Relatório de prestadores"]].map(([id, label]) => <button key={id} type="button" className={tab === id ? "active" : ""} aria-pressed={tab === id} onClick={() => setTab(id)}>{label}</button>)}</nav>{tab === "existing" ? <ExistingSalesReport /> : <><PageHeader title="Relatórios" description="Consulte e exporte os relatórios da operação." />{tab === "sales" ? <FleetClientReportPanel /> : <ProviderReportPanel />}</>}</>;
 }

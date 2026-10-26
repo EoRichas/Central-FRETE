@@ -16,7 +16,7 @@ function summaryName(p:ReportPdf,value:string,width:number){
 
 export async function renderSalesReportPdf(report:SalesReport,period:string,channel:string,showCommission=true,seller='Todos') {
  const periodLabel=/^\d{4}-\d{2}$/.test(period)?competencyLabel(period):period.replace(/\d{4}-\d{2}-\d{2}/g,date=>formatDate(date));
- const p=await ReportPdf.create('Vendas Geral',[['Período',periodLabel],['Canal',channel],['Vendedor',seller],['Moeda','Real (R$)']]);
+ const p=await ReportPdf.create('Relatórios',[['Período',periodLabel],['Canal',channel],['Vendedor',seller],['Moeda','Real (R$)']],true);
  const t=report.totals;
  p.kpis([{label:'RECEITA DAS VENDAS',value:formatMoney(t.freight),detail:`${report.sales.length} vendas incluídas`},
  {label:'CUSTO TOTAL',value:formatMoney(t.cost),detail:'Custos e comissões incluídos'},
