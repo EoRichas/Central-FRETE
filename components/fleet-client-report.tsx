@@ -16,7 +16,6 @@ export function FleetClientReportPanel() {
   const [query, setQuery] = useState('');
   const api = useApi<FleetClientReportData>(`/api/fleet/client-report${query ? `?${query}` : ''}`);
   const report = api.data?.report;
-  const [includeProviders,setIncludeProviders]=useState(false);
   const [pdf, setPdf] = useState<{url: string; filename: string} | null>(null);
   const [generating, setGenerating] = useState(false), [pdfError, setPdfError] = useState('');
   const previewUrl = useRef<string | null>(null), pending = useRef<AbortController | null>(null);
@@ -27,7 +26,7 @@ export function FleetClientReportPanel() {
     const controller = new AbortController(); pending.current = controller; setGenerating(true); setPdfError('');
     try {
       const response = await fetch(`/api/fleet/client-report?${query}`, {method:'POST',credentials:'same-origin',cache:'no-store',headers:{'content-type':'application/json'},
-        signal:AbortSignal.any([controller.signal,AbortSignal.timeout(60000)]),body:JSON.stringify({useOrderObservations:true,includeProviders})});
+        signal:AbortSignal.any([controller.signal,AbortSignal.timeout(60000)]),body:JSON.stringify({useOrderObservations:true,includeProviders:false})});
       if (!response.ok) throw new Error((await response.json()).error || 'Não foi possível gerar o relatório.');
       const blob = await response.blob(); if (controller.signal.aborted) return;
       closePreview(); const url = URL.createObjectURL(blob); previewUrl.current = url;
@@ -52,8 +51,7 @@ export function FleetClientReportPanel() {
       <button className="button primary" disabled={api.loading}>Consultar</button>
     </form>
     {api.loading ? <LoadingState label="Consultando vendas do Frota…" /> : api.error ? <ErrorState message={api.error} retry={api.refresh} /> : report ? <>
-      <label className="fleet-check-field"><input className="selection-checkbox" type="checkbox" checked={includeProviders} onChange={e=>setIncludeProviders(e.target.checked)} /> Incluir prestadores e valores nas exportações</label>
-      <div className={styles.heading}><div><h3>{report.client.name}</h3><p>{formatDate(report.from)} a {formatDate(report.to)} · {report.totals.sales} vendas · {report.totals.vehicles} veículos</p></div><a className="button secondary" href={`/api/fleet/client-report?${query}&format=xlsx&includeProviders=${includeProviders?'1':'0'}`}>Exportar Excel</a><button type="button" className="button secondary" disabled={generating || !report.rows.length} onClick={generateReport}>{generating ? 'Gerando…' : 'Gerar relatório de vendas'}</button></div>
+      <div className={styles.heading}><div><h3>{report.client.name}</h3><p>{formatDate(report.from)} a {formatDate(report.to)} · {report.totals.sales} vendas · {report.totals.vehicles} veículos</p></div><a className="button secondary" href={`/api/fleet/client-report?${query}&format=xlsx`}>Exportar Excel</a><button type="button" className="button secondary" disabled={generating || !report.rows.length} onClick={generateReport}>{generating ? 'Gerando…' : 'Gerar relatório de vendas'}</button></div>
       {pdfError && <p className="form-error" role="alert">{pdfError}</p>}
       <section className="receivable-summary large"><div><span>Total dos serviços</span><strong>{formatMoney(report.totals.amountCents)}</strong></div><div><span>Total recebido</span><strong>{formatMoney(report.totals.receivedCents)}</strong></div><div><span>Valor pendente</span><strong>{formatMoney(report.totals.balanceCents)}</strong></div></section>
       <p className="report-basis">Recebimento: valor das baixas e pagamentos confirmados, descontados os estornos. A forma de pagamento não altera o relatório. Datas ausentes não são estimadas.</p>

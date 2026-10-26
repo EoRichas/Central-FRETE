@@ -271,7 +271,7 @@ test('relatório gera prévia com todas as OS salvas pelo filtro consultado e pe
     './fleet-client-report.module.css':{default:{}},'@/lib/format':format,'@/lib/domain/dates':{currentCompetency:()=>'2026-10',todaySaoPaulo:()=>'2026-10-21'},
     './use-api':{useApi:()=>({data:{clients:[],report}})},
   });
-  const render=()=>{state.reset();return FleetClientReportPanel();};let tree=render();const calls=[];
+  const render=()=>{state.reset();return FleetClientReportPanel();};let tree=render();const calls=[];assert.equal(find(tree,n=>n.type==='input'&&n.props.type==='checkbox'),null);assert.ok(!find(tree,n=>n.type==='a'&&n.props.children==='Exportar Excel').props.href.includes('includeProviders'));
   const original=globalThis.fetch;globalThis.fetch=async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});return new Response(new Blob(['%PDF'],{type:'application/pdf'}));};
   try {
     await find(tree,n=>n.type==='button'&&n.props.children==='Gerar relatório de vendas').props.onClick();tree=render();
