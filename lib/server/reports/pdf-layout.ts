@@ -63,8 +63,8 @@ export class ReportPdf {
   table(columns:ReportColumn[],rows:string[][],options:{x?:number;top?:number;rowHeight?:number;total?:boolean}={}) {
     if(this.portrait) {
     const available = this.width - ((options.x ?? M) - M);
-    const totalWidth = columns.reduce((sum, col) => sum + Math.max(60, col.width), 0);
-    columns = columns.map(col => ({...col, width: Math.max(60, col.width) * Math.min(1, available / totalWidth)}));
+    const totalWidth = columns.reduce((sum, col) => sum + Math.max(30, col.width), 0);
+    columns = columns.map(col => ({...col, width: Math.max(30, col.width) * Math.min(1, available / totalWidth)}));
     }
     const x=options.x??M,width=columns.reduce((s,c)=>s+c.width,0);if(options.top!==undefined)this.y=options.top;
     const heading=()=>{this.ensure(50);const lines=columns.map(c=>this.wrap(c.label,c.width-14,7.2,true));const h=Math.max(25,Math.max(...lines.map(a=>a.length))*10+10);this.rect(x,this.y-h,width,h,reportColors.navy);let xx=x;

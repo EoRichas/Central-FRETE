@@ -5,7 +5,7 @@ import { FleetClientReportPanel } from "./fleet-client-report";
 import { ProviderReportPanel } from "./provider-report-panel";
 import { useState } from "react";
 import type { ReportSale } from "@/lib/domain/reports";
-import { partialResultMessage, type SalesReport } from "@/lib/domain/reports";
+import { type SalesReport } from "@/lib/domain/reports";
 import { PdfDownloadButton } from "@/components/pdf-download-button";
 import {
   formatDate,
@@ -72,7 +72,6 @@ function ExistingSalesReport() {
             <span>Central Express</span>
             <h1>Relatórios</h1>
           </div>
-          {Boolean(api.data?.report.pendingCosts) && <p className="form-error" role="status">{api.data && partialResultMessage(api.data.report)}</p>}
           <section className="kpi-grid report-kpis">
             <article className="kpi-card">
               <span>Receita das vendas</span>

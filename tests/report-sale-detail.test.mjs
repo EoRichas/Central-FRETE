@@ -545,3 +545,26 @@ test('Relatórios centraliza resultado existente, vendas e prestadores em abas i
  find(tree,n=>n.type==='button'&&n.props.children==='Relatório de prestadores').props.onClick();tree=render();assert.ok(find(tree,n=>n.type===Providers));
  find(tree,n=>n.type==='button'&&n.props.children==='Fechamento / resultado').props.onClick();tree=render();assert.ok(find(tree,n=>n.type?.name==='ExistingSalesReport'));
 });
+
+test('prestadores gera prévia sem baixar, permite imprimir e salvar e mostra falha da geração', async()=>{
+ const state=hooks();const {ReportPreviewButton}=compile('components/report-preview-button.tsx',{react:state.react,'./ui':ui});
+ const render=()=>{state.reset();return ReportPreviewButton({url:'/api/reports/providers?from=2026-10-01&to=2026-10-31&format=pdf',filename:'prestadores.pdf',label:'Gerar relatório de prestadores'});};
+ const previous=globalThis.fetch,calls=[];globalThis.fetch=async(url,options)=>{calls.push({url,options});return new Response(new Blob(['%PDF'],{type:'application/pdf'}));};
+ let preview;
+ try{let tree=render();assert.equal(find(tree,n=>n.type===ui.Modal).props.open,false);await find(tree,n=>n.type==='button').props.onClick();tree=render();const modal=find(tree,n=>n.type===ui.Modal);assert.equal(modal.props.open,true);preview=find(modal,n=>n.type==='iframe').props.src;assert.ok(preview.startsWith('blob:'));assert.equal(find(modal,n=>n.type==='a'&&n.props.children==='Visualizar / imprimir').props.href,preview);assert.equal(find(modal,n=>n.type==='a'&&n.props.children==='Salvar PDF').props.download,'prestadores.pdf');assert.equal(calls[0].options.credentials,'same-origin');modal.props.onClose();tree=render();assert.equal(find(tree,n=>n.type===ui.Modal).props.open,false);globalThis.fetch=async()=>new Response(JSON.stringify({error:'Falha de exemplo'}),{status:500});await find(tree,n=>n.type==='button').props.onClick();tree=render();assert.equal(find(tree,n=>n.props?.role==='alert').props.children,'Falha de exemplo');assert.equal(find(tree,n=>n.type===ui.Modal).props.open,false);}finally{globalThis.fetch=previous;if(preview)URL.revokeObjectURL(preview);}
+});
+
+test('prestadores mostra dados da venda, usa filtros aplicados na prévia e abre detalhes preservando consulta',()=>{
+ const state=hooks(['2026-10-01','2026-10-31','provider','from=2026-10-01&to=2026-10-31&providerId=provider']);
+ const Preview=()=>null,Detail=()=>null;
+ const row={id:'service',freightId:'freight',saleNumber:'234',createdDate:'2026-10-24',date:'2026-10-26',clientName:'CLIENTE',driverName:'MOTORISTA',vehicles:[{model:'FIAT STRADA',plate:'AAA1A11'}],serviceSituation:'ENTREGA',saleAmountCents:150000,paymentStatus:'PAGO',paidAt:'2026-10-26',orderIncludeObservation:true,orderObservation:'OBSERVAÇÃO SALVA',providerName:'PRESTADOR',kind:'COLETA',amountCents:12345};
+ const {ProviderReportPanel}=compile('components/provider-report-panel.tsx',{
+  react:state.react,'./report-preview-button':{ReportPreviewButton:Preview},'./fleet-report-sale-detail':{FleetReportSaleDetail:Detail},'./icons':{Icons:{chevron:icon}},'./ui':ui,
+  '@/lib/domain/provider-services':{providerKindLabel:String},'@/lib/domain/dates':{currentCompetency:()=> '2026-10',todaySaoPaulo:()=> '2026-10-26'},'@/lib/format':fullFormat,
+  './use-api':{useApi:url=>({data:url==='/api/providers'?{providers:[]}:{report:{from:'2026-10-01',to:'2026-10-31',totalCents:12345,providers:[],rows:[row]}}})},
+ });
+ const render=()=>{state.reset();return ProviderReportPanel();};let tree=render();
+ const html=renderToStaticMarkup(tree);for(const text of ['MOTORISTA','FIAT STRADA','AAA1A11','ENTREGA','OBSERVAÇÃO SALVA'])assert.ok(html.includes(text),text);
+ const preview=find(tree,n=>n.type===Preview);assert.equal(preview.props.label,'Gerar relatório de prestadores');assert.equal(preview.props.url,'/api/reports/providers?from=2026-10-01&to=2026-10-31&providerId=provider&format=pdf');
+ find(tree,n=>n.props?.['aria-label']==='Abrir venda 234').props.onClick();tree=render();assert.equal(tree.type,Detail);assert.equal(tree.props.id,'freight:freight');tree.props.onBack();tree=render();assert.equal(find(tree,n=>n.type===Preview).props.url,preview.props.url);
+});
