@@ -30,6 +30,9 @@ export async function renderSalesReportPdf(report:SalesReport,period:string,chan
  p.newPage('Detalhamento de todas as vendas selecionadas');p.section('02  Vendas incluídas');
  const columns=showCommission?cols(['Venda / canal / data','Cliente / vendedor','Receita / custo (R$)','Margem (R$)','Comissão % / valor (R$)'],[68,160,100,100,99],2):cols(['Venda / canal / data','Cliente / vendedor','Receita / custo (R$)','Margem (R$)'],[68,199,130,130],2);
  p.table(columns,[...report.sales.map(r=>[`${r.saleNumber}\n${r.saleChannel==='FROTA'?'Frota':'Cegonha'}\n${formatDate(r.saleDate)}`,`${r.clientName||'Não informado'}\nVendedor: ${r.sellerName}`,`${num(r.freightAmountCents)}\nCusto: ${num(r.financial.transportCostCents)}`,num(r.financial.marginCents),...(showCommission?[`${formatPercent(r.commissionBasisPoints)}\n${num(r.financial.commissionCents)}`]:[])]),['TOTAL','',`${num(t.freight)}\nCusto: ${num(t.cost)}`,num(t.margin),...(showCommission?[num(report.commissions)]:[])]],{total:true});
+ p.section('03  Fretes retorno aproveitados');
+ p.note(`${report.returnFreightCount} retorno(s) no período. Mês pela data da coleta. Caminhão identificado pela placa da Frota.`);
+ p.table(cols(['Mês da coleta','Caminhão / placa','Quantidade de retornos'],[170,200,p.width-370],2),report.returnFreights.map(r=>[r.competency?competencyLabel(r.competency):'Não informada',r.vehiclePlate,String(r.count)]));
  p.note('Margem = receita - custos - comissão do vendedor. Custos da Frota seguem o cálculo dos fretes, incluindo combustível estimado quando não há realizado. Não equivale ao lucro líquido.');
  return p.save();
 }

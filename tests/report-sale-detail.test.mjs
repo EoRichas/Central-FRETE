@@ -568,3 +568,12 @@ test('prestadores mostra dados da venda, usa filtros aplicados na prévia e abre
  const preview=find(tree,n=>n.type===Preview);assert.equal(preview.props.label,'Gerar relatório de prestadores');assert.equal(preview.props.url,'/api/reports/providers?from=2026-10-01&to=2026-10-31&providerId=provider&format=pdf');
  find(tree,n=>n.props?.['aria-label']==='Abrir venda 234').props.onClick();tree=render();assert.equal(tree.type,Detail);assert.equal(tree.props.id,'freight:freight');tree.props.onBack();tree=render();assert.equal(find(tree,n=>n.type===Preview).props.url,preview.props.url);
 });
+
+test('detalhes da Frota mostram frete retorno aproveitado somente quando marcado',()=>{
+ const {FleetFreightDetail}=compile('components/fleet-freight-detail.tsx',{
+  '@/lib/domain/provider-services':{providerCostCents:()=>0,providerKindLabel:String},'@/lib/domain/operations':operations,
+  '@/lib/domain/cargo-vehicles':{cargoVehiclesOrLegacy:()=>[]},'@/lib/domain/fleet':fleetDomain,'@/lib/format':format,'@/components/ui':ui,
+ });
+ const freight={distanceMeters:1000,providerServices:[],cargoVehicles:[],fuelCostSource:'ESTIMADO',freightAmountCents:10000,notes:'',totalCostCents:0,netRevenueCents:10000};
+ for(const marked of [true,false]){const html=renderToStaticMarkup(React.createElement(FleetFreightDetail,{freight:{...freight,returnFreight:marked}}));assert.equal(html.includes('Frete retorno aproveitado'),marked);if(marked)assert.ok(html.indexOf('Frete retorno aproveitado')<html.indexOf('Observações'));}
+});

@@ -29,3 +29,13 @@ test('preferência escura antiga e tema do sistema não reativam modo escuro',as
  assert.equal(root.dataset.theme,'light');assert.equal(root.style.colorScheme,'light');assert.equal(removed,'cf-theme');
  const shell=await readFile(new URL('../components/app-shell.tsx',import.meta.url),'utf8');assert.ok(!shell.includes('bloom-switch'));assert.ok(!shell.includes('toggleDarkMode'));
 });
+
+test('retornos contam somente vendas Frota marcadas, por mês e caminhão, sem repetir venda',async()=>{
+ const base:ReportSale={id:'one',saleNumber:'234',saleDate:'2026-10-26',saleChannel:'FROTA',sellerId:'seller',sellerName:'VENDEDOR',clientName:'CLIENTE',freightAmountCents:10000,commissionBasisPoints:0,costsPending:false,costs:[],financial:{commissionCents:0,transportCostCents:0,marginCents:10000,marginBasisPoints:10000},returnFreight:true,vehiclePlate:'aaa1a11'};
+ const rows=[base,base,{...base,id:'two'},{...base,id:'nov',saleDate:'2026-11-01',vehiclePlate:'BBB2B22'},{...base,id:'missing',vehiclePlate:null},{...base,id:'unchecked',returnFreight:false},{...base,id:'cegonha',saleChannel:'CEGONHA' as const}];
+ const report=buildSalesReport(rows);assert.equal(report.returnFreightCount,4);assert.deepEqual(report.returnFreights,[{competency:'2026-10',vehiclePlate:'AAA1A11',count:2},{competency:'2026-10',vehiclePlate:'Não informado',count:1},{competency:'2026-11',vehiclePlate:'BBB2B22',count:1}]);
+ assert.equal(buildSalesReport(rows.filter(r=>r.saleDate.startsWith('2026-11'))).returnFreightCount,1);
+ const {renderGeneralSalesXlsx}=await import('../lib/server/reports/sales-xlsx.ts');const {unzipSync,strFromU8}=await import('fflate');const files=unzipSync(renderGeneralSalesXlsx(report,false));const sheet=strFromU8(files['xl/worksheets/sheet2.xml']);assert.match(sheet,/AAA1A11/);assert.match(sheet,/BBB2B22/);assert.match(sheet,/>2<\/v>/);
+ const texts:string[]=[],draw=PDFPage.prototype.drawText;PDFPage.prototype.drawText=function(value,options){texts.push(value);return draw.call(this,value,options);};
+ try{const bytes=await renderSalesReportPdf(report,'2026-10 a 2026-11','Frota',false);assert.ok(texts.includes('AAA1A11'));assert.ok(texts.includes('BBB2B22'));assert.ok(texts.some(t=>t.includes('4 retorno(s)')));await qa('retornos-mes-caminhao',bytes);}finally{PDFPage.prototype.drawText=draw;}
+});

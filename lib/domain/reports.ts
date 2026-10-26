@@ -10,6 +10,7 @@ export type ReportSale = Pick<SaleRecord, 'id'|'saleNumber'|'saleDate'|'saleChan
   clientId?: string|null;
   providerServices?: import('./provider-services').ProviderService[];
   returnFreight?: boolean;
+  vehiclePlate?: string | null;
   costs: {category:string;amountCents:number}[];
   financial: Pick<SaleRecord['financial'],'commissionCents'|'transportCostCents'|'marginCents'|'marginBasisPoints'> & {balanceCents?:number;totalReceivedCents?:number;status?:string};
 };
@@ -18,7 +19,7 @@ export const reportSellerKey = (sale: Pick<ReportSale,'sellerId'|'sellerName'>) 
 // Operational Frota records are authoritative when a commercial mirror exists.
 export function consolidateReportSales(sales: (ReportSale & Pick<SaleRecord, 'fleetFreightId'> & {clientId?:string|null;financial:ReportSale['financial']})[], freights: FleetFreight[]): ReportSale[] {
   return [...sales.filter(s => s.saleChannel !== 'FROTA' || !s.fleetFreightId).map((s):ReportSale=>({id:s.id,clientId:s.clientId,origin:s.origin,destination:s.destination,saleNumber:s.saleNumber,saleDate:s.saleDate,saleChannel:s.saleChannel,sellerId:s.sellerId,sellerName:s.sellerName,clientName:s.clientName,freightAmountCents:s.freightAmountCents,commissionBasisPoints:s.commissionBasisPoints,costsPending:s.costsPending,costs:s.costs.map(c=>({category:c.category,amountCents:c.amountCents})),financial:{commissionCents:s.financial.commissionCents,transportCostCents:s.financial.transportCostCents,marginCents:s.financial.marginCents,marginBasisPoints:s.financial.marginBasisPoints,balanceCents:s.financial.balanceCents,totalReceivedCents:s.financial.totalReceivedCents,status:s.financial.status}})), ...freights.map((f):ReportSale => ({
-    id: `freight:${f.id}`,clientId:f.clientId,providerServices:f.providerServices,returnFreight:f.returnFreight, origin:f.origin, destination:f.destination, saleNumber:f.saleNumber || 'Não disponível', saleDate:f.pickupDate, saleChannel:'FROTA',
+    id: `freight:${f.id}`,clientId:f.clientId,providerServices:f.providerServices,returnFreight:f.returnFreight,vehiclePlate:f.vehiclePlate, origin:f.origin, destination:f.destination, saleNumber:f.saleNumber || 'Não disponível', saleDate:f.pickupDate, saleChannel:'FROTA',
     sellerId:f.sellerId ?? null, sellerName:f.sellerName || 'Não informado', clientName:f.clientName,
     freightAmountCents:f.freightAmountCents, commissionBasisPoints:f.sellerCommissionBasisPoints ?? 0,
     costsPending:f.fuelCostSource === 'ESTIMADO',
@@ -57,8 +58,20 @@ export function buildSalesReport(sales: ReportSale[], showCommission = true) {
   for(const value of [totals.freight,totals.cost,totals.margin,commissions]) if(!Number.isSafeInteger(value)) throw new Error('Total do relatório excede o limite de precisão.');
   const pendingFuelCount = ordered.filter(s => s.saleChannel === 'FROTA' && s.pendingReason === 'FUEL').length;
   const pendingCostCount = ordered.filter(s => s.costsPending && !(s.saleChannel === 'FROTA' && s.pendingReason === 'FUEL')).length;
+  const returns = new Map<string,{competency:string;vehiclePlate:string;count:number}>();
+  const counted = new Set<string>();
+  for (const sale of ordered) {
+    if (sale.saleChannel !== 'FROTA' || !sale.returnFreight || counted.has(sale.id)) continue;
+    counted.add(sale.id);
+    const competency = /^\d{4}-\d{2}/.test(sale.saleDate) ? sale.saleDate.slice(0,7) : '';
+    const vehiclePlate = sale.vehiclePlate?.trim().toLocaleUpperCase('pt-BR') || 'Não informado';
+    const key = JSON.stringify([competency,vehiclePlate]);
+    const group = returns.get(key) ?? {competency,vehiclePlate,count:0};
+    group.count++; returns.set(key,group);
+  }
+  const returnFreights = [...returns.values()].sort((a,b)=>a.competency.localeCompare(b.competency)||a.vehiclePlate.localeCompare(b.vehiclePlate));
   const credited = [...sellers.values()].flat();
-  return {sales:ordered,totals,sellerTotals:{sales:credited.length,...sum(credited)},commissions,pendingCosts:pendingCostCount+pendingFuelCount,pendingCostCount,pendingFuelCount,
+  return {sales:ordered,returnFreights,returnFreightCount:counted.size,totals,sellerTotals:{sales:credited.length,...sum(credited)},commissions,pendingCosts:pendingCostCount+pendingFuelCount,pendingCostCount,pendingFuelCount,
     sellers:[...sellers.entries()].map(([id,items])=>({id,name:items[0].sellerName,sales:items.length,...sum(items),...(showCommission ? {commission:items.reduce((total,s)=>total+s.financial.commissionCents,0)} : {})})).sort((a,b)=>b.freight-a.freight),
     clients:[...groups.entries()].map(([name,items])=>({name,sales:items.length,...sum(items)})).sort((a,b)=>b.freight-a.freight),
     expenses:[...expenses].map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value)};

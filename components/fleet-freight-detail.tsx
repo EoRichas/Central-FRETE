@@ -31,6 +31,7 @@ export function FleetFreightDetail({freight: f}: {freight: FleetFreight}) {
           <div><dt>Distância {f.odometerStartMeters!=null && f.odometerEndMeters!=null ? 'realizada' : 'informada'}</dt><dd>{(f.distanceMeters/1000).toLocaleString('pt-BR')} km</dd></div>
           <div><dt>Data da coleta</dt><dd>{formatDate(f.pickupDate)}</dd></div>
           <div><dt>Data da entrega</dt><dd>{formatDate(f.deliveryDate)}</dd></div>
+          {f.returnFreight && <div className="full"><dt>Aproveitamento frete retorno</dt><dd>Frete retorno aproveitado</dd></div>}
           <div className="full"><dt>Observações</dt><dd style={{whiteSpace:"pre-wrap"}}>{f.notes || "—"}</dd></div>
           <div><dt>Faturamento</dt><dd>{formatDate(f.billingDate)}</dd></div>
         </dl>
