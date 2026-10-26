@@ -1,13 +1,15 @@
+import { assertFleetAccess } from '@/lib/server/seller-commission';
 import { orderWithSavedObservation } from '@/lib/server/fleet-order-observation';
 import { authorize } from '@/lib/server/auth';
 import { ApiError, jsonError } from '@/lib/server/d1';
-import { fleetOrderTarget, issueOrder, orderReport, readOrderVersion } from '@/lib/server/service-orders';
+import { authorizeOrder, fleetOrderTarget, issueOrder, orderReport, readOrderVersion } from '@/lib/server/service-orders';
 import { renderServiceOrderPdf } from '@/lib/server/service-order-pdf';
 type Context = {params:Promise<{id:string}>};
 export async function GET(request:Request, context:Context) {
  try {
-  await authorize(request,['ADMIN','GERENCIA','FINANCEIRO','OPERACIONAL']);
-  const {id}=await context.params;const target=await fleetOrderTarget(id);
+  const user=await authorize(request,['ADMIN','GERENCIA','FINANCEIRO','OPERACIONAL','VENDEDOR']);
+  const {id}=await context.params;await assertFleetAccess(user,id);const target=await fleetOrderTarget(id);
+  if(target.kind==='sale')await authorizeOrder(user,target.id);
   const url=new URL(request.url);
   if(url.searchParams.get('format')!=='pdf') return Response.json(await orderReport(target.id,target.kind),{headers:{'Cache-Control':'no-store'}});
   const order=await readOrderVersion(target.id,undefined,target.kind);
@@ -21,12 +23,13 @@ export async function GET(request:Request, context:Context) {
 }
 export async function POST(request:Request,context:Context) {
  try {
-  const user=await authorize(request,['ADMIN','GERENCIA','FINANCEIRO','OPERACIONAL']);
-  const {id}=await context.params;let target=await fleetOrderTarget(id);
+  const user=await authorize(request,['ADMIN','GERENCIA','FINANCEIRO','OPERACIONAL','VENDEDOR']);
+  const {id}=await context.params;await assertFleetAccess(user,id);let target=await fleetOrderTarget(id);
+  if(target.kind==='sale')await authorizeOrder(user,target.id);
   let report=await issueOrder(target.id,user,target.kind);
   // A concurrent commercial link may have adopted the fleet document while
   // issuance was waiting for the freight lock. Resolve the owner once more.
-  if(target.kind==='fleet') { target=await fleetOrderTarget(id);if(target.kind==='sale') report=await issueOrder(target.id,user,target.kind); }
+  if(target.kind==='fleet') { target=await fleetOrderTarget(id);if(target.kind==='sale') {await authorizeOrder(user,target.id);report=await issueOrder(target.id,user,target.kind);} }
   return Response.json(report,{headers:{'Cache-Control':'no-store'}});
  }catch(error){return jsonError(error);}
 }
