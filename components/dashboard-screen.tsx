@@ -41,7 +41,7 @@ export function DashboardScreen() {
       {dashboard && (
         <div className="dashboard-stack">
           {dashboard.salesCount === 0 && (
-            <div className="onboarding-banner"><div><span className="eyebrow">Primeiro uso</span><h2>Cadastre a primeira venda</h2><p>A competência {competencyLabel(competency)} ainda não possui vendas.</p></div><Link className="button primary" href="/vendas/nova">Nova venda</Link></div>
+            <div className="onboarding-banner"><div><span className="eyebrow">Primeiro uso</span><h2>Cadastre a primeira venda</h2><p>A competência {competencyLabel(competency)} ainda não possui vendas.</p></div><Link className="button secondary create-sale-action" href="/vendas/nova"><Icons.plus /> Nova venda</Link></div>
           )}
           <section className="status-grid" aria-label="Situação financeira">
             {(Object.keys(statusMeta) as Array<keyof typeof statusMeta>).map((status) => {

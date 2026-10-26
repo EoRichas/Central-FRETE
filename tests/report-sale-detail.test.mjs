@@ -348,15 +348,15 @@ test('vendedor vê editar e novo recebimento somente na própria venda, sem excl
 
 test('vendedor abre edição e baixa pela própria lista Frota e atualiza detalhes após salvar', () => {
  const state=hooks();let refreshes=0;const urls=[];
- const FreightModal=()=>null,detail={id:'234',saleNumber:'234',clientName:'CLIENTE',origin:'A',destination:'B'};
+ const FreightTable=()=>null,FreightModal=()=>null,detail={id:'234',saleNumber:'234',clientName:'CLIENTE',origin:'A',destination:'B'};
  const {SellerFleetScreen}=compile('components/seller-fleet-screen.tsx',{
-  react:state.react,'@/components/fleet-freight-detail':{FleetFreightDetail:()=>null},'@/components/fleet-freight-modal':{FreightModal},'@/components/ui':ui,
+  'next/link':{__esModule:true,default:()=>null},'@/components/fleet-freight-table':{FreightTable},'@/components/icons':{Icons:new Proxy({},{get:()=>icon})},'@/lib/domain/fleet':fleetDomain,react:state.react,'@/components/fleet-freight-detail':{FleetFreightDetail:()=>null},'@/components/fleet-freight-modal':{FreightModal},'@/components/ui':ui,
   '@/components/use-transient-message':{useTransientMessage:()=>[null,()=>{}]},'@/lib/format':format,
   '@/components/use-api':{useApi:url=>{urls.push(url);return {data:url?.startsWith('/api/fleet/freights/options')?{fleet:{canManagePayments:true,canDeleteFreights:false}}:url==='/api/fleet/freights'?{freights:[detail]}:{freight:detail},refresh:()=>refreshes++};}},
  });
  const render=()=>{state.reset();return SellerFleetScreen();};let tree=render();
- find(tree,n=>n.type==='button'&&n.props.children==='Ver detalhes').props.onClick();tree=render();
- find(tree,n=>n.type==='button'&&n.props.children==='Editar / dar baixa').props.onClick();tree=render();
+ assert.equal(find(tree,n=>n.props?.className==='fleet-module').type,'div');assert.ok(find(tree,n=>n.props?.className==='cegonha-tabs module-tabs'));find(tree,n=>n.type===FreightTable).props.onOpen(detail);tree=render();assert.equal(find(tree,n=>n.type===ui.Modal),null);
+ find(find(tree,n=>n.type===ui.PageHeader).props.actions,n=>n.type==='button'&&n.props.children==='Editar frete').props.onClick();tree=render();
  const editor=find(tree,n=>n.type===FreightModal);assert.equal(editor.props.freight.id,'234');assert.equal(editor.props.fleet.canManagePayments,true);assert.equal(editor.props.fleet.canDeleteFreights,false);
  assert.ok(urls.includes('/api/fleet/freights/options?freightId=234'));
  editor.props.onSaved('Pagamento atualizado.');tree=render();assert.equal(find(tree,n=>n.type===FreightModal),null);assert.equal(refreshes,2);
@@ -576,4 +576,32 @@ test('detalhes da Frota mostram frete retorno aproveitado somente quando marcado
  });
  const freight={distanceMeters:1000,providerServices:[],cargoVehicles:[],fuelCostSource:'ESTIMADO',freightAmountCents:10000,notes:'',totalCostCents:0,netRevenueCents:10000};
  for(const marked of [true,false]){const html=renderToStaticMarkup(React.createElement(FleetFreightDetail,{freight:{...freight,returnFreight:marked}}));assert.equal(html.includes('Frete retorno aproveitado'),marked);if(marked)assert.ok(html.indexOf('Frete retorno aproveitado')<html.indexOf('Observações'));}
+});
+
+test('criação permite ao vendedor selecionar outro responsável sem consultar sua comissão',async()=>{
+ const OriginalFormData=globalThis.FormData;
+ globalThis.FormData=class{get(key){return ({saleDate:'2026-10-23',financialDueDate:'2026-10-31',pickupDate:'2026-10-23',origin:'ORIGEM',destination:'DESTINO',vehicleId:'truck',driverId:'driver',operationalStatus:'CONFIRMAR',priority:'NORMAL',paymentMethod:'PIX',serviceSituation:'ENTREGA',notes:'EDITADO JUNTO'})[key]??null;}};
+ try{
+  for(const kind of ['fleet','sale'])for(const role of ['VENDEDOR']){
+   const state=hooks(),calls=[],queries=[],noOp=()=>null,mod=new Proxy({},{get:()=>noOp});
+   const file=kind==='fleet'?'components/fleet-freight-modal.tsx':'components/sale-form-screen.tsx',source=readFileSync(new URL('../'+file,import.meta.url),'utf8');
+   const overrides=Object.fromEntries([...source.matchAll(/from\s+["']([^"']+)["']/g)].map(m=>[m[1],mod]));
+   Object.assign(overrides,{
+    react:state.react,'@/components/ui':ui,'@/lib/format':fullFormat,'@/lib/domain/fleet':fleetDomain,'@/lib/domain/number-input':numberInput,
+    '@/lib/domain/operations':operations,'@/lib/domain/permissions':permissions,'@/lib/domain/fleet-client-report':clientReport,'@/lib/domain/finance':{commissionCents:()=>0},
+    '@/lib/domain/dates':{todaySaoPaulo:()=>'2026-10-23'},'@/lib/domain/cargo-vehicles':{cargoVehiclesOrLegacy:()=>[{model:'CARRO',plate:'AAA1A11'}]},
+    '@/lib/domain/fleet-distance':{effectiveFleetDistance:v=>v.distanceMeters||0},'@/lib/domain/fuel-input':{fuelInputToInteger:v=>v?fullFormat.moneyInputToCents(v):null},
+    'next/navigation':{useRouter:()=>({push:()=>{}})},
+    '@/components/use-api':{useApi:url=>{queries.push(url);return {loading:false,data:url==='/api/me'?{user:{id:role==='VENDEDOR'?'owner':role.toLowerCase(),role}}:{sellers:[{id:'owner',name:'ATUAL',commissionBasisPoints:700},{id:'next',name:'NOVO',commissionBasisPoints:350}]}};},apiMutation:async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});return {id:'234',accessTransferred:false};}},
+   });
+   const exports=compile(file,overrides);
+   const fleet={parameters:fleetDomain.DEFAULT_FLEET_PARAMETERS,vehicles:[{id:'truck',active:true}],drivers:[{id:'driver',active:true}],canEditFreights:true};
+   const render=()=>{state.reset();return kind==='fleet'?exports.FreightModal({freight:null,fleet,onClose:()=>{},onSaved:()=>{},onDelete:()=>{}}):exports.SaleFormScreen({});};
+   let tree=render();let field=find(tree,n=>n.props?.label==='Vendedor');assert.ok(field,kind+role);assert.equal(find(field,n=>n.type==='select').props.value,'owner');
+   find(field,n=>n.type==='select').props.onChange({target:{value:'next'}});tree=render();field=find(tree,n=>n.props?.label==='Vendedor');assert.equal(find(field,n=>n.type==='select').props.value,'next');
+   assert.ok(queries.includes(['OPERACIONAL','VENDEDOR'].includes(role)?'/api/sales/sellers?assignment=1':'/api/sales/sellers'));
+   assert.equal(find(tree,n=>n.props?.label==='Valor da comissão (R$)'),null);
+
+  }
+ }finally{globalThis.FormData=OriginalFormData;}
 });

@@ -104,7 +104,7 @@ export function ProvidersScreen() {
         title="Prestadores"
         description="Empresas, contatos de referência e endereços dos pátios usados na operação."
         actions={canManage ? (
-          <button className="button primary" onClick={openNew}>
+          <button className="button secondary create-sale-action" onClick={openNew}>
             <Icons.plus /> Novo prestador
           </button>
         ) : null}

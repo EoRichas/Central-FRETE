@@ -161,8 +161,8 @@ function AdminSettingsPanel() {
             </select>
           </Field>
           {["VENDEDOR", "OPERACIONAL"].includes(newRole) && <Field label="Comissão (%)"><input name="commissionPercent" inputMode="decimal" defaultValue="7" required /></Field>}
-          <button className="button secondary" disabled={savingUser}>
-            {savingUser ? "Adicionando…" : "Criar acesso"}
+          <button className="button secondary create-sale-action" disabled={savingUser}>
+            <Icons.plus /> {savingUser ? "Adicionando…" : "Criar acesso"}
           </button>
         </form>
         {usersApi.loading && <LoadingState label="Carregando usuários…" />}

@@ -52,7 +52,7 @@ export function ClientsScreen() {
         title="Clientes"
         description="Cadastros, contatos e endereços de empresa, coleta e entrega."
         actions={
-          <button className="button primary" onClick={() => setModalOpen(true)}>
+          <button className="button secondary create-sale-action" onClick={() => setModalOpen(true)}>
             <Icons.plus /> Novo cliente
           </button>
         }

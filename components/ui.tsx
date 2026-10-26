@@ -14,7 +14,7 @@ export function ErrorState({ message, retry }: { message: string; retry?: () => 
   return <div className="state-panel state-error" role="alert"><strong>Não foi possível carregar</strong><span>{message}</span>{retry && <button className="button secondary" onClick={retry}>Tentar novamente</button>}</div>;
 }
 export function EmptyState({ title, description, href, action }: { title: string; description: string; href?: string; action?: string }) {
-  return <div className="empty-state"><span className="empty-icon"><Icons.receipt /></span><h3>{title}</h3><p>{description}</p>{href && action && <Link className="button primary" href={href}>{action}</Link>}</div>;
+  return <div className="empty-state"><span className="empty-icon"><Icons.receipt /></span><h3>{title}</h3><p>{description}</p>{href && action && <Link className={/^(Nov[ao]|Adicionar|Criar|Cadastrar)/i.test(action) ? "button secondary create-sale-action" : "button primary"} href={href}>{/^(Nov[ao]|Adicionar|Criar|Cadastrar)/i.test(action) && <Icons.plus />}{action}</Link>}</div>;
 }
 export function StatusBadge({ status, partial = false }: { status: string; partial?: boolean }) {
   const normalized = status

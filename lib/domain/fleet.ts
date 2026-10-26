@@ -304,4 +304,5 @@ export type FleetBillingData = {
 };
 
 export type FleetFreightFormData = Pick<FleetData, "vehicles" | "drivers" | "parameters" | "canEditFreights" | "canEditFreightFinancials" | "canManagePayments" | "canDeleteFreights">;
-export type SellerFreightSummary = Pick<FleetFreight, "id" | "saleNumber" | "clientName" | "origin" | "destination" | "pickupDate" | "freightAmountCents">;
+export type FleetFreightListRow = Pick<FleetFreight, "id" | "saleNumber" | "clientName" | "origin" | "destination" | "pickupDate" | "freightAmountCents" | "vehiclePlate" | "driverName" | "sellerId" | "sellerName" | "operationalStatus" | "paymentStatus" | "priority">;
+export type SellerFreightSummary = FleetFreightListRow;

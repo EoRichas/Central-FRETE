@@ -196,7 +196,7 @@ export function ClientDetailScreen({ id }: { id: string }) {
       <section className="panel">
         <header>
           <div><span className="eyebrow">Logística</span><h2>Endereços da empresa, coleta e entrega</h2></div>
-          <button className="button secondary" onClick={() => setAddressOpen(true)}><Icons.plus /> Novo endereço</button>
+          <button className="button secondary create-sale-action" onClick={() => setAddressOpen(true)}><Icons.plus /> Novo endereço</button>
         </header>
         {client.addresses.length ? (
           <div className="address-grid">
