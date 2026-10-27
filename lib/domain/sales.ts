@@ -1,9 +1,10 @@
 export const SALE_CHANNELS = ["CEGONHA", "FROTA"] as const;
 export type SaleChannel = (typeof SALE_CHANNELS)[number];
-export const SALE_SORTS = ["number-asc", "date-desc", "date-asc", "value-desc", "value-asc"] as const;
+export const SALE_SORTS = ["number-asc", "created-desc", "date-desc", "date-asc", "value-desc", "value-asc"] as const;
 export type SaleSort = (typeof SALE_SORTS)[number];
 // Whitelisted SQL expressions; never interpolate a client-provided expression.
 export const SALE_ORDER_SQL: Record<SaleSort, string> = {
+  "created-desc": "s.created_at desc, s.id desc",
   "number-asc": "case when s.sale_number ~ '^[0-9]{4}-[0-9]+$' then split_part(s.sale_number,'-',1)::integer else 0 end asc, case when s.sale_number ~ '^([0-9]{4}-)?[0-9]+$' then regexp_replace(s.sale_number,'^[0-9]{4}-','')::numeric end asc nulls last, s.sale_number asc, s.id asc",
   "date-desc": "s.sale_date desc, s.id asc",
   "date-asc": "s.sale_date asc, s.id asc",

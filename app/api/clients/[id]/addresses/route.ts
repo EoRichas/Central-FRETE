@@ -12,7 +12,7 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 export async function POST(request: Request, context: RouteContext) {
   try {
-    const user = await authorize(request, ["ADMIN"]);
+    const user = await authorize(request);
     const { id: clientId } = await context.params;
     const client = await queryFirst<{ id: string; legalName: string }>(
       "select id, legal_name as legalName from clients where id = ? and active = 1",

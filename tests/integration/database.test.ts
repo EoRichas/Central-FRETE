@@ -1254,7 +1254,7 @@ test('clientes Frota, Cegonha e Ambos filtram seletores e validam criação/edi�
  const created=await sales.POST(await request('/api/sales','seller','POST',{...salePayload,saleChannel:'FROTA',clientId:ids.FROTA}));const {id}=await created.json();assert.ok(id);
  const context={params:Promise.resolve({id:ids.FROTA})};
  const changed=await detail.PATCH(await request('/api/clients/x','admin','PATCH',{saleChannel:'CEGONHA',active:false}),context);assert.equal(changed.status,200,await changed.clone().text());
- assert.equal((await detail.PATCH(await request('/api/clients/x','seller','PATCH',{saleChannel:'FROTA'}),context)).status,403);
+ assert.equal((await detail.PATCH(new Request('https://example.test/api/clients/x',{method:'PATCH',headers:{origin:'https://example.test'}}),context)).status,401);
  const history=await edit.PATCH(await request('/api/sales/x','admin','PATCH',{...salePayload,saleChannel:'FROTA',clientId:ids.FROTA}),{params:Promise.resolve({id})});assert.equal(history.status,200,await history.clone().text());
  assert.equal((await edit.PATCH(await request('/api/sales/x','admin','PATCH',{...salePayload,saleChannel:'FROTA',clientId:ids.CEGONHA}),{params:Promise.resolve({id})})).status,400);
  const data=await (await detail.GET(await request('/api/clients/x'),context)).json();assert.equal(data.client.saleChannel,'CEGONHA');assert.equal(data.client.active,false);
@@ -2223,4 +2223,42 @@ test('vendedor acessa Clientes e visualiza, imprime e atualiza OS somente da pr�
  const other=await create.POST(await request('/api/fleet/freights','admin','POST',{...registeredFreight,clientId:'lookup-a',sellerId:'operator'}));assert.equal(other.status,201);const otherId=(await other.json()).id;
  for(const target of [otherId,'missing']){const blocked={params:Promise.resolve({id:target})};for(const extra of ['','?format=pdf','?format=pdf&download=1'])assert.equal((await orders.GET(await request('/api/fleet/freights/x/service-order'+extra,'seller'),blocked)).status,404);assert.equal((await orders.POST(await request('/api/fleet/freights/x/service-order','seller','POST'),blocked)).status,404);}
  const clientList=await clients.GET(await request('/api/clients','seller'));assert.equal(clientList.status,200);const data=await clientDetail.GET(await request('/api/clients/lookup-a','seller'),{params:Promise.resolve({id:'lookup-a'})});assert.equal(data.status,200);const body=await data.json();assert.equal(body.client.id,'lookup-a');assert.ok(body.sales.every((s:{sellerId:string})=>s.sellerId==='seller'));
+});
+
+test('Cegonha inicia pelas últimas cadastradas, preserva filtros e ordenação escolhida',async()=>{
+ const sales=await import('../../app/api/sales/route.ts');
+ const ids:string[]=[];
+ for(const date of ['2096-10-30','2096-10-01']){const result=await sales.POST(await request('/api/sales','seller','POST',{...salePayload,saleDate:date,financialDueDate:'2096-10-31',saleChannel:'CEGONHA'}));assert.equal(result.status,201,await result.clone().text());ids.push((await result.json()).id);}
+ await queryAll('update freight_sales set created_at=? where id=?',['2096-10-01T10:00:00.000Z',ids[0]]);await queryAll('update freight_sales set created_at=? where id=?',['2096-10-02T10:00:00.000Z',ids[1]]);
+ const query='/api/sales?competency=2096-10&saleChannel=CEGONHA';
+ const defaults=await (await sales.GET(await request(query,'seller'))).json();assert.deepEqual(defaults.sales.map((r:{id:string})=>r.id),[ids[1],ids[0]]);
+ const byDate=await (await sales.GET(await request(query+'&sort=date-desc','seller'))).json();assert.deepEqual(byDate.sales.map((r:{id:string})=>r.id),ids);
+ assert.equal((await sales.GET(await request(query+'&sort=SQL-injection','seller'))).status,400);
+});
+
+test('todos os perfis editam cadastro completo e vínculos; validação, sessão e exclusão seguem protegidas',async()=>{
+ const clients=await import('../../app/api/clients/route.ts'),detail=await import('../../app/api/clients/[id]/route.ts');
+ const create=await clients.POST(await request('/api/clients','seller','POST',{type:'PJ',legalName:'CLIENTE EDIÇÃO',cpfCnpj:'12345678000199',contacts:[{name:'CONTATO',phone:'11900000000',email:'old@example.test'}],addresses:[{type:'EMPRESA',street:'RUA A',number:'10',district:'CENTRO',city:'SOROCABA',state:'SP'}]}));assert.equal(create.status,201,await create.clone().text());const {id}=await create.json(),ctx={params:Promise.resolve({id})};
+ const original=(await (await detail.GET(await request('/api/clients/'+id,'seller'),ctx)).json()).client;
+ const update={type:'PJ',legalName:'NOVO NOME',tradeName:'FANTASIA',cpfCnpj:'98765432000198',stateRegistration:'ISENTO',notes:'CORRIGIDO',saleChannel:'CEGONHA',active:true,contacts:original.contacts.map((c:{id:string})=>({id:c.id,name:'NOVO CONTATO',phone:'(11) 98888-7777',whatsapp:'11999999999',email:'new@example.test'})),addresses:original.addresses.map((a:{id:string})=>({id:a.id,type:'EMPRESA',label:'MATRIZ',contactName:'RESPONSÁVEL',phone:'11999999999',cep:'18000000',street:'RUA B',number:'20',complement:'SALA 2',district:'NOVA VILA',city:'VOTORANTIM',state:'SP'}))};
+ const result=await detail.PATCH(await request('/api/clients/'+id,'seller','PATCH',update),ctx);assert.equal(result.status,200,await result.clone().text());
+ const saved=(await (await detail.GET(await request('/api/clients/'+id,'seller'),ctx)).json()).client;assert.equal(saved.legalName,'NOVO NOME');assert.equal(saved.tradeName,'FANTASIA');assert.equal(saved.cpfCnpj,update.cpfCnpj);assert.equal(saved.stateRegistration,'ISENTO');assert.equal(saved.contacts[0].phone,'11988887777');assert.equal(saved.contacts[0].email,'new@example.test');assert.equal(saved.contacts[0].id,original.contacts[0].id);assert.equal(saved.addresses[0].city,'VOTORANTIM');assert.equal(saved.addresses[0].id,original.addresses[0].id);const partial=await detail.PATCH(await request('/api/clients/'+id,'seller','PATCH',{contacts:[{id:saved.contacts[0].id,name:'CONTATO AJUSTADO'}]}),ctx);assert.equal(partial.status,200);assert.equal((await (await detail.GET(await request('/api/clients/'+id,'seller'),ctx)).json()).client.contacts[0].phone,'11988887777');
+ for(const invalid of [{cpfCnpj:'123'},{contacts:[{...update.contacts[0],id:'foreign-contact'}]},{addresses:[{...update.addresses[0],state:'INVALID'}]}])assert.equal((await detail.PATCH(await request('/api/clients/'+id,'seller','PATCH',{legalName:'NÃO SALVAR',...invalid}),ctx)).status,400);
+ assert.equal((await (await detail.GET(await request('/api/clients/'+id,'seller'),ctx)).json()).client.legalName,'NOVO NOME');
+ assert.equal((await detail.DELETE(await request('/api/clients/'+id,'seller','DELETE'),ctx)).status,403);
+ const addresses=await import('../../app/api/clients/[id]/addresses/route.ts');
+ await pg.exec("insert into users(id,email,name,role,active) values('client-manager','client-manager@example.test','GERÊNCIA CLIENTES','GERENCIA',1),('client-inactive','client-inactive@example.test','INATIVO CLIENTES','ADMIN',0)");
+ for(const actor of ['admin','client-manager','seller','finance','operator']){
+  const result=await detail.PATCH(await request('/api/clients/'+id,actor,'PATCH',{...update,legalName:'EDITADO '+actor}),ctx);assert.equal(result.status,200,await result.clone().text());
+  const read=(await (await detail.GET(await request('/api/clients/'+id,actor),ctx)).json()).client;assert.equal(read.legalName,('EDITADO '+actor).toUpperCase());assert.equal(read.contacts[0].id,original.contacts[0].id);assert.equal(read.addresses[0].id,original.addresses[0].id);
+  const address=await addresses.POST(await request('/api/clients/'+id+'/addresses',actor,'POST',{type:'COLETA',street:'RUA',number:'1',district:'CENTRO',city:'SOROCABA',state:'SP'}),ctx);assert.equal(address.status,201,await address.clone().text());
+  if(actor!=='admin')assert.equal((await detail.DELETE(await request('/api/clients/'+id,actor,'DELETE'),ctx)).status,403);
+  assert.ok((await queryAll("select id from audit_logs where entity_id=? and actor_user_id=? and action='UPDATED'",[id,actor])).length);
+ }
+ for(const actor of ['client-inactive','missing']){
+  const rejected=await detail.PATCH(await request('/api/clients/'+id,actor,'PATCH',{legalName:'PROIBIDO'}),ctx);assert.equal(rejected.status,actor==='client-inactive'?403:401);
+ }
+ const anonymous=await request('/api/clients/'+id,'seller','PATCH',{legalName:'PROIBIDO'});anonymous.headers.delete('cookie');assert.equal((await detail.PATCH(anonymous,ctx)).status,401);
+ assert.equal((await (await detail.GET(await request('/api/clients/'+id),ctx)).json()).client.legalName,'EDITADO OPERATOR');
+ assert.ok((await queryAll("select id from audit_logs where entity_id=? and actor_user_id='seller' and action='UPDATED'",[id])).length);
 });

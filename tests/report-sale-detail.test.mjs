@@ -605,3 +605,35 @@ test('criação permite ao vendedor selecionar outro responsável sem consultar 
   }
  }finally{globalThis.FormData=OriginalFormData;}
 });
+
+test('Cegonha abre com últimas cadastradas e Frota preserva sua ordenação padrão',()=>{
+ for(const channel of ['CEGONHA','FROTA']){
+  const state=hooks();state.react.useMemo=fn=>fn();const urls=[],mod=new Proxy({},{get:()=>()=>null});
+  const source=readFileSync(new URL('../components/sales-screen.tsx',import.meta.url),'utf8');const overrides=Object.fromEntries([...source.matchAll(/from\s+["']([^"']+)["']/g)].map(m=>[m[1],mod]));
+  Object.assign(overrides,{react:state.react,'@/components/ui':ui,'@/lib/format':format,'@/lib/domain/operations':operations,'@/components/icons':{Icons:new Proxy({},{get:()=>icon})},'@/components/use-api':{useApi:url=>{urls.push(url);return {data:{sales:[]}};}}});
+  const {SalesScreen}=compile('components/sales-screen.tsx',overrides);const tree=SalesScreen({initialCompetency:'2026-10',initialFinancialStatus:'',saleChannel:channel});
+  const expected=channel==='CEGONHA'?'created-desc':'number-asc';assert.equal(new URL(urls[0],'https://example.test').searchParams.get('sort'),expected);assert.ok(find(tree,n=>n.type==='select'&&n.props.value===expected));
+ }
+});
+
+test('todos os perfis editam identificação, contatos e endereços; excluir continua só para ADMIN',async()=>{
+ const originalForm=globalThis.FormData;
+ try{for(const role of ['ADMIN','GERENCIA','VENDEDOR','OPERACIONAL','FINANCEIRO']){
+  const state=hooks(),calls=[],client={id:'client',type:'PJ',legalName:'NOME ANTERIOR',tradeName:'FANTASIA',cpfCnpj:'12345678000199',stateRegistration:'ISENTO',active:true,saleChannel:'AMBOS',summary:{},contacts:[{id:'contact',name:'CONTATO',email:'old@example.test'}],addresses:[{id:'address',type:'EMPRESA',city:'CIDADE',state:'SP'}]};
+  const {ClientDetailScreen}=compile('components/client-detail-screen.tsx',{react:state.react,'@/components/registry-fields':{AddressFields:()=>null,ClientChannelSelect:()=>null},'next/link':{__esModule:true,default:()=>null},'next/navigation':{useRouter:()=>({replace:()=>{},refresh:()=>{}})},'@/lib/format':format,'@/components/icons':{Icons:new Proxy({},{get:()=>icon})},'@/components/ui':ui,'@/components/use-api':{useApi:url=>({data:url==='/api/me'?{user:{role}}:{client,sales:[]},refresh:()=>{}}),apiMutation:async(url,options)=>calls.push({url,body:JSON.parse(options.body)})}});
+  const render=()=>{state.reset();return ClientDetailScreen({id:'client'});};let tree=render();const edit=find(find(tree,n=>n.type===ui.PageHeader).props.actions,n=>n.props?.['aria-label']==='Editar cliente');assert.equal(Boolean(edit),true);
+  edit.props.onClick();tree=render();const modal=find(tree,n=>n.type===ui.Modal&&n.props.title==='Editar cliente');assert.equal(modal.props.open,true);assert.equal(find(modal,n=>n.type==='input'&&n.props.name==='legalName').props.defaultValue,'NOME ANTERIOR');assert.ok(find(modal,n=>n.props?.name==='contact_contact_phone'));assert.ok(find(modal,n=>n.props?.name==='address_address_city'));assert.equal(Boolean(find(modal,n=>n.type==='button'&&n.props.onClick?.name==='deleteClient')),role==='ADMIN');
+  globalThis.FormData=class{get(key){return {legalName:'NOVO NOME',type:'PJ',saleChannel:'AMBOS',active:'true',contact_contact_name:'NOVO CONTATO',contact_contact_phone:'11999999999',address_address_type:'EMPRESA',address_address_city:'NOVA CIDADE',address_address_state:'SP'}[key]??'';}};
+  await find(modal,n=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{}});assert.equal(calls[0].body.legalName,'NOVO NOME');assert.equal(calls[0].body.contacts[0].id,'contact');assert.equal(calls[0].body.contacts[0].phone,'11999999999');assert.equal(calls[0].body.addresses[0].id,'address');assert.equal(calls[0].body.addresses[0].city,'NOVA CIDADE');
+ }}finally{globalThis.FormData=originalForm;}
+});
+
+
+test('todos os perfis acessam a aba Clientes e seus detalhes',()=>{
+ for(const role of ['ADMIN','GERENCIA','VENDEDOR','FINANCEIRO','OPERACIONAL'])for(const path of ['/clientes','/clientes/client']){
+  const state=hooks([false,false,{id:'user',name:'USUÁRIO',role},true,0]);const marker=React.createElement('div',null,'CADASTRO DE CLIENTES'),noOp=()=>null,mod=new Proxy({},{get:()=>noOp});
+  const src=readFileSync(new URL('../components/app-shell.tsx',import.meta.url),'utf8');const overrides=Object.fromEntries([...src.matchAll(/from\s+["']([^"']+)["']/g)].map(m=>[m[1],mod]));
+  Object.assign(overrides,{react:state.react,'@/lib/domain/permissions':permissions,'@/components/current-user-context':{CurrentUserContext:React.createContext(null)},'@/components/icons':{Icons:new Proxy({},{get:()=>icon})},'next/navigation':{usePathname:()=>path},'next/link':{__esModule:true,default:({children})=>React.createElement('span',null,children)}});
+  const {AppShell}=compile('components/app-shell.tsx',overrides);const tree=AppShell({children:marker});assert.ok(find(tree,n=>n===marker));assert.ok(find(tree,n=>n.props?.href==='/clientes'));
+ }
+});

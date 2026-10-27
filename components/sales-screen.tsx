@@ -32,7 +32,7 @@ export function SalesScreen({
   const [query, setQuery] = useState("");
   const [financialStatus, setFinancialStatus] = useState(initialFinancialStatus);
   const [operationalStatus, setOperationalStatus] = useState("");
-  const [sort, setSort] = useState("number-asc");
+  const [sort, setSort] = useState(saleChannel === "CEGONHA" ? "created-desc" : "number-asc");
   const url = useMemo(() => {
     const params = new URLSearchParams({saleChannel, sort});
     if (competency) params.set("competency", competency);
@@ -61,7 +61,7 @@ export function SalesScreen({
         <label className="competency-filter"><span>Competência</span><input type="month" value={competency} onChange={(event) => setCompetency(event.target.value || currentCompetency())} /></label>
         <label><span>Status financeiro</span><select value={financialStatus} onChange={(event) => setFinancialStatus(event.target.value)}><option value="">Todos</option><option value="EM_ABERTO">Em aberto</option><option value="PAGO">Pago</option><option value="VENCIDO">Vencido</option></select></label>
         <label><span>Status operacional</span><select value={operationalStatus} onChange={(event) => setOperationalStatus(event.target.value)}><option value="">Todos</option>{OPERATIONAL_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-        <label><span>Ordenar</span><select value={sort} onChange={(event) => setSort(event.target.value)}><option value="number-asc">Número da venda crescente</option><option value="date-desc">Mais recentes</option><option value="date-asc">Mais antigas</option><option value="value-desc">Maior valor</option><option value="value-asc">Menor valor</option></select></label>
+        <label><span>Ordenar</span><select value={sort} onChange={(event) => setSort(event.target.value)}>{saleChannel === "CEGONHA" && <option value="created-desc">Últimas cadastradas</option>}<option value="number-asc">Número da venda crescente</option><option value="date-desc">Mais recentes</option><option value="date-asc">Mais antigas</option><option value="value-desc">Maior valor</option><option value="value-asc">Menor valor</option></select></label>
       </section>
       {loading && <LoadingState label="Consultando vendas…" />}
       {error && <ErrorState message={error} retry={refresh} />}

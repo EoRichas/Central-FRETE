@@ -79,6 +79,9 @@ export function ClientDetailScreen({ id }: { id: string }) {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          type: form.get("type"), legalName: form.get("legalName"), tradeName: form.get("tradeName"), cpfCnpj: form.get("cpfCnpj"), stateRegistration: form.get("stateRegistration"),
+          contacts: client.contacts.map(c=>({...c,...Object.fromEntries(['name','phone','whatsapp','email'].map(k=>[k,form.get(`contact_${c.id}_${k}`)]))})),
+          addresses: client.addresses.map(a=>({...a,...Object.fromEntries(['type','label','contactName','phone','cep','street','number','complement','district','city','state'].map(k=>[k,form.get(`address_${a.id}_${k}`)]))})),
           notes: form.get("notes"),
           saleChannel: form.get("saleChannel"),
           active: form.get("active") === "true",
@@ -140,7 +143,7 @@ export function ClientDetailScreen({ id }: { id: string }) {
         actions={
           <>
             <Link className="button secondary" href="/clientes">Voltar</Link>
-            {meApi.data?.user.role === "ADMIN" && (
+            {meApi.data?.user && (
               <button
                 type="button"
                 className="table-action"
@@ -243,8 +246,17 @@ export function ClientDetailScreen({ id }: { id: string }) {
         </div>
       </section>
 
-      <Modal open={editOpen} onClose={() => setEditOpen(false)} title="Editar cliente" description="Atualize a situação ou observações do cadastro.">
+      <Modal open={editOpen} onClose={() => setEditOpen(false)} title="Editar cliente" description="Atualize os dados cadastrais, contatos e endereços do cliente." wide>
         <form className="modal-body form-stack" onSubmit={saveClient}>
+          <div className="form-grid three">
+            <Field label="Tipo"><select name="type" defaultValue={client.type}><option value="PF">Pessoa física</option><option value="PJ">Pessoa jurídica</option></select></Field>
+            <Field label="Razão social / Nome"><input name="legalName" defaultValue={client.legalName} required /></Field>
+            <Field label="Nome fantasia"><input name="tradeName" defaultValue={client.tradeName??''} /></Field>
+            <Field label="CPF / CNPJ"><input name="cpfCnpj" defaultValue={client.cpfCnpj??''} inputMode="numeric" /></Field>
+            <Field label="Inscrição estadual"><input name="stateRegistration" defaultValue={client.stateRegistration??''} /></Field>
+          </div>
+          {client.contacts.map((c,index)=><fieldset className="form-stack" key={c.id}><legend>Contato {index+1}</legend><div className="form-grid two">{([['name','Nome do contato'],['phone','Telefone'],['whatsapp','WhatsApp'],['email','E-mail']] as const).map(([key,label])=><Field key={key} label={label}><input name={`contact_${c.id}_${key}`} defaultValue={c[key]??''} type={key==='email'?'email':'text'} required={key==='name'} /></Field>)}</div></fieldset>)}
+          {client.addresses.map((a,index)=><fieldset className="form-stack" key={a.id}><legend>Endereço {index+1}</legend><div className="form-grid three"><Field label="Tipo de endereço"><select name={`address_${a.id}_type`} defaultValue={a.type}><option value="EMPRESA">Empresa</option><option value="COLETA">Coleta</option><option value="ENTREGA">Entrega</option></select></Field>{([['label','Referência'],['contactName','Contato no local'],['phone','Telefone do local'],['cep','CEP'],['street','Logradouro'],['number','Número'],['complement','Complemento'],['district','Bairro'],['city','Cidade'],['state','UF']] as const).map(([key,label])=><Field key={key} label={label}><input name={`address_${a.id}_${key}`} defaultValue={a[key]??''} maxLength={key==='state'?2:200} /></Field>)}</div></fieldset>)}
           <ClientChannelSelect value={client.saleChannel}/>
           <Field label="Situação">
             <select name="active" defaultValue={client.active ? "true" : "false"}>
@@ -257,9 +269,9 @@ export function ClientDetailScreen({ id }: { id: string }) {
           </Field>
           {error && <p className="form-error" role="alert">{error}</p>}
           <footer className="modal-actions">
-            <button type="button" className="button danger" disabled={deleting || saving} onClick={deleteClient}>
+            {meApi.data?.user.role==='ADMIN' && <button type="button" className="button danger" disabled={deleting || saving} onClick={deleteClient}>
               {deleting ? "Excluindo cliente…" : "Excluir cliente"}
-            </button>
+            </button>}
             <button type="button" className="button secondary" onClick={() => setEditOpen(false)}>Cancelar</button>
             <button className="button primary" disabled={saving || deleting}>{saving ? "Salvando…" : "Salvar cliente"}</button>
           </footer>
