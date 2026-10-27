@@ -79,13 +79,16 @@ export async function listSales(
   }
   if (filters.query) {
     const term = `%${filters.query.toUpperCase()}%`;
+    const searchSeller = filters.saleChannel === "CEGONHA";
     where.push(`(
       upper(s.sale_number) like ? or upper(coalesce(c.legal_name, '')) like ? or
       coalesce(c.cpf_cnpj, '') like ? or upper(coalesce(s.vehicle, '')) like ? or
       upper(coalesce(s.plate, '')) like ? or upper(s.origin) like ? or upper(s.destination) like ? or
       upper(coalesce(case when f.id is not null then f.cargo_vehicles else s.cargo_vehicles end, '[]'::jsonb)::text) like ?
+      ${searchSeller ? "or upper(coalesce(s.seller_name, '')) like ?" : ""}
     )`);
     params.push(term, term, term, term, term, term, term, term);
+    if (searchSeller) params.push(term);
   }
   const ownership = saleOwnership(user);
   where.push(ownership.sql);
