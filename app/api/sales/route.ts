@@ -39,7 +39,7 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const competency = url.searchParams.get("period") === "all" ? undefined : url.searchParams.get("competency") || currentCompetency();
     if (competency && !isCompetency(competency)) throw new ApiError(400, "Competência inválida.");
-    const sort = url.searchParams.get("sort") || "number-asc";
+    const sort = url.searchParams.get("sort") || (url.searchParams.get("saleChannel") === "CEGONHA" ? "created-desc" : "number-asc");
     if (!SALE_SORTS.includes(sort as SaleSort)) throw new ApiError(400, "Ordenação inválida.");
     const saleChannel = url.searchParams.has("saleChannel") ? enumValue(url.searchParams.get("saleChannel"), "Canal da venda", SALE_CHANNELS) : undefined;
     const sales = await listSales(user, {
