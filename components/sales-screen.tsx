@@ -57,7 +57,7 @@ export function SalesScreen({
       {saleChannel === "CEGONHA" && <CegonhaTabs active="sales" competency={competency} />}
       {data?.canDelete && <StorageCleanupNotice />}
       <section className="filter-panel sales-filter-panel">
-        <label><span>Pesquisar</span><div className="search-input"><Icons.search /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Venda, cliente, placa, origem…" /></div></label>
+        <label><span>Pesquisar</span><div className="search-input"><Icons.search /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={saleChannel === "CEGONHA" ? "Venda, vendedor, cliente, placa, origem…" : "Venda, cliente, placa, origem…"} /></div></label>
         <label className="competency-filter"><span>Competência</span><input type="month" value={competency} onChange={(event) => setCompetency(event.target.value || currentCompetency())} /></label>
         <label><span>Status financeiro</span><select value={financialStatus} onChange={(event) => setFinancialStatus(event.target.value)}><option value="">Todos</option><option value="EM_ABERTO">Em aberto</option><option value="PAGO">Pago</option><option value="VENCIDO">Vencido</option></select></label>
         <label><span>Status operacional</span><select value={operationalStatus} onChange={(event) => setOperationalStatus(event.target.value)}><option value="">Todos</option>{OPERATIONAL_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>

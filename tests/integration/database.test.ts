@@ -2262,3 +2262,28 @@ test('todos os perfis editam cadastro completo e vínculos; validação, sessão
  assert.equal((await (await detail.GET(await request('/api/clients/'+id),ctx)).json()).client.legalName,'EDITADO OPERATOR');
  assert.ok((await queryAll("select id from audit_logs where entity_id=? and actor_user_id='seller' and action='UPDATED'",[id])).length);
 });
+
+
+test('pesquisa da Cegonha encontra vendedor por nome completo ou parcial sem ampliar acesso ou alterar a Frota',async()=>{
+ const api=await import('../../app/api/sales/route.ts');
+ await pg.exec("insert into users(id,email,name,role) values('search-seller-a','search-a@example.test','ANA TESTE VENDA','VENDEDOR'),('search-seller-b','search-b@example.test','BRUNO TESTE VENDA','VENDEDOR')");
+ const ids:string[]=[];
+ for(const [sellerId,saleDate,saleChannel] of [['search-seller-a','2097-06-01','CEGONHA'],['search-seller-b','2097-06-02','CEGONHA'],['search-seller-a','2097-07-01','CEGONHA'],['search-seller-a','2097-06-03','FROTA']]){
+  const created=await api.POST(await request('/api/sales','admin','POST',{...salePayload,sellerId,saleDate,saleChannel,financialDueDate:saleDate,origin:'ORIGEM BUSCA REGRESSAO'}));assert.equal(created.status,201,await created.clone().text());ids.push((await created.json()).id);
+ }
+ const search=async(q:string,actor='admin',extra='')=>{
+  const response=await api.GET(await request('/api/sales?saleChannel=CEGONHA&competency=2097-06&q='+encodeURIComponent(q)+extra,actor));assert.equal(response.status,200,await response.clone().text());return (await response.json()).sales as {id:string;saleNumber:string}[];
+ };
+ assert.deepEqual((await search('ana teste venda')).map(s=>s.id),[ids[0]]);
+ assert.deepEqual((await search('aNa TeStE')).map(s=>s.id),[ids[0]]);
+ assert.deepEqual(new Set((await search('teste venda')).map(s=>s.id)),new Set(ids.slice(0,2)));
+ assert.deepEqual((await search('teste venda','search-seller-a')).map(s=>s.id),[ids[0]]);
+ assert.deepEqual(await search('bruno','search-seller-a'),[]);
+ assert.deepEqual(await search('ana','admin','&financialStatus=PAGO'),[]);
+ assert.deepEqual(await search('ana','admin','&operationalStatus=FINALIZADO'),[]);
+ assert.deepEqual(new Set((await search('ORIGEM BUSCA REGRESSAO')).map(s=>s.id)),new Set(ids.slice(0,2)));
+ const first=await search('teste venda','admin','&sort=date-asc&limit=1');assert.deepEqual(first.map(s=>s.id),[ids[0]]);
+ assert.deepEqual((await search('teste venda','admin','&sort=date-asc&limit=1&offset=1')).map(s=>s.id),[ids[1]]);
+ assert.deepEqual(await search("' OR 1=1 --"),[]);
+ const fleet=await api.GET(await request('/api/sales?saleChannel=FROTA&competency=2097-06&q=ana%20teste%20venda','admin'));assert.equal(fleet.status,200);assert.deepEqual((await fleet.json()).sales,[]);
+});
