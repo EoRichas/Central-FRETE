@@ -16,8 +16,7 @@ export function assertTrustedMutation(request: Request) {
   }
 }
 
-export async function readAuthJson(request: Request) {
-  const limit = 16 * 1024;
+export async function readAuthJson(request: Request, limit = 16 * 1024) {
   if (Number(request.headers.get('content-length')) > limit) throw new ApiError(413, 'Solicitação muito grande.');
   const reader = request.body?.getReader();
   if (!reader) throw new ApiError(400, 'Solicitação inválida.');

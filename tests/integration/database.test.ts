@@ -2287,3 +2287,31 @@ test('pesquisa da Cegonha encontra vendedor por nome completo ou parcial sem amp
  assert.deepEqual(await search("' OR 1=1 --"),[]);
  const fleet=await api.GET(await request('/api/sales?saleChannel=FROTA&competency=2097-06&q=ana%20teste%20venda','admin'));assert.equal(fleet.status,200);assert.deepEqual((await fleet.json()).sales,[]);
 });
+
+test('baixa todas as 251 vendas selecionadas, aceita JSON maior que 16 KiB e preserva atomicidade e repetição segura',async()=>{
+ await oct23Fixtures();
+ const api=await import('../../app/api/finance/payments/batch/route.ts');
+ await pg.exec(`insert into freight_sales(id,sale_date,competency,seller_name,client_id,origin,destination,financial_due_date,operational_status,freight_amount_cents,commission_basis_points,created_by)
+  select 'batch-large-sale-'||i,'2098-01-01','2098-01','TESTE','oct23-client-a','A','B','2098-01-31','CONFIRMAR',1000,0,'admin' from generate_series(1,151) i;
+ insert into fleet_freights(id,client_id,client_name,vehicle_plate,driver_name,origin,destination,pickup_date,operational_status,freight_amount_cents,distance_meters,created_by)
+  select 'batch-large-freight-'||i,'oct23-client-a','CLIENTE','AAA1A11','MOTORISTA','A','B','2098-01-01','SEM_PREVISAO',2000,1000,'admin' from generate_series(1,100) i;
+ insert into payment_transactions(id,sale_id,type,status,amount_cents,occurred_at,payment_method,idempotency_key,created_by)
+  values('batch-large-partial','batch-large-sale-1','RECEBIMENTO','CONFIRMADO',100,'2098-01-01','PIX','batch-large-partial','admin');`);
+ const items=[...Array.from({length:151},(_,i)=>({sourceKind:'sale',id:`batch-large-sale-${i+1}`,expectedBalanceCents:i===0?900:1000})),...Array.from({length:100},(_,i)=>({sourceKind:'freight',id:`batch-large-freight-${i+1}`,expectedBalanceCents:2000}))];
+ const body={clientId:'oct23-client-a',paidAt:'2098-01-02',paymentMethod:'PIX',items};
+ assert.ok(Buffer.byteLength(JSON.stringify(body))>16*1024);
+ const send=async(key:string,data=body)=>{const req=await request('/api/finance/payments/batch','finance','POST',data);req.headers.set('idempotency-key',key);return api.POST(req);};
+ const {readAuthJson}=await import('../../lib/server/request-security.ts');
+ await assert.rejects(readAuthJson(new Request('https://example.test',{method:'POST',body:JSON.stringify(body)})),(e:unknown)=>e instanceof ApiError&&e.status===413);
+ assert.equal((await send('large-stale',{...body,items:items.map((item,i)=>i===150?{...item,expectedBalanceCents:999}:item)})).status,409);
+ const counts=async()=>({receipts:(await queryAll("select id from payment_transactions where sale_id like 'batch-large-sale-%'")).length,paid:(await queryAll("select id from fleet_freights where id like 'batch-large-freight-%' and payment_status='PAGO'")).length});
+ assert.deepEqual(await counts(),{receipts:1,paid:0});
+ await pg.exec("alter table audit_logs add constraint batch_large_rollback check(action<>'BATCH_SETTLED') not valid");
+ try{assert.equal((await send('large-audit-fails')).status,500);}finally{await pg.exec('alter table audit_logs drop constraint batch_large_rollback');}
+ assert.deepEqual(await counts(),{receipts:1,paid:0});
+ const saved=await send('large-all');assert.equal(saved.status,200,await saved.clone().text());assert.deepEqual(await saved.json(),{updated:true,count:251,totalCents:350900});
+ assert.deepEqual(await counts(),{receipts:152,paid:100});
+ assert.equal((await queryAll("select id from audit_logs where action='BATCH_SETTLED' and request_id='large-all'")).length,251);
+ const replay=await send('large-all');assert.equal(replay.status,200);assert.equal((await replay.json()).duplicate,true);assert.deepEqual(await counts(),{receipts:152,paid:100});
+ const tooLarge=await request('/api/finance/payments/batch','finance','POST',body);tooLarge.headers.set('idempotency-key','large-payload');tooLarge.headers.set('content-length',String(1024*1024+1));assert.equal((await api.POST(tooLarge)).status,413);
+});
