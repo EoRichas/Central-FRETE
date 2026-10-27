@@ -31,7 +31,7 @@ import {
 import { formatMoney } from "@/lib/format";
 import { FreightTable } from "@/components/fleet-freight-table";
 import { FleetFreightDetail } from "@/components/fleet-freight-detail";
-import { FreightModal } from "@/components/fleet-freight-modal";
+import { FleetFreightFormScreen } from "@/components/fleet-freight-form-screen";
 import {
   FleetAssetsPanel,
   VehicleModal,
@@ -74,7 +74,7 @@ function FleetOperationsScreen() {
   const [status, setStatus] = useState("");
   const [priority, setPriority] = useState("");
   const [seller, setSeller] = useState("");
-  const [freightModalOpen, setFreightModalOpen] = useState(false);
+  const [freightFormOpen, setFreightFormOpen] = useState(false);
   const [editingFreight, setEditingFreight] = useState<FleetFreight | null>(
     null,
   );
@@ -127,17 +127,17 @@ function FleetOperationsScreen() {
   function openNewFreight() {
     setEditingFreight(null);
     setMutationError(null);
-    setFreightModalOpen(true);
+    setFreightFormOpen(true);
   }
   function openEditFreight(freight: FleetFreight) {
     setEditingFreight(freight);
     setMutationError(null);
-    setFreightModalOpen(true);
+    setFreightFormOpen(true);
   }
   function finishMutation(message: string, id?: string, savedCompetency?: string) {
     if (savedCompetency) setCompetency(savedCompetency);
     if (id) setViewingId(id);
-    setFreightModalOpen(false);
+    setFreightFormOpen(false);
     setVehicleModalOpen(false);
     setDriverModalOpen(false);
     setEditingFreight(null);
@@ -173,6 +173,16 @@ function FleetOperationsScreen() {
     : allTabs;
 
   const viewedFreight = fleet?.freights.find(f => f.id === viewingId) ?? fleet?.billing.freights.find(f => f.id === viewingId);
+  if (freightFormOpen && fleet) return (
+    <FleetFreightFormScreen
+      key={editingFreight?.id ?? "new"}
+      freight={editingFreight}
+      fleet={fleet}
+      onClose={() => setFreightFormOpen(false)}
+      onSaved={finishMutation}
+      onDelete={deleteFreight}
+    />
+  );
   return (
     <>
     <div className="fleet-module">
@@ -317,16 +327,6 @@ function FleetOperationsScreen() {
       )}
       </>}
     </div>
-      {freightModalOpen && fleet && (
-        <FreightModal
-          key={editingFreight?.id ?? "new"}
-          freight={editingFreight}
-          fleet={fleet}
-          onClose={() => setFreightModalOpen(false)}
-          onSaved={finishMutation}
-          onDelete={deleteFreight}
-        />
-      )}
       <Modal open={calculationOpen} onClose={() => setCalculationOpen(false)} title="Como é calculado o resultado das operações?">
         <div className="modal-body form-stack"><p>Receita dos fretes coletados no mês ({formatMoney(fleet?.summary.revenueCents ?? 0)}) menos os custos das operações ({formatMoney(fleet?.summary.totalCostCents ?? 0)}). Inclui comissões, despesas diretas, combustível e pedágios. Não inclui custos fixos mensais, rateio por km ou vendas sem frete vinculado. O faturamento usa outra base: a data de faturamento.</p><footer className="modal-actions"><button type="button" className="button secondary" onClick={() => setCalculationOpen(false)}>Fechar</button></footer></div>
       </Modal>

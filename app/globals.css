@@ -264,6 +264,8 @@ td > small { max-width: 270px; margin-top: 2px; overflow: hidden; color: var(--m
 .empty-state p { max-width: 440px; margin: 0 0 8px; color: var(--muted); }
 
 .form-page { display: flex; flex-direction: column; gap: 18px; }
+.fleet-freight-form { min-width: 0; }
+.fleet-freight-form .sale-form-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 9px; }
 .form-section { padding: 24px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-sm); }
 .form-section > header { margin-bottom: 22px; display: flex; align-items: flex-start; gap: 13px; }
 .form-section > header > span { width: 30px; height: 30px; display: grid; place-items: center; flex: 0 0 auto; color: white; background: var(--navy-2); border-radius: 6px; font-size: 10px; font-weight: 800; }
