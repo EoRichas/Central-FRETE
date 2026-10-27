@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { FleetFreightDetail } from '@/components/fleet-freight-detail';
-import { FreightModal } from '@/components/fleet-freight-modal';
+import { FleetFreightFormScreen } from '@/components/fleet-freight-form-screen';
 import { FreightTable } from '@/components/fleet-freight-table';
 import { Icons } from '@/components/icons';
 import { ErrorState, LoadingState, PageHeader } from '@/components/ui';
@@ -26,6 +26,13 @@ export function SellerFleetScreen() {
   const normalized = search.trim().toLocaleUpperCase('pt-BR');
   const filtered = freights.filter(f=>(!normalized||[f.saleNumber,f.clientName,f.origin,f.destination,f.vehiclePlate,f.driverName].some(v=>v?.toLocaleUpperCase('pt-BR').includes(normalized)))&&(!status||f.operationalStatus===status)&&(!priority||f.priority===priority)&&(!seller||sellerKey(f)===seller));
   const edit = () => {setEditing(true);setOpen(true);};
+  if (open) return <div className="fleet-module">
+    {options.loading&&<LoadingState label="Preparando frete…"/>}
+    {options.error&&<ErrorState message={options.error} retry={options.refresh}/>}
+    {editing&&detail.loading&&<LoadingState label="Carregando detalhes…"/>}
+    {editing&&detail.error&&<ErrorState message={detail.error} retry={detail.refresh}/>}
+    {!options.loading&&options.data&&(!editing||(!detail.loading&&detail.data)) ? <FleetFreightFormScreen key={editing?selectedId:'new'} freight={editing?detail.data!.freight:null} fleet={options.data.fleet} onClose={()=>setOpen(false)} onSaved={(message,_id,_competency,accessTransferred)=>{setOpen(false);setSuccess(message);list.refresh();if(accessTransferred){setSelectedId(null);setEditing(false);}else if(editing)detail.refresh();}} onDelete={async()=>{throw new Error('Exclusão não permitida.');}}/> : <button type="button" className="button secondary" onClick={()=>setOpen(false)}>Voltar à Frota</button>}
+  </div>;
   return <div className="fleet-module">
     {selectedId ? <>
       <PageHeader eyebrow={`Venda ${detail.data?.freight.saleNumber ?? ''}`} title="Detalhes do frete" description={detail.data ? `${detail.data.freight.origin} → ${detail.data.freight.destination}` : ''} actions={<><button className="button secondary" onClick={()=>setSelectedId(null)}>Voltar à Frota</button><Link className="button secondary" href={`/frota/fretes/${selectedId}/os`}>Visualizar OS</Link>{detail.data&&!detail.loading&&<button type="button" className="button primary" onClick={edit}>Editar frete</button>}</>} />
@@ -46,7 +53,5 @@ export function SellerFleetScreen() {
       </div>
     </>}
     {success&&<p role="status" className="success-banner">{success}</p>}
-    {open&&options.loading&&<LoadingState label="Preparando frete…"/>}{open&&options.error&&<ErrorState message={options.error} retry={options.refresh}/>}
-    {open&&!options.loading&&options.data&&(!editing||detail.data)&&<FreightModal freight={editing?detail.data!.freight:null} fleet={options.data.fleet} onClose={()=>setOpen(false)} onSaved={(message,_id,_competency,accessTransferred)=>{setOpen(false);setSuccess(message);list.refresh();if(accessTransferred){setSelectedId(null);setEditing(false);}else if(editing)detail.refresh();}} onDelete={async()=>{throw new Error('Exclusão não permitida.');}}/>}
   </div>;
 }

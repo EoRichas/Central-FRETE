@@ -13,7 +13,7 @@ import { cargoVehiclesOrLegacy } from "@/lib/domain/cargo-vehicles";
 import { fuelInputToInteger } from "@/lib/domain/fuel-input";
 import { todaySaoPaulo } from "@/lib/domain/dates";
 import { FleetPaymentPanel } from "@/components/fleet-payment-panel";
-import { Field, Modal } from "@/components/ui";
+import { Field, PageHeader } from "@/components/ui";
 import type { CurrentUser } from "@/lib/contracts";
 import { apiMutation, useApi } from "@/components/use-api";
 import {
@@ -42,7 +42,7 @@ function formatDistance(distanceMeters: number) {
   })} km`;
 }
 
-export function FreightModal({
+export function FleetFreightFormScreen({
   freight,
   fleet,
   onClose,
@@ -55,6 +55,11 @@ export function FreightModal({
   onSaved: (message: string, id?: string, competency?: string, accessTransferred?: boolean) => void;
   onDelete: (freight: FleetFreight) => Promise<void>;
 }) {
+  const formScreenRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    formScreenRef.current?.focus({preventScroll: true});
+    window.scrollTo(0, 0);
+  }, []);
   const editing = Boolean(freight);
   const me = useApi<{user:CurrentUser}>("/api/me");
   const canAssignSeller=Boolean(me.data)&&(editing||['ADMIN','FINANCEIRO','VENDEDOR'].includes(me.data?.user.role??''));
@@ -403,14 +408,15 @@ export function FreightModal({
   );
 
   return (
-    <Modal
-      open
-      wide
-      onClose={onClose}
-      title={editing ? "Editar frete da frota" : "Novo frete da frota"}
-      description="Cadastre os veículos da carga e os custos desta operação. O combustível é estimado pela distância e pelos parâmetros da Frota."
-    >
-      <form className="modal-body form-stack" onSubmit={submit}>
+    <div className="fleet-freight-form" ref={formScreenRef} tabIndex={-1}>
+      <PageHeader
+        eyebrow={editing ? `Venda ${freight!.saleNumber}` : "Nova operação"}
+        title={editing ? "Editar frete da frota" : "Novo frete da frota"}
+        description="Cadastre os veículos da carga e os custos desta operação. O combustível é estimado pela distância e pelos parâmetros da Frota."
+        actions={<button type="button" className="button secondary" onClick={onClose}>Cancelar</button>}
+      />
+      <form className="form-page" onSubmit={submit}>
+        <section className="form-section">
         <fieldset
           disabled={!(fleet.canEditFreights || fleet.canEditFreightFinancials)}
           className="fleet-fieldset"
@@ -754,7 +760,7 @@ export function FreightModal({
               {error}
             </p>
           )}
-          <footer className="modal-actions">
+          <footer className="sale-form-actions">
             {freight && fleet.canDeleteFreights && (
               <button
                 type="button"
@@ -786,6 +792,7 @@ export function FreightModal({
             </button>
           </footer>
         </fieldset>
+        </section>
       </form>
       {freight && (fleet.canEditFreights || fleet.canManagePayments) && (
         <FleetPaymentPanel
@@ -797,6 +804,6 @@ export function FreightModal({
           onSaved={() => onSaved("Pagamento atualizado.")}
         />
       )}
-    </Modal>
+    </div>
   );
 }

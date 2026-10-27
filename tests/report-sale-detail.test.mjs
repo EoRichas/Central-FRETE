@@ -126,11 +126,11 @@ test('OS abre prévia inline, com impressão e download separados e sem emissão
 
 test('Frota inicia em Fretes e Novo frete não aparece nas demais abas', () => {
   const state=hooks(); state.react.useMemo=fn=>fn();
-  const noOp=()=>null, mod=new Proxy({}, {get:()=>noOp});
+  const noOp=()=>null, mod=new Proxy({}, {get:()=>noOp}),FleetFreightFormScreen=()=>null;
   const source=readFileSync(new URL('../components/fleet-screen.tsx',import.meta.url),'utf8');
   const overrides=Object.fromEntries([...source.matchAll(/from\s+["']([^"']+)["']/g)].map(m=>[m[1],mod]));
   Object.assign(overrides,{
-    react:state.react,'@/components/ui':ui,'@/lib/format':format,
+    react:state.react,'@/components/ui':ui,'@/lib/format':format,'@/components/fleet-freight-form-screen':{FleetFreightFormScreen},
     '@/lib/domain/permissions':permissions,'@/lib/domain/cargo-vehicles':{cargoVehiclesOrLegacy:()=>[]},
     '@/lib/domain/dates':{currentCompetency:()=>'2026-10'},'@/components/icons':{Icons:new Proxy({},{get:()=>icon})},
     '@/lib/domain/fleet':{FLEET_OPERATIONAL_STATUSES:[],FLEET_PRIORITIES:[]},
@@ -142,6 +142,7 @@ test('Frota inicia em Fretes e Novo frete não aparece nas demais abas', () => {
   const walk=(node,match)=>{if(!node||typeof node!=='object')return null;if(Array.isArray(node)){for(const child of node){const result=walk(child,match);if(result)return result;}return null;}return match(node)?node:walk(node.props?.children,match)||walk(node.props?.actions,match);};
   const create=tree=>walk(tree,n=>n.type==='button'&&n.props.className?.includes('create-sale-action'));
   let tree=render(); assert.ok(create(tree));
+  create(tree).props.onClick();tree=render();assert.equal(tree.type,FleetFreightFormScreen);assert.equal(find(tree,n=>n.type==='section'&&n.props.className==='filter-panel fleet-filter-panel'),null);tree.props.onClose();tree=render();assert.ok(create(tree));
   for(const label of ['Visão geral','Fechamento mensal','Relatório de vendas']) assert.equal(find(tree,n=>n.type==='button'&&n.props.children===label),null);
   find(tree,n=>n.type==='button'&&n.props.children==='Faturamento').props.onClick();tree=render();assert.equal(create(tree),null);
 
@@ -296,7 +297,7 @@ test('observação salva na OS volta preenchida e habilitada ao reabrir', () => 
 
 test('formulário Frota remove hodômetro e abastecimento, posiciona CTE e avarias e preserva valores antigos ao editar', async () => {
   const state=hooks();const noOp=()=>null,mod=new Proxy({},{get:()=>noOp});
-  const source=readFileSync(new URL('../components/fleet-freight-modal.tsx',import.meta.url),'utf8');
+  const source=readFileSync(new URL('../components/fleet-freight-form-screen.tsx',import.meta.url),'utf8');
   const overrides=Object.fromEntries([...source.matchAll(/from\s+["']([^"']+)["']/g)].map(m=>[m[1],mod]));
   const calls=[];
   Object.assign(overrides,{
@@ -307,12 +308,13 @@ test('formulário Frota remove hodômetro e abastecimento, posiciona CTE e avari
     '@/lib/domain/fuel-input':{fuelInputToInteger:v=>v?fullFormat.moneyInputToCents(v):null},
     '@/components/use-api':{useApi:url=>({data:url==='/api/me'?{user:{id:'admin',role:'ADMIN'}}:{sellers:[]}}),apiMutation:async(url,options)=>{calls.push({url,...options});return {id:'234'};}},
   });
-  const {FreightModal}=compile('components/fleet-freight-modal.tsx',overrides);
+  const {FleetFreightFormScreen}=compile('components/fleet-freight-form-screen.tsx',overrides);
   const freight={id:'234',vehicleId:'truck',driverId:'driver',clientName:'CLIENTE',distanceMeters:10000,odometerStartMeters:100000,odometerEndMeters:110000,
     actualFuelCostCents:12345,fuelLitersMilli:25000,fuelPumpAmountCents:12400,icmsCostCents:1500,cteMdfeCostCents:2000,damagesCostCents:3000,
     freightAmountCents:100000,tollCents:0,driverCommissionCents:0,pickupDate:'2026-10-21',operationalStatus:'EM_ROTA',priority:'NORMAL'};
   const fleet={parameters:fleetDomain.DEFAULT_FLEET_PARAMETERS,vehicles:[{id:'truck',active:true}],drivers:[{id:'driver',active:true}],canEditFreights:true};
-  const tree=FreightModal({freight,fleet,onClose:()=>{},onSaved:()=>{},onDelete:()=>{}});
+  let closed=0;const tree=FleetFreightFormScreen({freight,fleet,onClose:()=>closed++,onSaved:()=>{},onDelete:()=>{}});
+  assert.equal(find(tree,n=>n.type===ui.Modal),null);assert.equal(find(tree,n=>n.type==='form').props.className,'form-page');const header=find(tree,n=>n.type===ui.PageHeader);assert.equal(header.props.title,'Editar frete da frota');header.props.actions.props.onClick();assert.equal(closed,1);
   for(const label of ['KM inicial','KM final','Litros abastecidos','Valor bomba (R$)','Valor pago combustível (R$)','ICMS (R$)']) assert.equal(find(tree,n=>n.props?.label===label),null,label);
   const cte=find(tree,n=>n.props?.label==='CTE/MDF (R$)'),damages=find(tree,n=>n.props?.label==='Avarias (R$)');
   assert.ok(cte&&damages);assert.equal(find(cte,n=>n.type==='input').props.value,'20,00');assert.equal(find(damages,n=>n.type==='input').props.value,'30,00');
@@ -348,18 +350,18 @@ test('vendedor vê editar e novo recebimento somente na própria venda, sem excl
 
 test('vendedor abre edição e baixa pela própria lista Frota e atualiza detalhes após salvar', () => {
  const state=hooks();let refreshes=0;const urls=[];
- const FreightTable=()=>null,FreightModal=()=>null,detail={id:'234',saleNumber:'234',clientName:'CLIENTE',origin:'A',destination:'B'};
+ const FreightTable=()=>null,FleetFreightFormScreen=()=>null,detail={id:'234',saleNumber:'234',clientName:'CLIENTE',origin:'A',destination:'B'};
  const {SellerFleetScreen}=compile('components/seller-fleet-screen.tsx',{
-  'next/link':{__esModule:true,default:()=>null},'@/components/fleet-freight-table':{FreightTable},'@/components/icons':{Icons:new Proxy({},{get:()=>icon})},'@/lib/domain/fleet':fleetDomain,react:state.react,'@/components/fleet-freight-detail':{FleetFreightDetail:()=>null},'@/components/fleet-freight-modal':{FreightModal},'@/components/ui':ui,
+  'next/link':{__esModule:true,default:()=>null},'@/components/fleet-freight-table':{FreightTable},'@/components/icons':{Icons:new Proxy({},{get:()=>icon})},'@/lib/domain/fleet':fleetDomain,react:state.react,'@/components/fleet-freight-detail':{FleetFreightDetail:()=>null},'@/components/fleet-freight-form-screen':{FleetFreightFormScreen},'@/components/ui':ui,
   '@/components/use-transient-message':{useTransientMessage:()=>[null,()=>{}]},'@/lib/format':format,
   '@/components/use-api':{useApi:url=>{urls.push(url);return {data:url?.startsWith('/api/fleet/freights/options')?{fleet:{canManagePayments:true,canDeleteFreights:false}}:url==='/api/fleet/freights'?{freights:[detail]}:{freight:detail},refresh:()=>refreshes++};}},
  });
  const render=()=>{state.reset();return SellerFleetScreen();};let tree=render();
  assert.equal(find(tree,n=>n.props?.className==='fleet-module').type,'div');assert.ok(find(tree,n=>n.props?.className==='cegonha-tabs module-tabs'));find(tree,n=>n.type===FreightTable).props.onOpen(detail);tree=render();assert.equal(find(tree,n=>n.type===ui.Modal),null);
  find(find(tree,n=>n.type===ui.PageHeader).props.actions,n=>n.type==='button'&&n.props.children==='Editar frete').props.onClick();tree=render();
- const editor=find(tree,n=>n.type===FreightModal);assert.equal(editor.props.freight.id,'234');assert.equal(editor.props.fleet.canManagePayments,true);assert.equal(editor.props.fleet.canDeleteFreights,false);
+ const editor=find(tree,n=>n.type===FleetFreightFormScreen);assert.equal(find(tree,n=>n.type===FreightTable),null);assert.equal(find(tree,n=>n.type===ui.PageHeader),null);assert.equal(editor.props.freight.id,'234');assert.equal(editor.props.fleet.canManagePayments,true);assert.equal(editor.props.fleet.canDeleteFreights,false);
  assert.ok(urls.includes('/api/fleet/freights/options?freightId=234'));
- editor.props.onSaved('Pagamento atualizado.');tree=render();assert.equal(find(tree,n=>n.type===FreightModal),null);assert.equal(refreshes,2);
+ editor.props.onSaved('Pagamento atualizado.');tree=render();assert.equal(find(tree,n=>n.type===FleetFreightFormScreen),null);assert.equal(refreshes,2);
 });
 
 test('barra lateral permite edição e configurações pessoais, mas preserva o fechamento restrito', () => {
@@ -508,7 +510,7 @@ test('editar frete mantém seleção de vendedor na Frota e Cegonha e envia a tr
  try{
   for(const kind of ['fleet','sale'])for(const role of ['ADMIN','FINANCEIRO','OPERACIONAL','VENDEDOR']){
    const state=hooks(),calls=[],queries=[],noOp=()=>null,mod=new Proxy({},{get:()=>noOp});
-   const file=kind==='fleet'?'components/fleet-freight-modal.tsx':'components/sale-form-screen.tsx',source=readFileSync(new URL('../'+file,import.meta.url),'utf8');
+   const file=kind==='fleet'?'components/fleet-freight-form-screen.tsx':'components/sale-form-screen.tsx',source=readFileSync(new URL('../'+file,import.meta.url),'utf8');
    const overrides=Object.fromEntries([...source.matchAll(/from\s+["']([^"']+)["']/g)].map(m=>[m[1],mod]));
    Object.assign(overrides,{
     react:state.react,'@/components/ui':ui,'@/lib/format':fullFormat,'@/lib/domain/fleet':fleetDomain,'@/lib/domain/number-input':numberInput,
@@ -520,7 +522,7 @@ test('editar frete mantém seleção de vendedor na Frota e Cegonha e envia a tr
    });
    const exports=compile(file,overrides),record={id:'234',saleNumber:'234',sellerId:'owner',sellerName:'ATUAL',sellerCommissionBasisPoints:700,sellerCommissionOverrideCents:0,commissionBasisPoints:700,commissionOverrideCents:0,saleChannel:'CEGONHA',cargoVehicles:[],costs:[],installments:[],vehicleId:'truck',driverId:'driver',clientId:'client',clientName:'CLIENTE',distanceMeters:10000,freightAmountCents:100000,tollCents:0,driverCommissionCents:0,pickupDate:'2026-10-23',saleDate:'2026-10-23',operationalStatus:'CONFIRMAR',priority:'NORMAL'};
    const fleet={parameters:fleetDomain.DEFAULT_FLEET_PARAMETERS,vehicles:[{id:'truck',active:true}],drivers:[{id:'driver',active:true}],canEditFreights:true};
-   const render=()=>{state.reset();return kind==='fleet'?exports.FreightModal({freight:record,fleet,onClose:()=>{},onSaved:()=>{},onDelete:()=>{}}):exports.SaleFormScreen({initialSale:record});};
+   const render=()=>{state.reset();return kind==='fleet'?exports.FleetFreightFormScreen({freight:record,fleet,onClose:()=>{},onSaved:()=>{},onDelete:()=>{}}):exports.SaleFormScreen({initialSale:record});};
    let tree=render();let field=find(tree,n=>n.props?.label==='Vendedor');assert.ok(field,kind+role);assert.equal(find(field,n=>n.type==='select').props.value,'owner');
    find(field,n=>n.type==='select').props.onChange({target:{value:'next'}});tree=render();field=find(tree,n=>n.props?.label==='Vendedor');assert.equal(find(field,n=>n.type==='select').props.value,'next');
    assert.ok(queries.includes(['OPERACIONAL','VENDEDOR'].includes(role)?'/api/sales/sellers?assignment=1':'/api/sales/sellers'));
@@ -584,7 +586,7 @@ test('criação permite ao vendedor selecionar outro responsável sem consultar 
  try{
   for(const kind of ['fleet','sale'])for(const role of ['VENDEDOR']){
    const state=hooks(),calls=[],queries=[],noOp=()=>null,mod=new Proxy({},{get:()=>noOp});
-   const file=kind==='fleet'?'components/fleet-freight-modal.tsx':'components/sale-form-screen.tsx',source=readFileSync(new URL('../'+file,import.meta.url),'utf8');
+   const file=kind==='fleet'?'components/fleet-freight-form-screen.tsx':'components/sale-form-screen.tsx',source=readFileSync(new URL('../'+file,import.meta.url),'utf8');
    const overrides=Object.fromEntries([...source.matchAll(/from\s+["']([^"']+)["']/g)].map(m=>[m[1],mod]));
    Object.assign(overrides,{
     react:state.react,'@/components/ui':ui,'@/lib/format':fullFormat,'@/lib/domain/fleet':fleetDomain,'@/lib/domain/number-input':numberInput,
@@ -596,7 +598,7 @@ test('criação permite ao vendedor selecionar outro responsável sem consultar 
    });
    const exports=compile(file,overrides);
    const fleet={parameters:fleetDomain.DEFAULT_FLEET_PARAMETERS,vehicles:[{id:'truck',active:true}],drivers:[{id:'driver',active:true}],canEditFreights:true};
-   const render=()=>{state.reset();return kind==='fleet'?exports.FreightModal({freight:null,fleet,onClose:()=>{},onSaved:()=>{},onDelete:()=>{}}):exports.SaleFormScreen({});};
+   const render=()=>{state.reset();return kind==='fleet'?exports.FleetFreightFormScreen({freight:null,fleet,onClose:()=>{},onSaved:()=>{},onDelete:()=>{}}):exports.SaleFormScreen({});};
    let tree=render();let field=find(tree,n=>n.props?.label==='Vendedor');assert.ok(field,kind+role);assert.equal(find(field,n=>n.type==='select').props.value,'owner');
    find(field,n=>n.type==='select').props.onChange({target:{value:'next'}});tree=render();field=find(tree,n=>n.props?.label==='Vendedor');assert.equal(find(field,n=>n.type==='select').props.value,'next');
    assert.ok(queries.includes(['OPERACIONAL','VENDEDOR'].includes(role)?'/api/sales/sellers?assignment=1':'/api/sales/sellers'));
