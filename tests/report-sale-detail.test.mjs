@@ -639,3 +639,22 @@ test('todos os perfis acessam a aba Clientes e seus detalhes',()=>{
   const {AppShell}=compile('components/app-shell.tsx',overrides);const tree=AppShell({children:marker});assert.ok(find(tree,n=>n===marker));assert.ok(find(tree,n=>n.props?.href==='/clientes'));
  }
 });
+
+test('Selecionar todas inclui mais de 50 vendas elegíveis e permite desmarcar sem incluir outro cliente ou vendas quitadas',async()=>{
+ const state=hooks();state.react.useRef=initial=>{const [ref]=state.react.useState(()=>({current:initial}));return ref;};
+ const calls=[];
+ const {BulkPaymentPanel}=compile('components/bulk-payment-panel.tsx',{
+  react:state.react,'./ui':ui,'@/lib/format':fullFormat,'@/lib/domain/dates':{todaySaoPaulo:()=>'2026-10-27'},
+  './use-api':{useApi:()=>({data:{user:{role:'FINANCEIRO'}}}),apiMutation:async(url,options)=>calls.push(JSON.parse(options.body))},
+ });
+ const available=Array.from({length:251},(_,i)=>({id:`all-${i}`,saleNumber:String(i),clientId:'client',clientName:'CLIENTE',saleChannel:'CEGONHA',financial:{balanceCents:100}}));
+ const sales=[...available,{...available[0],id:'other',clientId:'other'},{...available[0],id:'paid',financial:{balanceCents:0}}];
+ const render=()=>{state.reset();return BulkPaymentPanel({sales,onSaved:()=>{}});};let tree=render();
+ find(tree,n=>n.type==='button'&&n.props.children==='Baixa em lote').props.onClick();tree=render();find(find(tree,n=>n.props?.label==='Cliente'),n=>n.type==='select').props.onChange({target:{value:'client'}});tree=render();
+ // Locate the group selector by its lack of a per-sale aria-label.
+ const all=()=>find(tree,n=>n.type==='input'&&n.props.type==='checkbox'&&!n.props['aria-label']);
+ assert.equal(all().props.disabled,false);assert.equal(all().props.checked,false);all().props.onChange({target:{checked:true}});tree=render();assert.equal(all().props.checked,true);
+ find(tree,n=>n.props?.['aria-label']==='Baixar venda 0').props.onChange({target:{checked:false}});tree=render();assert.equal(all().props.checked,false);assert.equal(find(tree,n=>n.props?.['aria-label']==='Baixar venda 0').props.disabled,false);
+ all().props.onChange({target:{checked:true}});tree=render();await find(tree,n=>n.type==='form').props.onSubmit({preventDefault(){}});
+ assert.equal(calls.length,1);assert.equal(calls[0].items.length,251);assert.deepEqual(calls[0].items.map(item=>item.id),available.map(s=>s.id));
+});
