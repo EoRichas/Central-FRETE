@@ -161,7 +161,7 @@ export async function DELETE(request: Request, context: RouteContext) {
 
 export async function PATCH(request: Request, context: RouteContext) {
   try {
-    const user = await authorize(request, ["ADMIN", "VENDEDOR"]);
+    const user = await authorize(request);
     const { id } = await context.params;
     const current = await queryFirst<Omit<ClientRecord,'contacts'|'addresses'|'active'>&{active:number}>(
       `select id,type,legal_name as legalName,trade_name as tradeName,cpf_cnpj as cpfCnpj,state_registration as stateRegistration,notes,active,sale_channel as saleChannel from clients where id=?`,[id]);

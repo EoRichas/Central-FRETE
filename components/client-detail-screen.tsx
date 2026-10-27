@@ -143,7 +143,7 @@ export function ClientDetailScreen({ id }: { id: string }) {
         actions={
           <>
             <Link className="button secondary" href="/clientes">Voltar</Link>
-            {["ADMIN","VENDEDOR"].includes(meApi.data?.user.role ?? "") && (
+            {meApi.data?.user && (
               <button
                 type="button"
                 className="table-action"

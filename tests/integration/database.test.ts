@@ -1254,7 +1254,7 @@ test('clientes Frota, Cegonha e Ambos filtram seletores e validam criação/edi�
  const created=await sales.POST(await request('/api/sales','seller','POST',{...salePayload,saleChannel:'FROTA',clientId:ids.FROTA}));const {id}=await created.json();assert.ok(id);
  const context={params:Promise.resolve({id:ids.FROTA})};
  const changed=await detail.PATCH(await request('/api/clients/x','admin','PATCH',{saleChannel:'CEGONHA',active:false}),context);assert.equal(changed.status,200,await changed.clone().text());
- assert.equal((await detail.PATCH(await request('/api/clients/x','operator','PATCH',{saleChannel:'FROTA'}),context)).status,403);
+ assert.equal((await detail.PATCH(new Request('https://example.test/api/clients/x',{method:'PATCH',headers:{origin:'https://example.test'}}),context)).status,401);
  const history=await edit.PATCH(await request('/api/sales/x','admin','PATCH',{...salePayload,saleChannel:'FROTA',clientId:ids.FROTA}),{params:Promise.resolve({id})});assert.equal(history.status,200,await history.clone().text());
  assert.equal((await edit.PATCH(await request('/api/sales/x','admin','PATCH',{...salePayload,saleChannel:'FROTA',clientId:ids.CEGONHA}),{params:Promise.resolve({id})})).status,400);
  const data=await (await detail.GET(await request('/api/clients/x'),context)).json();assert.equal(data.client.saleChannel,'CEGONHA');assert.equal(data.client.active,false);
@@ -2236,7 +2236,7 @@ test('Cegonha inicia pelas últimas cadastradas, preserva filtros e ordenação 
  assert.equal((await sales.GET(await request(query+'&sort=SQL-injection','seller'))).status,400);
 });
 
-test('vendedor edita cadastro completo do cliente e vínculos, sem exclusão nem alteração de outros clientes',async()=>{
+test('todos os perfis editam cadastro completo e vínculos; validação, sessão e exclusão seguem protegidas',async()=>{
  const clients=await import('../../app/api/clients/route.ts'),detail=await import('../../app/api/clients/[id]/route.ts');
  const create=await clients.POST(await request('/api/clients','seller','POST',{type:'PJ',legalName:'CLIENTE EDIÇÃO',cpfCnpj:'12345678000199',contacts:[{name:'CONTATO',phone:'11900000000',email:'old@example.test'}],addresses:[{type:'EMPRESA',street:'RUA A',number:'10',district:'CENTRO',city:'SOROCABA',state:'SP'}]}));assert.equal(create.status,201,await create.clone().text());const {id}=await create.json(),ctx={params:Promise.resolve({id})};
  const original=(await (await detail.GET(await request('/api/clients/'+id,'seller'),ctx)).json()).client;
@@ -2246,6 +2246,19 @@ test('vendedor edita cadastro completo do cliente e vínculos, sem exclusão nem
  for(const invalid of [{cpfCnpj:'123'},{contacts:[{...update.contacts[0],id:'foreign-contact'}]},{addresses:[{...update.addresses[0],state:'INVALID'}]}])assert.equal((await detail.PATCH(await request('/api/clients/'+id,'seller','PATCH',{legalName:'NÃO SALVAR',...invalid}),ctx)).status,400);
  assert.equal((await (await detail.GET(await request('/api/clients/'+id,'seller'),ctx)).json()).client.legalName,'NOVO NOME');
  assert.equal((await detail.DELETE(await request('/api/clients/'+id,'seller','DELETE'),ctx)).status,403);
- assert.equal((await detail.PATCH(await request('/api/clients/'+id,'operator','PATCH',{legalName:'PROIBIDO'}),ctx)).status,403);
+ const addresses=await import('../../app/api/clients/[id]/addresses/route.ts');
+ await pg.exec("insert into users(id,email,name,role,active) values('client-manager','client-manager@example.test','GERÊNCIA CLIENTES','GERENCIA',1),('client-inactive','client-inactive@example.test','INATIVO CLIENTES','ADMIN',0)");
+ for(const actor of ['admin','client-manager','seller','finance','operator']){
+  const result=await detail.PATCH(await request('/api/clients/'+id,actor,'PATCH',{...update,legalName:'EDITADO '+actor}),ctx);assert.equal(result.status,200,await result.clone().text());
+  const read=(await (await detail.GET(await request('/api/clients/'+id,actor),ctx)).json()).client;assert.equal(read.legalName,('EDITADO '+actor).toUpperCase());assert.equal(read.contacts[0].id,original.contacts[0].id);assert.equal(read.addresses[0].id,original.addresses[0].id);
+  const address=await addresses.POST(await request('/api/clients/'+id+'/addresses',actor,'POST',{type:'COLETA',street:'RUA',number:'1',district:'CENTRO',city:'SOROCABA',state:'SP'}),ctx);assert.equal(address.status,201,await address.clone().text());
+  if(actor!=='admin')assert.equal((await detail.DELETE(await request('/api/clients/'+id,actor,'DELETE'),ctx)).status,403);
+  assert.ok((await queryAll("select id from audit_logs where entity_id=? and actor_user_id=? and action='UPDATED'",[id,actor])).length);
+ }
+ for(const actor of ['client-inactive','missing']){
+  const rejected=await detail.PATCH(await request('/api/clients/'+id,actor,'PATCH',{legalName:'PROIBIDO'}),ctx);assert.equal(rejected.status,actor==='client-inactive'?403:401);
+ }
+ const anonymous=await request('/api/clients/'+id,'seller','PATCH',{legalName:'PROIBIDO'});anonymous.headers.delete('cookie');assert.equal((await detail.PATCH(anonymous,ctx)).status,401);
+ assert.equal((await (await detail.GET(await request('/api/clients/'+id),ctx)).json()).client.legalName,'EDITADO OPERATOR');
  assert.ok((await queryAll("select id from audit_logs where entity_id=? and actor_user_id='seller' and action='UPDATED'",[id])).length);
 });
