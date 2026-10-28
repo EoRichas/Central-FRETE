@@ -38,7 +38,7 @@ mock.module('../../lib/server/d1.ts', { namedExports: {
 
 before(async () => {
  await pg.exec('CREATE ROLE anon; CREATE ROLE authenticated;');
- for (let pass = 0; pass < 2; pass++) for (const file of ['001_central_frete_postgres.sql', '002_fleet.sql', '003_fleet_billing.sql', '004_operational_role.sql', '005_detach_driver_vehicle.sql', '006_fleet_vehicle_cost_average_flag.sql', '008_fleet_results.sql', '009_direct_paid_operation_costs.sql', '010_fleet_cargo_sales_orders.sql', '011_sale_origin_location_type.sql', '../supabase/migrations/20260923220518_fleet_operation_integrity.sql', '012_sales_channels_global_numbering_costs.sql', '013_fleet_document_costs.sql', '015_fleet_numbers_and_orders.sql', '../supabase/migrations/20260928224007_user_phone_vehicle_deletion.sql', '016_fleet_monthly_scope.sql', '017_fleet_service_situation.sql', '../supabase/migrations/20260929161711_registry_channels_addresses.sql', '../supabase/migrations/20260929175656_fleet_client_reference.sql', '../supabase/migrations/20260930164106_seller_commission_access.sql', '../supabase/migrations/20260930172047_cegonha_monthly_scope.sql', '../supabase/migrations/20260930183118_fleet_vehicle_model.sql', '../supabase/migrations/20260930184218_fleet_location_types.sql', '../supabase/migrations/20261005122915_security_sessions_and_login_limits.sql', '../supabase/migrations/20261014180528_negotiated_commissions_fleet_notes.sql', '../supabase/migrations/20261016133115_preserve_deleted_user_history.sql', '../supabase/migrations/20261021201125_fleet_report_observations_damages_fuel.sql','../supabase/migrations/20261023142114_finance_reports_providers_annual_numbers.sql']) await pg.exec(await readFile(new URL(`../../database/${file}`, import.meta.url), 'utf8'));
+ for (let pass = 0; pass < 2; pass++) for (const file of ['001_central_frete_postgres.sql', '002_fleet.sql', '003_fleet_billing.sql', '004_operational_role.sql', '005_detach_driver_vehicle.sql', '006_fleet_vehicle_cost_average_flag.sql', '008_fleet_results.sql', '009_direct_paid_operation_costs.sql', '010_fleet_cargo_sales_orders.sql', '011_sale_origin_location_type.sql', '../supabase/migrations/20260923220518_fleet_operation_integrity.sql', '012_sales_channels_global_numbering_costs.sql', '013_fleet_document_costs.sql', '015_fleet_numbers_and_orders.sql', '../supabase/migrations/20260928224007_user_phone_vehicle_deletion.sql', '016_fleet_monthly_scope.sql', '017_fleet_service_situation.sql', '../supabase/migrations/20260929161711_registry_channels_addresses.sql', '../supabase/migrations/20260929175656_fleet_client_reference.sql', '../supabase/migrations/20260930164106_seller_commission_access.sql', '../supabase/migrations/20260930172047_cegonha_monthly_scope.sql', '../supabase/migrations/20260930183118_fleet_vehicle_model.sql', '../supabase/migrations/20260930184218_fleet_location_types.sql', '../supabase/migrations/20261005122915_security_sessions_and_login_limits.sql', '../supabase/migrations/20261014180528_negotiated_commissions_fleet_notes.sql', '../supabase/migrations/20261016133115_preserve_deleted_user_history.sql', '../supabase/migrations/20261021201125_fleet_report_observations_damages_fuel.sql','../supabase/migrations/20261023142114_finance_reports_providers_annual_numbers.sql','../supabase/migrations/20261028191506_driver_commission_payments.sql']) await pg.exec(await readFile(new URL(`../../database/${file}`, import.meta.url), 'utf8'));
  await pg.exec("INSERT INTO users(id,email,name,role) VALUES ('admin','admin@example.test','Admin','ADMIN'),('finance','finance@example.test','Finance','FINANCEIRO'),('seller','seller@example.test','Seller','VENDEDOR');");
  await pg.exec("INSERT INTO clients(id,type,legal_name,sale_channel) VALUES ('freight-client-0','PJ','CLIENTE DE TESTE','FROTA'),('freight-client-1','PJ','CLIENTE TESTE','FROTA'),('freight-client-2','PJ','CLIENTE CARGA','FROTA'),('freight-client-3','PJ','ODOMETRO','FROTA'),('freight-client-4','PJ','CLIENTE CUSTOS','FROTA'),('freight-client-5','PJ','CLIENTE OS FROTA','FROTA'),('freight-client-6','PJ','CLIENTE ATUALIZADO','FROTA');");
  process.env.CENTRAL_FRETE_SESSION_SECRET = 'test-secret-never-use-in-production-1234';
@@ -2367,4 +2367,48 @@ test('vendedor exclui somente seu frete e operacional exclui frete acessível; v
  const opDelete=await edit.DELETE(await request('/api/fleet/freights/x','operator','DELETE'),foreign);assert.equal(opDelete.status,200,await opDelete.clone().text());assert.equal(await queryFirst('select id from fleet_freights where id=?',[other]),null);
  assert.deepEqual(await queryFirst("select actor_user_id from audit_logs where entity_type='FLEET_FREIGHT' and entity_id=? and action='DELETED'",[own]),{actor_user_id:'seller'});
  assert.deepEqual(await queryFirst("select actor_user_id from audit_logs where entity_type='FLEET_FREIGHT' and entity_id=? and action='DELETED'",[other]),{actor_user_id:'operator'});
+});
+
+test('pagamento da comissão do motorista é individual por frete e independente do recebimento e do vendedor',async()=>{
+ const payments=await import('../../app/api/drivers/commissions/route.ts'),reportApi=await import('../../app/api/reports/driver-commissions/route.ts');
+ await pg.exec(`insert into fleet_drivers(id,name) values('commission-driver','MOTORISTA COMISSAO');
+ insert into fleet_freights(id,vehicle_plate,driver_id,driver_name,client_name,origin,destination,pickup_date,operational_status,payment_status,freight_amount_cents,distance_meters,driver_commission_cents) values
+ ('driver-pay-a','COM1A11','commission-driver','MOTORISTA COMISSAO','CLIENTE A','A','B','2300-01-01','EM_ROTA','EM_ABERTO',10000,1000,1000),
+ ('driver-pay-b','COM1A11','commission-driver','MOTORISTA COMISSAO','CLIENTE B','A','B','2300-01-01','EM_ROTA','PAGO',20000,1000,2000)`);
+ const path='/api/drivers/commissions',query='/api/reports/driver-commissions?from=2300-01-01&to=2300-01-01';
+ const payload={freightId:'driver-pay-a',status:'PAGO',paidAt:'2026-10-28',pixDetails:'PIX TESTE FICTICIO'};
+ for(const actor of ['seller','operator','finance','delete-manager'])assert.equal((await payments.PATCH(await request(path,actor,'PATCH',payload))).status,403);
+ assert.equal((await payments.PATCH(await request(path,'missing','PATCH',payload))).status,401);
+ for(const patch of [{paidAt:'2026-02-31'},{paidAt:''},{status:'INVALIDO'},{pixDetails:'X'.repeat(2001)}])assert.equal((await payments.PATCH(await request(path,'admin','PATCH',{...payload,...patch}))).status,400);
+ assert.equal((await payments.PATCH(await request(path,'admin','PATCH',{...payload,freightId:'nao-existe'}))).status,404);
+ assert.equal((await queryAll('select * from driver_commission_payments')).length,0);
+ const sellerBefore=await queryAll('select * from sale_commission_payments order by source_kind,source_id');
+ const saved=await payments.PATCH(await request(path,'admin','PATCH',payload));assert.equal(saved.status,200,await saved.clone().text());
+ const read=await reportApi.GET(await request(query,'admin')),body=await read.json();assert.equal(body.canManagePayments,true);assert.equal(body.report.rows.length,2);
+ const a=body.report.rows.find((r:{id:string})=>r.id==='driver-pay-a'),b=body.report.rows.find((r:{id:string})=>r.id==='driver-pay-b');
+ assert.equal(a.commissionStatus,'PAGO');assert.equal(a.commissionPaidAt,'2026-10-28');assert.equal(a.commissionPaidByName,'Admin');assert.equal(a.pixDetails,payload.pixDetails);
+ assert.equal(b.commissionStatus,'EM_ABERTO');assert.equal(b.commissionPaidAt,null);assert.equal(b.pixDetails,payload.pixDetails);
+ assert.equal((await (await reportApi.GET(await request(query,'finance'))).json()).canManagePayments,false);
+ assert.deepEqual(await queryFirst('select payment_status from fleet_freights where id=?',['driver-pay-a']),{payment_status:'EM_ABERTO'});
+ assert.deepEqual(await queryFirst('select payment_status from fleet_freights where id=?',['driver-pay-b']),{payment_status:'PAGO'});
+ assert.deepEqual(await queryAll('select * from sale_commission_payments order by source_kind,source_id'),sellerBefore);
+ assert.deepEqual(await queryFirst('select pix_details from fleet_drivers where id=?',['commission-driver']),{pix_details:payload.pixDetails});
+ const before=await queryFirst('select * from driver_commission_payments where freight_id=?',['driver-pay-a']);
+ await payments.PATCH(await request(path,'admin','PATCH',{...payload,freightId:'driver-pay-b',paidAt:'2026-10-29'}));
+ assert.deepEqual(await queryFirst('select * from driver_commission_payments where freight_id=?',['driver-pay-a']),before);
+ const reopened=await payments.PATCH(await request(path,'admin','PATCH',{...payload,status:'EM_ABERTO'}));assert.equal(reopened.status,200);
+ assert.deepEqual(await queryFirst('select status,paid_at,paid_by from driver_commission_payments where freight_id=?',['driver-pay-a']),{status:'EM_ABERTO',paid_at:null,paid_by:null});
+ assert.deepEqual(await queryFirst('select status,paid_at from driver_commission_payments where freight_id=?',['driver-pay-b']),{status:'PAGO',paid_at:'2026-10-29'});
+ assert.equal((await queryAll("select * from audit_logs where entity_type='DRIVER_COMMISSION' and entity_id='driver-pay-a'")).length,2);
+ assert.equal((await queryAll("select * from information_schema.role_table_grants where grantee in('anon','authenticated','PUBLIC') and table_name='driver_commission_payments'")).length,0);
+ assert.deepEqual(await queryFirst("select rowsecurity from pg_tables where schemaname='public' and tablename='driver_commission_payments'"),{rowsecurity:true});
+ const migration=await readFile(new URL('../../supabase/migrations/20261028191506_driver_commission_payments.sql',import.meta.url),'utf8');
+ const settledBefore=await queryAll('select * from driver_commission_payments order by freight_id');await pg.exec(migration);await pg.exec(migration);
+ assert.deepEqual(await queryAll('select * from driver_commission_payments order by freight_id'),settledBefore);
+ await pg.exec('SET ROLE central_app');
+ try {
+  const restricted=await reportApi.GET(await request(query,'admin'));assert.equal(restricted.status,200,await restricted.clone().text());assert.equal((await restricted.json()).report.rows.length,2);
+  const update=await payments.PATCH(await request(path,'admin','PATCH',{...payload,status:'EM_ABERTO'}));assert.equal(update.status,200,await update.clone().text());
+  await assert.rejects(pg.exec('ALTER TABLE driver_commission_payments ADD COLUMN forbidden integer'),/owner|permission/i);
+ }finally{await pg.exec('RESET ROLE');}
 });

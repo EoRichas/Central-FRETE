@@ -39,6 +39,12 @@
 .seller-commission-group { overflow: hidden; }
 .seller-commission-group > summary { font-family: inherit; cursor: pointer; padding: 18px 20px; color: var(--navy); font-weight: 600; }
 .seller-commission-group[open] > summary { border-bottom: 1px solid var(--line); }
+.fleet-asset-group > summary { display:flex; flex-direction:row; flex-wrap:nowrap; align-items:center; justify-content:space-between; gap:16px; cursor: pointer; list-style: none; }
+.fleet-asset-group > summary p { margin:4px 0 0; color:var(--muted); font-size:12px; }
+.fleet-asset-group > summary::-webkit-details-marker { display: none; }
+.fleet-asset-group > summary > svg { width: 20px; height: 20px; flex-shrink: 0; transition: transform .15s; }
+.fleet-asset-group[open] > summary > svg { transform: rotate(90deg); }
+.fleet-asset-group > .fleet-asset-tools { border-top: 1px solid var(--line); }
 .calculation-summary small { display: block; font-size: 11px; margin-top: 4px; font-weight: 400; }
 
 .page-actions .button.create-sale-action:not(.compact-button) { background: #fff; color: #233d53; border-color: #c8d5df; }

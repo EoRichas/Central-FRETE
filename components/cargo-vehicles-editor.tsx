@@ -1,6 +1,7 @@
 "use client";
 import { useId } from 'react';
 import { Field } from '@/components/ui';
+import { Icons } from '@/components/icons';
 import type { CargoVehicle } from '@/lib/domain/cargo-vehicles';
 
 export function CargoVehiclesEditor({ vehicles, onChange, disabled = false, showFipe = false }: {
@@ -28,6 +29,16 @@ export function CargoVehiclesEditor({ vehicles, onChange, disabled = false, show
           }}
         /></Field>}
       </div>
+      {!disabled && <button
+        type="button"
+        className="icon-button danger cargo-remove"
+        aria-label={`${vehicles.length === 1 ? 'Limpar' : 'Remover'} veículo ${index + 1}`}
+        title={`${vehicles.length === 1 ? 'Limpar' : 'Remover'} veículo ${index + 1}`}
+        onClick={() => {
+          const remaining = vehicles.filter((_, i) => i !== index);
+          onChange(remaining.length ? remaining : [{ model: null, plate: null, identification: null }]);
+        }}
+      ><Icons.close /></button>}
     </div>)}
     {!disabled && <button type="button" className="button secondary" disabled={vehicles.length >= 100} onClick={() => onChange([...vehicles, { model: null, plate: null, identification: null }])}>Adicionar veículo</button>}
   </fieldset>;

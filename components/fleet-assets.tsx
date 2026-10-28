@@ -290,8 +290,8 @@ export function FleetAssetsPanel({fleet,openVehicle,openDriver}: {
   const vehicles=fleet.vehicles.filter(v=>matches(vehicleSearch,[v.plate,v.model]));
   const drivers=fleet.drivers.filter(d=>matches(driverSearch,[d.name,d.phone,d.cpf]));
   return (<div className="fleet-assets-stack">
-              <section className="panel table-panel">
-                <header className="fleet-panel-header">
+              <details className="panel table-panel fleet-asset-group">
+                <summary className="fleet-panel-header">
                   <div>
                     <span className="eyebrow">Cadastro</span>
                     <h2>Veículos da frota</h2>
@@ -300,7 +300,9 @@ export function FleetAssetsPanel({fleet,openVehicle,openDriver}: {
                       fixos da empresa.
                     </p>
                   </div>
-                  <div className="fleet-asset-tools">
+                  <Icons.chevron />
+                </summary>
+                  <div className="fleet-asset-tools fleet-panel-header">
                     <label className="fleet-asset-search"><span>Buscar veículo</span><div className="search-input"><Icons.search/><input type="search" value={vehicleSearch} onChange={e=>setVehicleSearch(e.target.value)} placeholder="Placa ou modelo"/></div></label>
                   {fleet.canManage && (
                     <button
@@ -312,7 +314,7 @@ export function FleetAssetsPanel({fleet,openVehicle,openDriver}: {
                     </button>
                   )}
                   </div>
-                </header>
+
                 <div className="responsive-table fleet-asset-scroll" tabIndex={0} role="region" aria-label="Lista de veículos com rolagem independente">
                   <table>
                     <thead>
@@ -381,14 +383,16 @@ export function FleetAssetsPanel({fleet,openVehicle,openDriver}: {
                     </tbody>
                   </table>
                 </div>
-              </section>
-              <section className="panel table-panel">
-                <header className="fleet-panel-header">
+              </details>
+              <details className="panel table-panel fleet-asset-group">
+                <summary className="fleet-panel-header">
                   <div>
                     <span className="eyebrow">Equipe</span>
                     <h2>Motoristas</h2>
                   </div>
-                  <div className="fleet-asset-tools">
+                  <Icons.chevron />
+                </summary>
+                  <div className="fleet-asset-tools fleet-panel-header">
                     <label className="fleet-asset-search"><span>Buscar motorista</span><div className="search-input"><Icons.search/><input type="search" value={driverSearch} onChange={e=>setDriverSearch(e.target.value)} placeholder="Nome, CPF ou telefone"/></div></label>
                   {fleet.canManage && (
                     <button
@@ -400,7 +404,7 @@ export function FleetAssetsPanel({fleet,openVehicle,openDriver}: {
                     </button>
                   )}
                   </div>
-                </header>
+
                 <div className="responsive-table fleet-asset-scroll" tabIndex={0} role="region" aria-label="Lista de motoristas com rolagem independente">
                   <table>
                     <thead>
@@ -464,6 +468,6 @@ export function FleetAssetsPanel({fleet,openVehicle,openDriver}: {
                     </tbody>
                   </table>
                 </div>
-              </section>
+              </details>
             </div>);
 }

@@ -706,7 +706,7 @@ test('relatórios motorista e veículo têm somente seu filtro e aplicam a busca
  for(const by of ['driver','vehicle']){
   const state=hooks(),urls=[],Preview=()=>null;
   const {DriverCommissionsPanel}=compile('components/driver-commissions-panel.tsx',{react:state.react,'./report-preview-button':{ReportPreviewButton:Preview},'./fleet-freight-detail':{FleetFreightDetail:()=>null},'./ui':ui,'./icons':{Icons:new Proxy({},{get:()=>icon})},'@/lib/format':fullFormat,
-   '@/lib/domain/driver-commissions':{groupDriverCommissions:()=>[]},'./use-api':{useApi:url=>{urls.push(url);return {loading:false,data:{report:{rows:[],drivers:[{key:'id:driver',name:'MOTORISTA'}],vehicles:[{key:'id:vehicle',name:'AAA1A11'}]}}};}}});
+   '@/lib/domain/driver-commissions':{groupDriverCommissions:()=>[],commissionDriverKey:r=>r.driverId||r.driverName},'@/lib/domain/dates':{todaySaoPaulo:()=>'2026-10-28'},'./use-api':{useApi:url=>{urls.push(url);return {loading:false,data:{report:{rows:[],drivers:[{key:'id:driver',name:'MOTORISTA'}],vehicles:[{key:'id:vehicle',name:'AAA1A11'}]}}};}}});
   const render=()=>{state.reset();return DriverCommissionsPanel({reportBy:by});};let tree=render();
   const html=renderToStaticMarkup(tree);assert.ok(html.includes('report-search-filters'));assert.ok(html.includes('Consultar'));assert.equal(find(tree,n=>n.type==='select')?.props.children[0].props.children,by==='driver'?'Todos os motoristas':'Todos os veículos');
   assert.equal(find(tree,n=>n.type==='select'&&n.props.children[0].props.children===(by==='driver'?'Todos os veículos':'Todos os motoristas')),null);
@@ -750,4 +750,19 @@ test('vendedor confirma exclusão no editor e volta à lista; cancelar não envi
  const {SellerFleetScreen}=compile('components/seller-fleet-screen.tsx',{react:state.react,'next/link':{__esModule:true,default:()=>null},'@/components/fleet-freight-table':{FreightTable},'@/components/fleet-freight-form-screen':{FleetFreightFormScreen},'@/components/fleet-freight-detail':{FleetFreightDetail:()=>null},'@/components/icons':{Icons:new Proxy({},{get:()=>icon})},'@/lib/domain/fleet':fleetDomain,'@/components/ui':ui,'@/components/use-transient-message':{useTransientMessage:()=>[null,()=>{}]},'@/components/use-api':{useApi:url=>({loading:false,data:url?.startsWith('/api/fleet/freights/options')?{fleet:{canDeleteFreights:true}}:url?.startsWith('/api/fleet/freights?')?{freights:[freight]}:{freight},refresh:()=>refreshes++}),apiMutation:async(url,options)=>calls.push({url,method:options.method})}});
  const render=()=>{state.reset();return SellerFleetScreen();};let tree=render();find(tree,n=>n.type===FreightTable).props.onEdit(freight);tree=render();const editor=find(tree,n=>n.type===FleetFreightFormScreen);assert.equal(editor.props.fleet.canDeleteFreights,true);
  const original=globalThis.window;try{globalThis.window={confirm:()=>false};await editor.props.onDelete(freight);assert.equal(calls.length,0);globalThis.window={confirm:()=>true};await editor.props.onDelete(freight);assert.deepEqual(calls,[{url:'/api/fleet/freights/234',method:'DELETE'}]);tree=render();assert.ok(find(tree,n=>n.type===FreightTable));assert.equal(refreshes,1);}finally{if(original===undefined)delete globalThis.window;else globalThis.window=original;}
+});
+
+test('motorista abre pagamento da comissão por venda, preserva dados em erro e não abre detalhes do frete',async()=>{
+ const state=hooks(),calls=[],urls=[];let fail=true,refreshed=0;
+ const row={id:'freight-234',saleNumber:'234',driverId:'driver',driverName:'MOTORISTA',pickupDate:'2026-10-28',freightAmountCents:10000,driverCommissionCents:1000,commissionStatus:'EM_ABERTO',pixDetails:'PIX EXISTENTE'};
+ const {DriverCommissionsPanel}=compile('components/driver-commissions-panel.tsx',{react:state.react,'./report-preview-button':{ReportPreviewButton:()=>null},'./ui':ui,'./icons':{Icons:new Proxy({},{get:()=>icon})},'@/lib/format':fullFormat,'@/lib/domain/dates':{todaySaoPaulo:()=>'2026-10-28'},
+ '@/lib/domain/driver-commissions':{groupDriverCommissions:()=>[],commissionDriverKey:r=>r.driverId},'./use-api':{useApi:url=>{urls.push(url);return {loading:false,refresh(){refreshed++;},data:{canManagePayments:true,report:{rows:[row],drivers:[],vehicles:[]}}};},apiMutation:async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});if(fail)throw Error('Falha de teste');}}});
+ const render=()=>{state.reset();return DriverCommissionsPanel({});};let tree=render();assert.ok(find(tree,n=>n.type==='details'));
+ find(tree,n=>n.props?.['aria-label']==='Editar comissão da venda 234 de MOTORISTA').props.onClick();tree=render();assert.equal(find(tree,n=>n.type===ui.Modal).props.title,'Pagamento da comissão');
+ find(find(tree,n=>n.props?.label==='Situação'),n=>n.type==='select').props.onChange({target:{value:'PAGO'}});tree=render();
+ find(tree,n=>n.type==='textarea').props.onChange({target:{value:'PIX NOVO'}});tree=render();
+ await find(tree,n=>n.type==='form').props.onSubmit({preventDefault(){}});tree=render();assert.ok(renderToStaticMarkup(tree).includes('Falha de teste'));assert.equal(find(tree,n=>n.type==='textarea').props.value,'PIX NOVO');
+ fail=false;await find(tree,n=>n.type==='form').props.onSubmit({preventDefault(){}});tree=render();assert.equal(find(tree,n=>n.type===ui.Modal).props.open,false);assert.equal(refreshed,1);
+ assert.deepEqual(calls.at(-1),{url:'/api/drivers/commissions',body:{freightId:'freight-234',status:'PAGO',paidAt:'2026-10-28',pixDetails:'PIX NOVO'}});
+ assert.ok(urls.every(url=>url.startsWith('/api/reports/driver-commissions?')));
 });

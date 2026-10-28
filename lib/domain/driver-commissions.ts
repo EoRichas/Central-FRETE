@@ -2,6 +2,8 @@ export type DriverCommissionRow = {
  id:string; saleNumber:string; pickupDate:string; clientName:string;
  driverId:string|null; driverName:string; vehicleId:string|null; vehiclePlate:string;
  freightAmountCents:number; driverCommissionCents:number;
+ commissionStatus?:'EM_ABERTO'|'PAGO'; commissionPaidAt?:string|null;
+ commissionPaidByName?:string|null; pixDetails?:string|null;
 };
 export type CommissionGroup = {key:string;name:string;freights:number;amountCents:number;commissionCents:number};
 export function commissionDriverKey(row:DriverCommissionRow){return row.driverId?`id:${row.driverId}`:`historical:${row.driverName.trim().toLocaleUpperCase('pt-BR')}`;}
