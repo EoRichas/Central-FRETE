@@ -58,7 +58,6 @@ function ExistingSalesReport() {
         <label><span>Canal</span><select value={draft.saleChannel} onChange={e=>setDraft({...draft,saleChannel:e.target.value,seller:''})}><option value="">Frota e Cegonha</option><option value="FROTA">Frota</option><option value="CEGONHA">Cegonha</option></select></label>
         <label><span>Vendedor</span><select value={draft.seller} onChange={e=>setDraft({...draft,seller:e.target.value})}><option value="">Todos</option>{api.data?.sellers.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
         <button className="button primary" type="submit">Aplicar filtros</button>
-        <button className="button secondary" type="button" onClick={()=>{const empty={from:'',to:'',saleChannel:'',seller:''};setDraft(empty);setFilters(empty);setPage(0);}}>Limpar</button>
       </form>
       <p className="report-basis">Sem datas, inclui todo o histórico. Base: data da venda na Cegonha e data de coleta nos fretes da Frota. Exportações seguem os filtros aplicados.</p>
       {api.loading && <LoadingState label="Consultando vendas…" />}
