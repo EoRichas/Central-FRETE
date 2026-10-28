@@ -283,6 +283,12 @@ export function FleetAssetsPanel({fleet,openVehicle,openDriver}: {
   openVehicle: (vehicle: FleetVehicle | null) => void;
   openDriver: (driver: FleetDriver | null) => void;
 }) {
+  const [vehicleSearch,setVehicleSearch]=useState("");
+  const [driverSearch,setDriverSearch]=useState("");
+  const normalize=(value:string)=>value.normalize("NFD").replace(/\p{Diacritic}/gu,"").toLocaleLowerCase("pt-BR").trim();
+  const matches=(query:string,values:(string|null|undefined)[])=>!normalize(query)||values.some(value=>normalize(value??"").includes(normalize(query)));
+  const vehicles=fleet.vehicles.filter(v=>matches(vehicleSearch,[v.plate,v.model]));
+  const drivers=fleet.drivers.filter(d=>matches(driverSearch,[d.name,d.phone,d.cpf]));
   return (<div className="fleet-assets-stack">
               <section className="panel table-panel">
                 <header className="fleet-panel-header">
@@ -294,6 +300,8 @@ export function FleetAssetsPanel({fleet,openVehicle,openDriver}: {
                       fixos da empresa.
                     </p>
                   </div>
+                  <div className="fleet-asset-tools">
+                    <label className="fleet-asset-search"><span>Buscar veículo</span><div className="search-input"><Icons.search/><input type="search" value={vehicleSearch} onChange={e=>setVehicleSearch(e.target.value)} placeholder="Placa ou modelo"/></div></label>
                   {fleet.canManage && (
                     <button
                       type="button"
@@ -303,8 +311,9 @@ export function FleetAssetsPanel({fleet,openVehicle,openDriver}: {
                       <Icons.plus /> Novo veículo
                     </button>
                   )}
+                  </div>
                 </header>
-                <div className="responsive-table fleet-asset-scroll" tabIndex={0} role="region" aria-label="Lista com rolagem independente">
+                <div className="responsive-table fleet-asset-scroll" tabIndex={0} role="region" aria-label="Lista de veículos com rolagem independente">
                   <table>
                     <thead>
                       <tr>
@@ -321,7 +330,7 @@ export function FleetAssetsPanel({fleet,openVehicle,openDriver}: {
                       </tr>
                     </thead>
                     <tbody>
-                      {fleet.vehicles.map((vehicle) => (
+                      {vehicles.map((vehicle) => (
                         <tr key={vehicle.id}>
                           <td data-label="Placa">
                             <button
@@ -359,13 +368,13 @@ export function FleetAssetsPanel({fleet,openVehicle,openDriver}: {
                           )}
                         </tr>
                       ))}
-                      {!fleet.vehicles.length && (
+                      {!vehicles.length && (
                         <tr>
                           <td
                             colSpan={fleet.canManage ? 6 : 5}
                             className="empty-cell"
                           >
-                            Nenhum veículo cadastrado.
+                            Nenhum veículo encontrado.
                           </td>
                         </tr>
                       )}
@@ -379,6 +388,8 @@ export function FleetAssetsPanel({fleet,openVehicle,openDriver}: {
                     <span className="eyebrow">Equipe</span>
                     <h2>Motoristas</h2>
                   </div>
+                  <div className="fleet-asset-tools">
+                    <label className="fleet-asset-search"><span>Buscar motorista</span><div className="search-input"><Icons.search/><input type="search" value={driverSearch} onChange={e=>setDriverSearch(e.target.value)} placeholder="Nome, CPF ou telefone"/></div></label>
                   {fleet.canManage && (
                     <button
                       type="button"
@@ -388,8 +399,9 @@ export function FleetAssetsPanel({fleet,openVehicle,openDriver}: {
                       <Icons.plus /> Novo motorista
                     </button>
                   )}
+                  </div>
                 </header>
-                <div className="responsive-table fleet-asset-scroll" tabIndex={0} role="region" aria-label="Lista com rolagem independente">
+                <div className="responsive-table fleet-asset-scroll" tabIndex={0} role="region" aria-label="Lista de motoristas com rolagem independente">
                   <table>
                     <thead>
                       <tr>
@@ -404,7 +416,7 @@ export function FleetAssetsPanel({fleet,openVehicle,openDriver}: {
                       </tr>
                     </thead>
                     <tbody>
-                      {fleet.drivers.map((driver) => (
+                      {drivers.map((driver) => (
                         <tr key={driver.id}>
                           <td data-label="Nome / contato">
                             <strong>{driver.name}</strong>
@@ -439,13 +451,13 @@ export function FleetAssetsPanel({fleet,openVehicle,openDriver}: {
                           )}
                         </tr>
                       ))}
-                      {!fleet.drivers.length && (
+                      {!drivers.length && (
                         <tr>
                           <td
                             colSpan={fleet.canManage ? 4 : 3}
                             className="empty-cell"
                           >
-                            Nenhum motorista cadastrado.
+                            Nenhum motorista encontrado.
                           </td>
                         </tr>
                       )}

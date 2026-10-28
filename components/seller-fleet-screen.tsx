@@ -34,7 +34,7 @@ export function SellerFleetScreen() {
     {options.error&&<ErrorState message={options.error} retry={options.refresh}/>}
     {editing&&detail.loading&&<LoadingState label="Carregando detalhes…"/>}
     {editing&&detail.error&&<ErrorState message={detail.error} retry={detail.refresh}/>}
-    {!options.loading&&options.data&&(!editing||(!detail.loading&&detail.data)) ? <FleetFreightFormScreen key={editing?selectedId:'new'} freight={editing?detail.data!.freight:null} fleet={options.data.fleet} onClose={()=>setOpen(false)} onSaved={(message,_id,_competency,accessTransferred,savedPickupDate)=>{if(!accessTransferred&&savedPickupDate)setPeriod(current=>({from:savedPickupDate<current.from?savedPickupDate:current.from,to:savedPickupDate>current.to?savedPickupDate:current.to}));setOpen(false);setSuccess(message);list.refresh();if(accessTransferred){setSelectedId(null);setEditing(false);}else if(editing)detail.refresh();}} onDelete={async()=>{throw new Error('Exclusão não permitida.');}}/> : <button type="button" className="button secondary" onClick={()=>setOpen(false)}>Voltar à Frota</button>}
+    {!options.loading&&options.data&&(!editing||(!detail.loading&&detail.data?.freight.id===selectedId)) ? <FleetFreightFormScreen key={editing?selectedId:'new'} freight={editing?detail.data!.freight:null} fleet={options.data.fleet} onClose={()=>setOpen(false)} onSaved={(message,_id,_competency,accessTransferred,savedPickupDate)=>{if(!accessTransferred&&savedPickupDate)setPeriod(current=>({from:savedPickupDate<current.from?savedPickupDate:current.from,to:savedPickupDate>current.to?savedPickupDate:current.to}));setOpen(false);setSuccess(message);list.refresh();if(accessTransferred){setSelectedId(null);setEditing(false);}else if(editing)detail.refresh();}} onDelete={async()=>{throw new Error('Exclusão não permitida.');}}/> : <button type="button" className="button secondary" onClick={()=>setOpen(false)}>Voltar à Frota</button>}
   </div>;
   return <div className="fleet-module">
     {selectedId ? <>
@@ -52,7 +52,7 @@ export function SellerFleetScreen() {
           <div className="filter-stat"><strong>{filtered.length}</strong><span>frete{filtered.length===1?'':'s'}</span></div>
         </section>
         {list.loading&&<LoadingState label="Carregando seus fretes…"/>}{list.error&&<ErrorState message={list.error} retry={list.refresh}/>}
-        {list.data&&<section className="panel table-panel"><FreightTable freights={filtered} onOpen={f=>setSelectedId(f.id)}/></section>}
+        {list.data&&<section className="panel table-panel"><FreightTable freights={filtered} onEdit={f=>{setSelectedId(f.id);setEditing(true);setOpen(true);}} onOpen={f=>setSelectedId(f.id)}/></section>}
       </div>
     </>}
     {success&&<p role="status" className="success-banner">{success}</p>}

@@ -2334,3 +2334,15 @@ test('períodos Frota incluem extremos e virada anual sem limite de 100 ou acess
  select 'period-many-'||g,'PER1A11','MOTORISTA','CLIENTE','A','B','2198-03-01','EM_ROTA','period-seller','VENDEDOR PERIODO',10000,1000,100 from generate_series(1,125) g`);
  const many=await sellerList.GET(await request('/api/fleet/freights?from=2198-03-01&to=2198-03-01','period-seller'));assert.equal((await many.json()).freights.length,125);
 });
+
+test('relatório motorista ignora filtro de veículo e relatório veículo ignora filtro de motorista',async()=>{
+ const api=await import('../../app/api/reports/driver-commissions/route.ts');
+ await pg.exec(`insert into fleet_freights(id,vehicle_plate,driver_name,client_name,origin,destination,pickup_date,operational_status,freight_amount_cents,distance_meters,driver_commission_cents) values
+ ('review-driver-a','REV1A11','MOTORISTA A','CLIENTE','A','B','2298-01-01','EM_ROTA',10000,1000,100),
+ ('review-driver-b','REV2B22','MOTORISTA B','CLIENTE','A','B','2298-01-01','EM_ROTA',20000,1000,200)`);
+ const query='from=2298-01-01&to=2298-01-01';
+ const drivers=await api.GET(await request(`/api/reports/driver-commissions?${query}&by=driver&vehicle=nao-existe`,'finance'));assert.equal(drivers.status,200);assert.equal((await drivers.json()).report.rows.length,2);
+ const vehicles=await api.GET(await request(`/api/reports/driver-commissions?${query}&by=vehicle&driver=nao-existe`,'finance'));assert.equal(vehicles.status,200);assert.equal((await vehicles.json()).report.rows.length,2);
+ const onlyDriver=await api.GET(await request(`/api/reports/driver-commissions?${query}&by=driver&driver=historical%3AMOTORISTA%20A&vehicle=nao-existe`,'finance'));assert.deepEqual((await onlyDriver.json()).report.rows.map((r:{id:string})=>r.id),['review-driver-a']);
+ const onlyVehicle=await api.GET(await request(`/api/reports/driver-commissions?${query}&by=vehicle&vehicle=historical%3AREV2B22&driver=nao-existe`,'finance'));assert.deepEqual((await onlyVehicle.json()).report.rows.map((r:{id:string})=>r.id),['review-driver-b']);
+});

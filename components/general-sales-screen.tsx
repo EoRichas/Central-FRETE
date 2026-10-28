@@ -52,7 +52,7 @@ function ExistingSalesReport() {
           </>
         }
       />
-      <form className="filter-panel report-filters no-print" onSubmit={event=>{event.preventDefault();setFilters({...draft});setPage(0);}}>
+      <form className="filter-panel report-filters report-search-filters no-print" onSubmit={event=>{event.preventDefault();setFilters({...draft});setPage(0);}}>
         <label><span>De</span><input type="date" value={draft.from} onChange={e=>setDraft({...draft,from:e.target.value})} /></label>
         <label><span>Até</span><input type="date" min={draft.from || undefined} value={draft.to} onChange={e=>setDraft({...draft,to:e.target.value})} /></label>
         <label><span>Canal</span><select value={draft.saleChannel} onChange={e=>setDraft({...draft,saleChannel:e.target.value,seller:''})}><option value="">Frota e Cegonha</option><option value="FROTA">Frota</option><option value="CEGONHA">Cegonha</option></select></label>

@@ -45,3 +45,30 @@
 
 /* All create actions use the same appearance as Novo frete, across roles. */
 .button.create-sale-action:not(.compact-button) { min-height: 42px; background: #fff; color: #233d53; border-color: #c8d5df; }
+
+/* Report searches share the sales-report layout and action sizing. */
+.filter-panel.report-search-filters { display:flex; align-items:flex-end; flex-wrap:wrap; gap:14px; padding:18px; }
+.report-search-filters > label { flex:1 1 180px; min-width:0; }
+.report-search-filters > label:first-child { flex:1.2 1 230px; }
+.report-search-filters > .button { flex:0 0 auto; min-height:42px; white-space:nowrap; padding-inline:18px; }
+.fleet-asset-tools { display:flex; align-items:flex-end; justify-content:flex-end; flex-wrap:wrap; gap:12px; }
+.fleet-asset-search { display:grid; gap:6px; min-width:0; width:250px; max-width:100%; }
+.fleet-asset-search > span { font-size:10px; color:var(--muted); font-weight:700; }
+.fleet-asset-search input { width:100%; min-width:0; }
+.fleet-module .fleet-asset-scroll { scrollbar-width:none; scrollbar-gutter:auto; }
+.fleet-module .fleet-asset-scroll::-webkit-scrollbar { display:none; width:0; height:0; }
+
+/* Reserve the last column for the arrow instead of letting long routes push it away. */
+.fleet-module .fleet-table-compact { width:100%; min-width:760px; table-layout:fixed; }
+.fleet-module .fleet-table-compact :is(th,td) { padding:11px 8px; min-width:0; }
+.fleet-module .fleet-table-compact th { white-space:normal; overflow-wrap:anywhere; }
+.fleet-module .fleet-table-compact td > :is(strong,small),
+.fleet-module .fleet-table-compact .text-button { max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.fleet-module .fleet-table-compact .status-badge { max-width:100%; white-space:normal; overflow-wrap:anywhere; }
+.fleet-module .fleet-table-compact td:last-child { padding-inline:4px; }
+.fleet-module .fleet-table-compact td:last-child .table-actions { justify-content:center; gap:0; }
+@media(max-width:640px){
+ .report-search-filters > label, .report-search-filters > label:first-child { flex-basis:100%; }
+ .report-search-filters > .button { width:100%; }
+ .fleet-asset-tools, .fleet-asset-search { width:100%; }
+}

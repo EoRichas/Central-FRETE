@@ -9,14 +9,14 @@ export type ReportColumn={label:string;width:number;align?:'left'|'right'};
 export class ReportPdf {
   get width(){return (this.portrait ? 595.28 : W)-2*M;} readonly left=M;
   page!:PDFPage; y=0;
-  private constructor(readonly doc:PDFDocument,private normal:PDFFont,private bold:PDFFont,private logo:Awaited<ReturnType<PDFDocument['embedPng']>>,private title:string,private filters:[string,string][], private portrait=false){}
-  static async create(title:string,filters:[string,string][],portrait=false,subtitle?:string) {
+  private constructor(readonly doc:PDFDocument,private normal:PDFFont,private bold:PDFFont,private logo:Awaited<ReturnType<PDFDocument['embedPng']>>,private title:string,private filters:[string,string][], private portrait=false, private firstPageHeaderOnly=false){}
+  static async create(title:string,filters:[string,string][],portrait=false,subtitle?:string,firstPageHeaderOnly=false) {
     const doc=await PDFDocument.create();doc.registerFontkit(fontkit);
     const [r,b,l]=await Promise.all([
       readFile(path.join(process.cwd(),'node_modules/@fontsource/noto-sans/files/noto-sans-latin-400-normal.woff')),
       readFile(path.join(process.cwd(),'node_modules/@fontsource/noto-sans/files/noto-sans-latin-700-normal.woff')),
       readFile(path.join(process.cwd(),'public/central-express-logo.png'))]);
-    const result=new ReportPdf(doc,await doc.embedFont(r,{subset:true}),await doc.embedFont(b,{subset:true}),await doc.embedPng(l),title,filters,portrait);
+    const result=new ReportPdf(doc,await doc.embedFont(r,{subset:true}),await doc.embedFont(b,{subset:true}),await doc.embedPng(l),title,filters,portrait,firstPageHeaderOnly);
     doc.setTitle(`${title} | Central Express`);doc.setAuthor('Central Express');result.newPage(subtitle);return result;
   }
   private safe(value:string) {const chars=new Set(this.normal.getCharacterSet());return [...value.replace(/[\u0000-\u0008\u000b-\u001f]/g,'').normalize('NFC')].map(c=>c==='\n'||chars.has(c.codePointAt(0)!)?c:'?').join('');}
@@ -37,7 +37,9 @@ export class ReportPdf {
   }
   newPage(subtitle='Receitas, custos e resultados do período') {
     const W=this.portrait?595.28:841.89,H=this.portrait?841.89:595.28;
-    this.page=this.doc.addPage([W,H]);this.rect(0,H-5,W,5,reportColors.navy);
+    this.page=this.doc.addPage([W,H]);
+    if(this.firstPageHeaderOnly&&this.doc.getPageCount()>1){this.y=H-M;return;}
+    this.rect(0,H-5,W,5,reportColors.navy);
     this.page.drawImage(this.logo,{x:M,y:H-77,width:84,height:61});
     this.text('CENTRAL EXPRESS',M+101,H-31,10,true,reportColors.navy);
     this.text(this.title,M+101,H-56,this.title.length>22?12:18,true,reportColors.navy);

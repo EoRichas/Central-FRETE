@@ -12,6 +12,7 @@ export async function loadDriverCommissions(params:URLSearchParams):Promise<Driv
   from fleet_freights where pickup_date>=? and pickup_date<=? order by pickup_date desc,created_at desc,id`,[period.from,period.to]);
  const drivers=[...new Map(all.map(r=>[commissionDriverKey(r),{key:commissionDriverKey(r),name:r.driverName||'Motorista não informado'}])).values()].sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));
  const vehicles=[...new Map(all.map(r=>[commissionVehicleKey(r),{key:commissionVehicleKey(r),name:r.vehiclePlate||'Veículo não informado'}])).values()].sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));
- const driver=params.get('driver')||'',vehicle=params.get('vehicle')||'';
+ const by=params.get('by');
+ const driver=by==='vehicle'?'':params.get('driver')||'',vehicle=by==='driver'?'':params.get('vehicle')||'';
  return {...period,drivers,vehicles,rows:all.filter(r=>(!driver||commissionDriverKey(r)===driver)&&(!vehicle||commissionVehicleKey(r)===vehicle)),driverLabel:driver?(drivers.find(d=>d.key===driver)?.name??'Sem correspondência'):'Todos',vehicleLabel:vehicle?(vehicles.find(v=>v.key===vehicle)?.name??'Sem correspondência'):'Todos'};
 }

@@ -44,7 +44,7 @@ export function FleetClientReportPanel() {
   if (viewingId) return <FleetReportSaleDetail key={viewingId} id={viewingId} onBack={() => setViewingId(null)} />;
   return <section className={styles.report} aria-label="Relatório de vendas por cliente">
     <header className="fleet-panel-header"><div><h2>Relatório de vendas</h2><p>Controle por cliente, exclusivamente das vendas do Frota. O período considera a data de criação em São Paulo.</p></div></header>
-    <form className="filter-panel report-filters" onSubmit={search}>
+    <form className="filter-panel report-filters report-search-filters" onSubmit={search}>
       <label><span>Cliente</span><select value={clientId} onChange={e => setClientId(e.target.value)} required><option value="">Selecione um cliente</option><option value="*">Todos os clientes</option>{api.data?.clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
       <label><span>Criada de</span><input type="date" value={from} max={to || undefined} onChange={e => setFrom(e.target.value)} required /></label>
       <label><span>Até</span><input type="date" value={to} min={from || undefined} onChange={e => setTo(e.target.value)} required /></label>

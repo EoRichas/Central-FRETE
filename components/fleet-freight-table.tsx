@@ -1,4 +1,5 @@
 "use client";
+import { useEffect,useRef } from "react";
 import { Icons } from "@/components/icons";
 import { StatusBadge } from "@/components/ui";
 import {
@@ -10,11 +11,20 @@ import { formatDate, formatMoney } from "@/lib/format";
 
 export function FreightTable<T extends FleetFreightListRow>({
   freights,
-  onOpen,
+  onOpen, onEdit,
 }: {
   freights: T[];
   onOpen: (freight: T) => void;
+  onEdit?: (freight:T)=>void;
 }) {
+  const pendingOpen=useRef<ReturnType<typeof setTimeout>|null>(null);
+  function cancelPendingOpen(){if(pendingOpen.current)clearTimeout(pendingOpen.current);pendingOpen.current=null;}
+  useEffect(()=>()=>{if(pendingOpen.current)clearTimeout(pendingOpen.current);},[]);
+  function openNumber(freight:T,keyboard:boolean){
+    cancelPendingOpen();
+    if(!onEdit||keyboard)onOpen(freight);
+    else pendingOpen.current=setTimeout(()=>{pendingOpen.current=null;onOpen(freight);},350);
+  }
   if (!freights.length) {
     return (
       <div className="inline-empty">
@@ -25,7 +35,8 @@ export function FreightTable<T extends FleetFreightListRow>({
 
   return (
     <div className="responsive-table fleet-table-wrap">
-      <table className="fleet-table">
+      <table className="fleet-table fleet-table-compact">
+        <colgroup>{["12%","22%","22%","12%","12%","14%","6%"].map((width,index)=><col key={index} style={{width}}/>)}</colgroup>
         <thead>
           <tr>
             <th>Venda</th>
@@ -39,20 +50,20 @@ export function FreightTable<T extends FleetFreightListRow>({
         </thead>
         <tbody>
           {freights.map((freight) => (
-            <tr key={freight.id}>
+            <tr key={freight.id} onDoubleClick={onEdit?event=>{if(!(event.target as HTMLElement).closest("button,a,input,select,textarea,summary"))onEdit(freight);}:undefined}>
               <td data-label="Venda">
-                <button type="button" className="text-button" onClick={() => onOpen(freight)} aria-label={`Abrir venda ${freight.saleNumber}`}>
+                <button type="button" className="text-button" onClick={event => openNumber(freight,event.detail===0)} onDoubleClick={onEdit?event=>{event.stopPropagation();cancelPendingOpen();onEdit(freight);}:undefined} aria-label={`Abrir venda ${freight.saleNumber}`}>
                   <strong>{freight.saleNumber}</strong>
                 </button>
                 <small>{formatDate(freight.pickupDate)} · {freight.sellerName || "Vendedor não informado"}</small>
               </td>
               <td data-label="Cliente / rota">
-                <strong>{freight.clientName}</strong>
-                <small>{freight.origin} → {freight.destination}</small>
+                <strong title={freight.clientName}>{freight.clientName}</strong>
+                <small title={`${freight.origin} → ${freight.destination}`}>{freight.origin} → {freight.destination}</small>
               </td>
               <td data-label="Frota / motorista">
                 <strong>{freight.vehiclePlate}</strong>
-                <small>{freight.driverName}</small>
+                <small title={freight.driverName}>{freight.driverName}</small>
               </td>
               <td data-label="Operação">
                 <StatusBadge status={FLEET_OPERATIONAL_STATUS_LABELS[freight.operationalStatus]} />
