@@ -35,3 +35,8 @@ export function roleCan(role: PermissionRole, capability: Capability): boolean {
 export function canViewSellerCommission(role: PermissionRole): boolean {
   return role === "ADMIN" || role === "VENDEDOR";
 }
+
+export const FLEET_DELETE_ROLES = ["ADMIN", "FINANCEIRO", "VENDEDOR", "OPERACIONAL"] as const;
+export function canDeleteFleetFreights(role:PermissionRole) {
+  return FLEET_DELETE_ROLES.some(allowed=>allowed===role);
+}

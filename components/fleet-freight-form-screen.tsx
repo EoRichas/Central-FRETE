@@ -17,10 +17,6 @@ import { Field, PageHeader } from "@/components/ui";
 import type { CurrentUser } from "@/lib/contracts";
 import { apiMutation, useApi } from "@/components/use-api";
 import {
-  FLEET_OPERATIONAL_STATUSES,
-  FLEET_OPERATIONAL_STATUS_LABELS,
-  FLEET_PRIORITIES,
-  FLEET_PRIORITY_LABELS,
   calculateFleetFreightPreview,
   type FleetFreightFormData,
   type FleetFreight,
@@ -366,10 +362,8 @@ export function FleetFreightFormScreen({
         billingDate: financialOnly
           ? freight!.billingDate
           : form.get("billingDate") || null,
-        operationalStatus: financialOnly
-          ? freight!.operationalStatus
-          : form.get("operationalStatus"),
-        priority: financialOnly ? freight!.priority : form.get("priority"),
+        operationalStatus: freight?.operationalStatus ?? "SEM_PREVISAO",
+        priority: freight?.priority ?? "NORMAL",
         freightAmountCents: moneyInputToCents(freightValue || "0"),
         ...distanceValues(),
         tollCents: moneyInputToCents(toll || "0"),
@@ -403,6 +397,14 @@ export function FleetFreightFormScreen({
   const selectableVehicles = fleet.vehicles.filter(
     (vehicle) => vehicle.active || vehicle.id === freight?.vehicleId,
   );
+  async function deleteFreight() {
+    if (!freight || !fleet.canDeleteFreights || saving) return;
+    setSaving(true); setError(null);
+    try { await onDelete(freight); }
+    catch (deleteError) { setError(deleteError instanceof Error ? deleteError.message : "Não foi possível excluir o frete."); }
+    finally { setSaving(false); }
+  }
+
   const selectableDrivers = fleet.drivers.filter(
     (driver) => driver.active || driver.id === freight?.driverId,
   );
@@ -413,7 +415,7 @@ export function FleetFreightFormScreen({
         eyebrow={editing ? `Venda ${freight!.saleNumber}` : "Nova operação"}
         title={editing ? "Editar frete da frota" : "Novo frete da frota"}
         description="Cadastre os veículos da carga e os custos desta operação. O combustível é estimado pela distância e pelos parâmetros da Frota."
-        actions={<button type="button" className="button secondary" onClick={onClose}>Cancelar</button>}
+        actions={<>{freight && fleet.canDeleteFreights && <button type="button" className="button danger" disabled={saving} onClick={deleteFreight}>Excluir frete</button>}<button type="button" className="button secondary" onClick={onClose}>Cancelar</button></>}
       />
       <form className="form-page" onSubmit={submit}>
         <section className="form-section">
@@ -586,34 +588,8 @@ export function FleetFreightFormScreen({
             </div>
           </fieldset>
           <div className="section-divider">Operação e valores</div>
-          <div className="form-grid four">
+          <div className="form-grid two">
             <Field label="Situação do serviço"><select name="serviceSituation" disabled={financialOnly} defaultValue={freight?.serviceSituation ?? ""} required><option value="">Selecione</option>{FLEET_RELATION_SITUATIONS.map(value => <option key={value} value={value}>{value}</option>)}</select></Field>
-            <Field label="Status operacional">
-              <select
-                name="operationalStatus"
-                disabled={financialOnly}
-                defaultValue={freight?.operationalStatus ?? "SEM_PREVISAO"}
-              >
-                {FLEET_OPERATIONAL_STATUSES.map((status) => (
-                  <option key={status} value={status}>
-                    {FLEET_OPERATIONAL_STATUS_LABELS[status]}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Prioridade">
-              <select
-                name="priority"
-                disabled={financialOnly}
-                defaultValue={freight?.priority ?? "NORMAL"}
-              >
-                {FLEET_PRIORITIES.map((priority) => (
-                  <option key={priority} value={priority}>
-                    {FLEET_PRIORITY_LABELS[priority]}
-                  </option>
-                ))}
-              </select>
-            </Field>
             <Field label="Valor do frete">
               <div className="money-field">
                 <span>R$</span>
@@ -766,12 +742,7 @@ export function FleetFreightFormScreen({
                 type="button"
                 className="button danger"
                 disabled={saving}
-                onClick={async () => {
-                  setSaving(true); setError(null);
-                  try { await onDelete(freight); }
-                  catch (error) { setError(error instanceof Error ? error.message : "Não foi possível excluir o frete."); }
-                  finally { setSaving(false); }
-                }}
+                onClick={deleteFreight}
               >
                 Excluir frete
               </button>

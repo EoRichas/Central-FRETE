@@ -318,8 +318,8 @@ test('formulário Frota remove hodômetro e abastecimento, posiciona CTE e avari
     freightAmountCents:100000,tollCents:0,driverCommissionCents:0,pickupDate:'2026-10-21',operationalStatus:'EM_ROTA',priority:'NORMAL'};
   const fleet={parameters:fleetDomain.DEFAULT_FLEET_PARAMETERS,vehicles:[{id:'truck',active:true}],drivers:[{id:'driver',active:true}],canEditFreights:true};
   let closed=0;const tree=FleetFreightFormScreen({freight,fleet,onClose:()=>closed++,onSaved:()=>{},onDelete:()=>{}});
-  assert.equal(find(tree,n=>n.type===ui.Modal),null);assert.equal(find(tree,n=>n.type==='form').props.className,'form-page');const header=find(tree,n=>n.type===ui.PageHeader);assert.equal(header.props.title,'Editar frete da frota');header.props.actions.props.onClick();assert.equal(closed,1);
-  for(const label of ['KM inicial','KM final','Litros abastecidos','Valor bomba (R$)','Valor pago combustível (R$)','ICMS (R$)']) assert.equal(find(tree,n=>n.props?.label===label),null,label);
+  assert.equal(find(tree,n=>n.type===ui.Modal),null);assert.equal(find(tree,n=>n.type==='form').props.className,'form-page');const header=find(tree,n=>n.type===ui.PageHeader);assert.equal(header.props.title,'Editar frete da frota');find(header.props.actions,n=>n.type==='button'&&n.props.children==='Cancelar').props.onClick();assert.equal(closed,1);
+  for(const label of ['KM inicial','KM final','Litros abastecidos','Valor bomba (R$)','Valor pago combustível (R$)','ICMS (R$)','Prioridade','Status operacional']) assert.equal(find(tree,n=>n.props?.label===label),null,label);
   const cte=find(tree,n=>n.props?.label==='CTE/MDF (R$)'),damages=find(tree,n=>n.props?.label==='Avarias (R$)');
   assert.ok(cte&&damages);assert.equal(find(cte,n=>n.type==='input').props.value,'20,00');assert.equal(find(damages,n=>n.type==='input').props.value,'30,00');
   const fields=find(tree,n=>n.props?.className==='form-grid four'&&n.props.children[0]?.props.label==='Seguro (R$)');assert.deepEqual(fields.props.children.map(n=>n.props.label),['Seguro (R$)','Nota Fiscal (R$)','CTE/MDF (R$)','Avarias (R$)']);
@@ -331,7 +331,7 @@ test('formulário Frota remove hodômetro e abastecimento, posiciona CTE e avari
   try {
     await find(tree,n=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{}});
     assert.equal(calls.length,1);const body=JSON.parse(calls[0].body);
-    for(const field of ['actualFuelCostCents','fuelLitersMilli','fuelPumpAmountCents','icmsCostCents','cteMdfeCostCents','damagesCostCents','odometerStartMeters','odometerEndMeters']) assert.equal(body[field],freight[field],field);
+    for(const field of ['operationalStatus','priority','actualFuelCostCents','fuelLitersMilli','fuelPumpAmountCents','icmsCostCents','cteMdfeCostCents','damagesCostCents','odometerStartMeters','odometerEndMeters']) assert.equal(body[field],freight[field],field);
   } finally {globalThis.FormData=OriginalFormData;}
 });
 
@@ -358,12 +358,12 @@ test('vendedor abre edição e baixa pela própria lista Frota e atualiza detalh
  const {SellerFleetScreen}=compile('components/seller-fleet-screen.tsx',{
   'next/link':{__esModule:true,default:()=>null},'@/components/fleet-freight-table':{FreightTable},'@/components/icons':{Icons:new Proxy({},{get:()=>icon})},'@/lib/domain/fleet':fleetDomain,react:state.react,'@/components/fleet-freight-detail':{FleetFreightDetail:()=>null},'@/components/fleet-freight-form-screen':{FleetFreightFormScreen},'@/components/ui':ui,
   '@/components/use-transient-message':{useTransientMessage:()=>[null,()=>{}]},'@/lib/format':format,
-  '@/components/use-api':{useApi:url=>{urls.push(url);return {data:url?.startsWith('/api/fleet/freights/options')?{fleet:{canManagePayments:true,canDeleteFreights:false}}:url?.startsWith('/api/fleet/freights?')?{freights:[detail]}:{freight:detail},refresh:()=>refreshes++};}},
+  '@/components/use-api':{useApi:url=>{urls.push(url);return {data:url?.startsWith('/api/fleet/freights/options')?{fleet:{canManagePayments:true,canDeleteFreights:true}}:url?.startsWith('/api/fleet/freights?')?{freights:[detail]}:{freight:detail},refresh:()=>refreshes++};}},
  });
  const render=()=>{state.reset();return SellerFleetScreen();};let tree=render();
  assert.equal(find(tree,n=>n.props?.className==='fleet-module').type,'div');assert.ok(find(tree,n=>n.props?.className==='cegonha-tabs module-tabs'));find(tree,n=>n.type===FreightTable).props.onOpen(detail);tree=render();assert.equal(find(tree,n=>n.type===ui.Modal),null);
  find(find(tree,n=>n.type===ui.PageHeader).props.actions,n=>n.type==='button'&&n.props.children==='Editar frete').props.onClick();tree=render();
- const editor=find(tree,n=>n.type===FleetFreightFormScreen);assert.equal(find(tree,n=>n.type===FreightTable),null);assert.equal(find(tree,n=>n.type===ui.PageHeader),null);assert.equal(editor.props.freight.id,'234');assert.equal(editor.props.fleet.canManagePayments,true);assert.equal(editor.props.fleet.canDeleteFreights,false);
+ const editor=find(tree,n=>n.type===FleetFreightFormScreen);assert.equal(find(tree,n=>n.type===FreightTable),null);assert.equal(find(tree,n=>n.type===ui.PageHeader),null);assert.equal(editor.props.freight.id,'234');assert.equal(editor.props.fleet.canManagePayments,true);assert.equal(editor.props.fleet.canDeleteFreights,true);
  assert.ok(urls.includes('/api/fleet/freights/options?freightId=234'));
  editor.props.onSaved('Pagamento atualizado.');tree=render();assert.equal(find(tree,n=>n.type===FleetFreightFormScreen),null);assert.equal(refreshes,2);
 });
@@ -700,4 +700,54 @@ test('baixa em lote consulta as datas do modal e seleciona somente vendas elegí
  const render=()=>{state.reset();return BulkPaymentPanel({sales:[],period:{from:'2026-12-31',to:'2027-01-02'},saleChannel:'CEGONHA',onSaved(){}});};
  let tree=render();find(tree,n=>n.type==='button'&&n.props.children==='Baixa em lote').props.onClick();tree=render();find(find(tree,n=>n.props?.label==='Cliente'),n=>n.type==='select').props.onChange({target:{value:'client'}});tree=render();find(tree,n=>n.type==='input'&&n.props.type==='checkbox'&&!n.props['aria-label']).props.onChange({target:{checked:true}});tree=render();await find(tree,n=>n.type==='form').props.onSubmit({preventDefault(){}});
  assert.deepEqual(calls[0].items.map(i=>i.id),['sale-one','sale-two']);assert.ok(urls.some(u=>u==='/api/reports/sales?from=2026-12-31&to=2027-01-02&saleChannel=CEGONHA'));
+});
+
+test('relatórios motorista e veículo têm somente seu filtro e aplicam a busca antes da prévia',()=>{
+ for(const by of ['driver','vehicle']){
+  const state=hooks(),urls=[],Preview=()=>null;
+  const {DriverCommissionsPanel}=compile('components/driver-commissions-panel.tsx',{react:state.react,'./report-preview-button':{ReportPreviewButton:Preview},'./fleet-freight-detail':{FleetFreightDetail:()=>null},'./ui':ui,'./icons':{Icons:new Proxy({},{get:()=>icon})},'@/lib/format':fullFormat,
+   '@/lib/domain/driver-commissions':{groupDriverCommissions:()=>[]},'./use-api':{useApi:url=>{urls.push(url);return {loading:false,data:{report:{rows:[],drivers:[{key:'id:driver',name:'MOTORISTA'}],vehicles:[{key:'id:vehicle',name:'AAA1A11'}]}}};}}});
+  const render=()=>{state.reset();return DriverCommissionsPanel({reportBy:by});};let tree=render();
+  const html=renderToStaticMarkup(tree);assert.ok(html.includes('report-search-filters'));assert.ok(html.includes('Consultar'));assert.equal(find(tree,n=>n.type==='select')?.props.children[0].props.children,by==='driver'?'Todos os motoristas':'Todos os veículos');
+  assert.equal(find(tree,n=>n.type==='select'&&n.props.children[0].props.children===(by==='driver'?'Todos os veículos':'Todos os motoristas')),null);
+  find(tree,n=>n.type==='select').props.onChange({target:{value:`id:${by}`}});tree=render();assert.ok(!find(tree,n=>n.type===Preview).props.url.includes(`id%3A${by}`));
+  find(tree,n=>n.type==='form').props.onSubmit({preventDefault(){}});tree=render();const url=find(tree,n=>n.type===Preview).props.url;assert.ok(url.includes(`${by}=id%3A${by}`));assert.ok(!url.includes(by==='driver'?'vehicle=':'driver='));
+ }
+});
+test('buscas de veículos e motoristas são independentes e ignoram acentuação',()=>{
+ const state=hooks(),noOp=()=>null,mod=new Proxy({},{get:()=>noOp});const source=readFileSync(new URL('../components/fleet-assets.tsx',import.meta.url),'utf8'),overrides=Object.fromEntries([...source.matchAll(/from\s+["']([^"']+)["']/g)].map(m=>[m[1],mod]));
+ Object.assign(overrides,{react:state.react,'@/components/ui':ui,'@/components/icons':{Icons:new Proxy({},{get:()=>icon})},'@/lib/domain/fleet':fleetDomain,'@/lib/format':fullFormat});
+ const {FleetAssetsPanel}=compile('components/fleet-assets.tsx',overrides),fleet={canManage:true,freights:[],vehicles:[{id:'a',plate:'AAA1A11',model:'Scania',active:true},{id:'b',plate:'BBB2B22',model:'Volvo',active:true}],drivers:[{id:'a',name:'João da Silva',active:true,phone:'1111'},{id:'b',name:'Ana Souza',active:true,phone:'2222'}]};
+ const render=()=>{state.reset();return FleetAssetsPanel({fleet,openVehicle(){},openDriver(){}});};let tree=render();find(tree,n=>n.props?.placeholder==='Placa ou modelo').props.onChange({target:{value:'scania'}});tree=render();
+ let vehicles=renderToStaticMarkup(find(tree,n=>n.props?.['aria-label']==='Lista de veículos com rolagem independente')),drivers=renderToStaticMarkup(find(tree,n=>n.props?.['aria-label']==='Lista de motoristas com rolagem independente'));assert.ok(vehicles.includes('AAA1A11'));assert.ok(!vehicles.includes('BBB2B22'));assert.ok(drivers.includes('João da Silva')&&drivers.includes('Ana Souza'));
+ find(tree,n=>n.props?.placeholder==='Nome, CPF ou telefone').props.onChange({target:{value:'joao'}});tree=render();drivers=renderToStaticMarkup(find(tree,n=>n.props?.['aria-label']==='Lista de motoristas com rolagem independente'));assert.ok(drivers.includes('João da Silva'));assert.ok(!drivers.includes('Ana Souza'));
+});
+test('duplo clique da linha abre edição e ignora cliques sobre botões de detalhes',()=>{
+ const state=hooks(),calls=[],{FreightTable}=compile('components/fleet-freight-table.tsx',{react:state.react,'@/components/ui':ui,'@/components/icons':{Icons:new Proxy({},{get:()=>icon})},'@/lib/domain/fleet':fleetDomain,'@/lib/format':fullFormat});
+ const freight={id:'234',saleNumber:'234',pickupDate:'2026-10-28',operationalStatus:'EM_ROTA',paymentStatus:'EM_ABERTO',clientName:'CLIENTE',driverName:'MOTORISTA',freightAmountCents:10000};
+ const tree=FreightTable({freights:[freight],onOpen:f=>calls.push(['details',f.id]),onEdit:f=>calls.push(['edit',f.id])}),row=find(tree,n=>n.type==='tr'&&n.props.onDoubleClick);
+ row.props.onDoubleClick({target:{closest:()=>null}});assert.deepEqual(calls,[['edit','234']]);row.props.onDoubleClick({target:{closest:()=>({})}});assert.equal(calls.length,1);
+ const number=find(tree,n=>n.props?.['aria-label']==='Abrir venda 234');number.props.onClick({detail:1});number.props.onDoubleClick({stopPropagation(){}});assert.deepEqual(calls,[['edit','234'],['edit','234']]);
+ number.props.onClick({detail:0});assert.deepEqual(calls.at(-1),['details','234']);
+ const readOnly=FreightTable({freights:[freight],onOpen(){}});assert.equal(find(readOnly,n=>n.type==='tr'&&n.props.onDoubleClick),null);
+});
+
+test('Editar frete mantém Excluir visível no cabeçalho e rodapé só quando a exclusão é permitida',async()=>{
+ for(const canDelete of [true,false]){
+  const state=hooks(),noOp=()=>null,mod=new Proxy({},{get:()=>noOp}),deleted=[];
+  const source=readFileSync(new URL('../components/fleet-freight-form-screen.tsx',import.meta.url),'utf8'),overrides=Object.fromEntries([...source.matchAll(/from\s+["']([^"']+)["']/g)].map(m=>[m[1],mod]));
+  Object.assign(overrides,{react:state.react,'@/components/ui':ui,'@/lib/format':fullFormat,'@/lib/domain/fleet':fleetDomain,'@/lib/domain/number-input':numberInput,'@/lib/domain/operations':operations,'@/lib/domain/fleet-client-report':clientReport,'@/lib/domain/finance':{commissionCents:()=>0},'@/lib/domain/dates':{todaySaoPaulo:()=>'2026-10-28'},'@/lib/domain/cargo-vehicles':{cargoVehiclesOrLegacy:()=>[{model:'CARRO',plate:'AAA1A11'}]},'@/lib/domain/fleet-distance':{effectiveFleetDistance:()=>10000},'@/lib/domain/fuel-input':{fuelInputToInteger:()=>null},'@/components/use-api':{useApi:url=>({data:url==='/api/me'?{user:{id:'admin',role:'ADMIN'}}:{sellers:[]}})}});
+  const {FleetFreightFormScreen}=compile('components/fleet-freight-form-screen.tsx',overrides),freight={id:'234',saleNumber:'234',vehicleId:'truck',driverId:'driver',pickupDate:'2026-10-28',freightAmountCents:10000,distanceMeters:10000,operationalStatus:'EM_ROTA',priority:'NORMAL'},fleet={parameters:fleetDomain.DEFAULT_FLEET_PARAMETERS,vehicles:[],drivers:[],canEditFreights:true,canDeleteFreights:canDelete};
+  const tree=FleetFreightFormScreen({freight,fleet,onClose(){},onSaved(){},onDelete:async record=>{deleted.push(record.id);}}),header=find(tree,n=>n.type===ui.PageHeader),button=find(header.props.actions,n=>n.type==='button'&&n.props.children==='Excluir frete');
+  assert.equal(Boolean(button),canDelete);const footer=find(tree,n=>n.props?.className==='sale-form-actions');assert.equal(Boolean(find(footer,n=>n.type==='button'&&n.props.children==='Excluir frete')),canDelete);
+  if(canDelete){assert.equal(button.props.type,'button');await button.props.onClick();assert.deepEqual(deleted,['234']);}
+ }
+});
+
+test('vendedor confirma exclusão no editor e volta à lista; cancelar não envia DELETE',async()=>{
+ const state=hooks(),calls=[],FreightTable=()=>null,FleetFreightFormScreen=()=>null;let refreshes=0;
+ const freight={id:'234',saleNumber:'234',origin:'A',destination:'B',sellerId:'seller'};
+ const {SellerFleetScreen}=compile('components/seller-fleet-screen.tsx',{react:state.react,'next/link':{__esModule:true,default:()=>null},'@/components/fleet-freight-table':{FreightTable},'@/components/fleet-freight-form-screen':{FleetFreightFormScreen},'@/components/fleet-freight-detail':{FleetFreightDetail:()=>null},'@/components/icons':{Icons:new Proxy({},{get:()=>icon})},'@/lib/domain/fleet':fleetDomain,'@/components/ui':ui,'@/components/use-transient-message':{useTransientMessage:()=>[null,()=>{}]},'@/components/use-api':{useApi:url=>({loading:false,data:url?.startsWith('/api/fleet/freights/options')?{fleet:{canDeleteFreights:true}}:url?.startsWith('/api/fleet/freights?')?{freights:[freight]}:{freight},refresh:()=>refreshes++}),apiMutation:async(url,options)=>calls.push({url,method:options.method})}});
+ const render=()=>{state.reset();return SellerFleetScreen();};let tree=render();find(tree,n=>n.type===FreightTable).props.onEdit(freight);tree=render();const editor=find(tree,n=>n.type===FleetFreightFormScreen);assert.equal(editor.props.fleet.canDeleteFreights,true);
+ const original=globalThis.window;try{globalThis.window={confirm:()=>false};await editor.props.onDelete(freight);assert.equal(calls.length,0);globalThis.window={confirm:()=>true};await editor.props.onDelete(freight);assert.deepEqual(calls,[{url:'/api/fleet/freights/234',method:'DELETE'}]);tree=render();assert.ok(find(tree,n=>n.type===FreightTable));assert.equal(refreshes,1);}finally{if(original===undefined)delete globalThis.window;else globalThis.window=original;}
 });

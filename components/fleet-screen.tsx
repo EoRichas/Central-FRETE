@@ -297,6 +297,7 @@ function FleetOperationsScreen() {
               <section className="panel table-panel">
                 <FreightTable
                   freights={filteredFreights}
+                  onEdit={fleet.canEditFreights||fleet.canEditFreightFinancials||fleet.canManagePayments?openEditFreight:undefined}
                   onOpen={f => setViewingId(f.id)}
                 />
               </section>
