@@ -318,7 +318,7 @@ test('formulário Frota remove hodômetro e abastecimento, posiciona CTE e avari
     freightAmountCents:100000,tollCents:0,driverCommissionCents:0,pickupDate:'2026-10-21',operationalStatus:'EM_ROTA',priority:'NORMAL'};
   const fleet={parameters:fleetDomain.DEFAULT_FLEET_PARAMETERS,vehicles:[{id:'truck',active:true}],drivers:[{id:'driver',active:true}],canEditFreights:true};
   let closed=0;const tree=FleetFreightFormScreen({freight,fleet,onClose:()=>closed++,onSaved:()=>{},onDelete:()=>{}});
-  assert.equal(find(tree,n=>n.type===ui.Modal),null);assert.equal(find(tree,n=>n.type==='form').props.className,'form-page');const header=find(tree,n=>n.type===ui.PageHeader);assert.equal(header.props.title,'Editar frete da frota');header.props.actions.props.onClick();assert.equal(closed,1);
+  assert.equal(find(tree,n=>n.type===ui.Modal),null);assert.equal(find(tree,n=>n.type==='form').props.className,'form-page');const header=find(tree,n=>n.type===ui.PageHeader);assert.equal(header.props.title,'Editar frete da frota');find(header.props.actions,n=>n.type==='button'&&n.props.children==='Cancelar').props.onClick();assert.equal(closed,1);
   for(const label of ['KM inicial','KM final','Litros abastecidos','Valor bomba (R$)','Valor pago combustível (R$)','ICMS (R$)','Prioridade','Status operacional']) assert.equal(find(tree,n=>n.props?.label===label),null,label);
   const cte=find(tree,n=>n.props?.label==='CTE/MDF (R$)'),damages=find(tree,n=>n.props?.label==='Avarias (R$)');
   assert.ok(cte&&damages);assert.equal(find(cte,n=>n.type==='input').props.value,'20,00');assert.equal(find(damages,n=>n.type==='input').props.value,'30,00');
@@ -730,4 +730,16 @@ test('duplo clique da linha abre edição e ignora cliques sobre botões de deta
  const number=find(tree,n=>n.props?.['aria-label']==='Abrir venda 234');number.props.onClick({detail:1});number.props.onDoubleClick({stopPropagation(){}});assert.deepEqual(calls,[['edit','234'],['edit','234']]);
  number.props.onClick({detail:0});assert.deepEqual(calls.at(-1),['details','234']);
  const readOnly=FreightTable({freights:[freight],onOpen(){}});assert.equal(find(readOnly,n=>n.type==='tr'&&n.props.onDoubleClick),null);
+});
+
+test('Editar frete mantém Excluir visível no cabeçalho e rodapé só quando a exclusão é permitida',async()=>{
+ for(const canDelete of [true,false]){
+  const state=hooks(),noOp=()=>null,mod=new Proxy({},{get:()=>noOp}),deleted=[];
+  const source=readFileSync(new URL('../components/fleet-freight-form-screen.tsx',import.meta.url),'utf8'),overrides=Object.fromEntries([...source.matchAll(/from\s+["']([^"']+)["']/g)].map(m=>[m[1],mod]));
+  Object.assign(overrides,{react:state.react,'@/components/ui':ui,'@/lib/format':fullFormat,'@/lib/domain/fleet':fleetDomain,'@/lib/domain/number-input':numberInput,'@/lib/domain/operations':operations,'@/lib/domain/fleet-client-report':clientReport,'@/lib/domain/finance':{commissionCents:()=>0},'@/lib/domain/dates':{todaySaoPaulo:()=>'2026-10-28'},'@/lib/domain/cargo-vehicles':{cargoVehiclesOrLegacy:()=>[{model:'CARRO',plate:'AAA1A11'}]},'@/lib/domain/fleet-distance':{effectiveFleetDistance:()=>10000},'@/lib/domain/fuel-input':{fuelInputToInteger:()=>null},'@/components/use-api':{useApi:url=>({data:url==='/api/me'?{user:{id:'admin',role:'ADMIN'}}:{sellers:[]}})}});
+  const {FleetFreightFormScreen}=compile('components/fleet-freight-form-screen.tsx',overrides),freight={id:'234',saleNumber:'234',vehicleId:'truck',driverId:'driver',pickupDate:'2026-10-28',freightAmountCents:10000,distanceMeters:10000,operationalStatus:'EM_ROTA',priority:'NORMAL'},fleet={parameters:fleetDomain.DEFAULT_FLEET_PARAMETERS,vehicles:[],drivers:[],canEditFreights:true,canDeleteFreights:canDelete};
+  const tree=FleetFreightFormScreen({freight,fleet,onClose(){},onSaved(){},onDelete:async record=>{deleted.push(record.id);}}),header=find(tree,n=>n.type===ui.PageHeader),button=find(header.props.actions,n=>n.type==='button'&&n.props.children==='Excluir frete');
+  assert.equal(Boolean(button),canDelete);const footer=find(tree,n=>n.props?.className==='sale-form-actions');assert.equal(Boolean(find(footer,n=>n.type==='button'&&n.props.children==='Excluir frete')),canDelete);
+  if(canDelete){assert.equal(button.props.type,'button');await button.props.onClick();assert.deepEqual(deleted,['234']);}
+ }
 });

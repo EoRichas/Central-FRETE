@@ -397,6 +397,14 @@ export function FleetFreightFormScreen({
   const selectableVehicles = fleet.vehicles.filter(
     (vehicle) => vehicle.active || vehicle.id === freight?.vehicleId,
   );
+  async function deleteFreight() {
+    if (!freight || !fleet.canDeleteFreights || saving) return;
+    setSaving(true); setError(null);
+    try { await onDelete(freight); }
+    catch (deleteError) { setError(deleteError instanceof Error ? deleteError.message : "Não foi possível excluir o frete."); }
+    finally { setSaving(false); }
+  }
+
   const selectableDrivers = fleet.drivers.filter(
     (driver) => driver.active || driver.id === freight?.driverId,
   );
@@ -407,7 +415,7 @@ export function FleetFreightFormScreen({
         eyebrow={editing ? `Venda ${freight!.saleNumber}` : "Nova operação"}
         title={editing ? "Editar frete da frota" : "Novo frete da frota"}
         description="Cadastre os veículos da carga e os custos desta operação. O combustível é estimado pela distância e pelos parâmetros da Frota."
-        actions={<button type="button" className="button secondary" onClick={onClose}>Cancelar</button>}
+        actions={<>{freight && fleet.canDeleteFreights && <button type="button" className="button danger" disabled={saving} onClick={deleteFreight}>Excluir frete</button>}<button type="button" className="button secondary" onClick={onClose}>Cancelar</button></>}
       />
       <form className="form-page" onSubmit={submit}>
         <section className="form-section">
@@ -734,12 +742,7 @@ export function FleetFreightFormScreen({
                 type="button"
                 className="button danger"
                 disabled={saving}
-                onClick={async () => {
-                  setSaving(true); setError(null);
-                  try { await onDelete(freight); }
-                  catch (error) { setError(error instanceof Error ? error.message : "Não foi possível excluir o frete."); }
-                  finally { setSaving(false); }
-                }}
+                onClick={deleteFreight}
               >
                 Excluir frete
               </button>
