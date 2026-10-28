@@ -801,7 +801,7 @@ export function FleetFreightFormScreen({
           paidAt={freight.paidAt}
           proofAttachmentId={freight.proofAttachmentId}
           canManagePayments={fleet.canManagePayments}
-          onSaved={() => onSaved("Pagamento atualizado.")}
+          onSaved={() => onSaved(fleet.canManagePayments ? "Pagamento atualizado." : "Comprovante salvo.")}
         />
       )}
     </div>
