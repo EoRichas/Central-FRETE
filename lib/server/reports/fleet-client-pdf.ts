@@ -67,7 +67,7 @@ export async function renderFleetClientPdf(report: FleetClientReport, observatio
     y -= 20;
   };
   const columns = [
-    {label: 'DATA', width: 54}, {label: 'MOTORISTA', width: 54}, {label: 'CLIENTE', width: 55},
+    {label: orderNumber ? 'DATA' : 'DATA / VENDA', width: 54}, {label: 'MOTORISTA', width: 54}, {label: 'CLIENTE', width: 55},
     {label: 'VEÍCULO', width: 54}, {label: 'PLACA', width: 46}, {label: 'SITUAÇÃO', width: 62},
     {label: 'CLIENTE / OBSERVAÇÃO', width: 90}, {label: 'VALOR\nSERVIÇO', width: 62},
     {label: 'CONFIRMAÇÃO\nDO PAGAMENTO', width: WIDTH - 477},
@@ -84,7 +84,7 @@ export async function renderFleetClientPdf(report: FleetClientReport, observatio
     const payment = row.paid === 'Sim' ? 'CONFIRMADO' : row.paid === 'Parcial' ? 'PARCIAL' : 'PENDENTE';
     const confirmation = `${payment}\n${row.receivedDates.length ? row.receivedDates.map(d => formatDate(d)).join(', ') : 'Data não informada'}\n${formatMoney(row.receivedCents)}`;
     // Only explicitly selected observations enter a customer document.
-    const cells = [formatDate(row.createdDate), row.driverName || 'Não informado', row.clientName,
+    const cells = [orderNumber ? formatDate(row.createdDate) : `${formatDate(row.createdDate)}\nVenda ${row.saleNumber}`, row.driverName || 'Não informado', row.clientName,
       models || 'Não informado', plates || 'Não informada', row.serviceSituation || 'Não informada',
       `${row.clientName}\n${notes.get(row.id) || 'Sem observação incluída.'}${orderNumber && row.returnFreight ? '\nFrete retorno aproveitado' : ''}${options.includeProviders&&(row.providerServices?.length)?'\nPRESTADORES: '+row.providerServices.map(p=>`${p.providerName}${p.referenceName?' / '+p.referenceName:''} · ${providerKindLabel(p.kind)}: ${formatMoney(p.amountCents)}`).join('\n'):''}`, formatMoney(row.amountCents), confirmation];
     const lines = cells.map((cell, i) => wrap(cell, columns[i].width - 15, 6.4, i === 7));

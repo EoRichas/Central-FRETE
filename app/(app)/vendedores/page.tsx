@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { SellersScreen } from "@/components/sellers-screen";
+import { CommissionsScreen } from "@/components/commissions-screen";
 
 export const metadata: Metadata = { title: "Comissões" };
 
@@ -9,5 +9,5 @@ export default async function SellersPage({
   searchParams: Promise<{ competency?: string }>;
 }) {
   const { competency } = await searchParams;
-  return <SellersScreen initialCompetency={competency} />;
+  return <CommissionsScreen initialCompetency={competency} />;
 }

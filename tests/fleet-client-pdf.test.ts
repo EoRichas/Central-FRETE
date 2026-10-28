@@ -38,6 +38,7 @@ test('relação contém nove campos, tipos de serviço, baixas reais e somente o
     assert.ok(!texts.some(t => t.includes('Observação de exemplo da venda.')));
     assert.equal(texts.filter(t => t === 'Modelo B').length, 1);
     assert.equal(report.rows[0].situation, 'Em rota');
+    assert.ok(texts.join(' ').includes('Venda 201'));
   } finally { PDFPage.prototype.drawText = original; }
 });
 

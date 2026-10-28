@@ -3,6 +3,7 @@ import { Icons } from "@/components/icons";
 import { StatusBadge } from "@/components/ui";
 import {
   FLEET_OPERATIONAL_STATUS_LABELS,
+  fleetFinancialStatus,
   type FleetFreightListRow,
 } from "@/lib/domain/fleet";
 import { formatDate, formatMoney } from "@/lib/format";
@@ -32,7 +33,7 @@ export function FreightTable<T extends FleetFreightListRow>({
             <th>Frota / motorista</th>
             <th>Operação</th>
             <th>Frete</th>
-            <th>Situação</th>
+            <th>Situação financeira</th>
             <th><span className="sr-only">Ações</span></th>
           </tr>
         </thead>
@@ -59,8 +60,8 @@ export function FreightTable<T extends FleetFreightListRow>({
               <td data-label="Frete">
                 <strong>{formatMoney(freight.freightAmountCents)}</strong>
               </td>
-              <td data-label="Situação">
-                <StatusBadge status={freight.paymentStatus} />
+              <td data-label="Situação financeira">
+                <StatusBadge status={fleetFinancialStatus(freight)} />
               </td>
               <td data-label="Ações">
                   <div className="table-actions">

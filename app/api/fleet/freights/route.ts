@@ -1,3 +1,4 @@
+import { readDatePeriod } from "@/lib/server/date-period";
 import { parseProviderServices } from '@/lib/server/provider-services';
 import { booleanValue } from '@/lib/server/fleet-validation';
 import { resolveSaleSeller, saleCommissionOverride } from "@/lib/server/seller-commission";
@@ -100,10 +101,13 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   try {
     const user = await authorize(request, ["VENDEDOR", "OPERACIONAL"]);
+    const period=readDatePeriod(new URL(request.url).searchParams);
+    const conditions=[...(user.role==='VENDEDOR'?['seller_id=?']:[]),...(period?['pickup_date>=? and pickup_date<=?']:[])];
+    const params=[...(user.role==='VENDEDOR'?[user.id]:[]),...(period?[period.from,period.to]:[])];
     const freights = await queryAll<import("@/lib/domain/fleet").SellerFreightSummary>(
       `select id, sale_number as saleNumber, client_name as clientName, origin, destination,
-        pickup_date as pickupDate, freight_amount_cents as freightAmountCents, vehicle_plate as vehiclePlate, driver_name as driverName, seller_id as sellerId, seller_name as sellerName, operational_status as operationalStatus, payment_status as paymentStatus, priority
-       from fleet_freights ${user.role === 'VENDEDOR' ? 'where seller_id=?' : ''} order by created_at desc, id desc limit 100`, user.role === 'VENDEDOR' ? [user.id] : []);
+        pickup_date as pickupDate, freight_amount_cents as freightAmountCents, vehicle_plate as vehiclePlate, driver_name as driverName, seller_id as sellerId, seller_name as sellerName, operational_status as operationalStatus, payment_status as paymentStatus, billing_date as billingDate, priority
+       from fleet_freights ${conditions.length?'where '+conditions.join(' and '):''} order by created_at desc, id desc ${period?'':'limit 100'}`,params);
     return Response.json({freights});
   } catch (error) { return jsonError(error); }
 }

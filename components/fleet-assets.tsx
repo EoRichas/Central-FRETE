@@ -3,7 +3,6 @@ import { AddressFields, ActiveSelect } from "@/components/registry-fields";
 import { addressFromForm } from "@/lib/domain/registry";
 import { Icons } from "@/components/icons";
 import { useState } from "react";
-import { FleetVehicleHistory } from "@/components/fleet-vehicle-history";
 import { Field, Modal, StatusBadge } from "@/components/ui";
 import { apiMutation } from "@/components/use-api";
 import {
@@ -26,7 +25,7 @@ export function VehicleResultCells({
   const totals = summarizeFleet(members);
   return (
     <>
-      <td data-label="Receita no mês">{formatMoney(totals.revenueCents)}</td>
+      <td data-label="Receita no período">{formatMoney(totals.revenueCents)}</td>
       <td data-label="Custos da operação">
         {formatMoney(totals.totalCostCents)}
       </td>
@@ -103,7 +102,6 @@ export function VehicleModal({
           <Field label="Modelo do veículo"><input name="model" defaultValue={vehicle?.model ?? ""} maxLength={120} /></Field>
           <ActiveSelect active={vehicle?.active ?? true}/>
         </fieldset>
-        {vehicle && <FleetVehicleHistory vehicle={vehicle} />}
         {error && (
           <p className="form-error" role="alert">
             {error}
@@ -292,7 +290,7 @@ export function FleetAssetsPanel({fleet,openVehicle,openDriver}: {
                     <span className="eyebrow">Cadastro</span>
                     <h2>Veículos da frota</h2>
                     <p>
-                      Resultado por caminhão no mês da coleta, antes dos custos
+                      Resultado por caminhão no período da coleta, antes dos custos
                       fixos da empresa.
                     </p>
                   </div>
@@ -306,13 +304,13 @@ export function FleetAssetsPanel({fleet,openVehicle,openDriver}: {
                     </button>
                   )}
                 </header>
-                <div className="responsive-table">
+                <div className="responsive-table fleet-asset-scroll" tabIndex={0} role="region" aria-label="Lista com rolagem independente">
                   <table>
                     <thead>
                       <tr>
                         <th>Placa</th>
                         <th>Situação</th>
-                        <th>Receita no mês</th>
+                        <th>Receita no período</th>
                         <th>Custos da operação</th>
                         <th>Resultado operacional</th>
                         {fleet.canManage && (
@@ -391,12 +389,12 @@ export function FleetAssetsPanel({fleet,openVehicle,openDriver}: {
                     </button>
                   )}
                 </header>
-                <div className="responsive-table">
+                <div className="responsive-table fleet-asset-scroll" tabIndex={0} role="region" aria-label="Lista com rolagem independente">
                   <table>
                     <thead>
                       <tr>
                         <th>Nome / contato</th>
-                        <th>Veículos no mês</th>
+                        <th>Veículos no período</th>
                         <th>Situação</th>
                         {fleet.canManage && (
                           <th>
@@ -416,8 +414,8 @@ export function FleetAssetsPanel({fleet,openVehicle,openDriver}: {
                             </small>
                             <small>{driver.address}</small>
                           </td>
-                          <td data-label="Veículos no mês">
-                            {[...new Set(fleet.freights.filter(f => f.driverId === driver.id).map(f => f.vehiclePlate))].join(", ") || "Sem operação no mês"}
+                          <td data-label="Veículos no período">
+                            {[...new Set(fleet.freights.filter(f => f.driverId === driver.id).map(f => f.vehiclePlate))].join(", ") || "Sem operação no período"}
                           </td>
                           <td data-label="Situação">
                             <StatusBadge

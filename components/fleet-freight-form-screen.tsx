@@ -52,7 +52,7 @@ export function FleetFreightFormScreen({
   freight: FleetFreight | null;
   fleet: FleetFreightFormData;
   onClose: () => void;
-  onSaved: (message: string, id?: string, competency?: string, accessTransferred?: boolean) => void;
+  onSaved: (message: string, id?: string, competency?: string, accessTransferred?: boolean, savedPickupDate?: string) => void;
   onDelete: (freight: FleetFreight) => Promise<void>;
 }) {
   const formScreenRef = useRef<HTMLDivElement>(null);
@@ -388,7 +388,7 @@ export function FleetFreightFormScreen({
           body: JSON.stringify(payload),
         },
       );
-      onSaved(editing ? "Frete atualizado." : "Frete cadastrado.", saved.id, pickupDate.slice(0,7),saved.accessTransferred||(!editing&&sellerChanged));
+      onSaved(editing ? "Frete atualizado." : "Frete cadastrado.", saved.id, pickupDate.slice(0,7),saved.accessTransferred||(!editing&&sellerChanged),pickupDate);
     } catch (submitError) {
       setError(
         submitError instanceof Error
@@ -801,7 +801,7 @@ export function FleetFreightFormScreen({
           paidAt={freight.paidAt}
           proofAttachmentId={freight.proofAttachmentId}
           canManagePayments={fleet.canManagePayments}
-          onSaved={() => onSaved("Pagamento atualizado.")}
+          onSaved={() => onSaved(fleet.canManagePayments ? "Pagamento atualizado." : "Comprovante salvo.")}
         />
       )}
     </div>
