@@ -358,12 +358,12 @@ test('vendedor abre edição e baixa pela própria lista Frota e atualiza detalh
  const {SellerFleetScreen}=compile('components/seller-fleet-screen.tsx',{
   'next/link':{__esModule:true,default:()=>null},'@/components/fleet-freight-table':{FreightTable},'@/components/icons':{Icons:new Proxy({},{get:()=>icon})},'@/lib/domain/fleet':fleetDomain,react:state.react,'@/components/fleet-freight-detail':{FleetFreightDetail:()=>null},'@/components/fleet-freight-form-screen':{FleetFreightFormScreen},'@/components/ui':ui,
   '@/components/use-transient-message':{useTransientMessage:()=>[null,()=>{}]},'@/lib/format':format,
-  '@/components/use-api':{useApi:url=>{urls.push(url);return {data:url?.startsWith('/api/fleet/freights/options')?{fleet:{canManagePayments:true,canDeleteFreights:false}}:url?.startsWith('/api/fleet/freights?')?{freights:[detail]}:{freight:detail},refresh:()=>refreshes++};}},
+  '@/components/use-api':{useApi:url=>{urls.push(url);return {data:url?.startsWith('/api/fleet/freights/options')?{fleet:{canManagePayments:true,canDeleteFreights:true}}:url?.startsWith('/api/fleet/freights?')?{freights:[detail]}:{freight:detail},refresh:()=>refreshes++};}},
  });
  const render=()=>{state.reset();return SellerFleetScreen();};let tree=render();
  assert.equal(find(tree,n=>n.props?.className==='fleet-module').type,'div');assert.ok(find(tree,n=>n.props?.className==='cegonha-tabs module-tabs'));find(tree,n=>n.type===FreightTable).props.onOpen(detail);tree=render();assert.equal(find(tree,n=>n.type===ui.Modal),null);
  find(find(tree,n=>n.type===ui.PageHeader).props.actions,n=>n.type==='button'&&n.props.children==='Editar frete').props.onClick();tree=render();
- const editor=find(tree,n=>n.type===FleetFreightFormScreen);assert.equal(find(tree,n=>n.type===FreightTable),null);assert.equal(find(tree,n=>n.type===ui.PageHeader),null);assert.equal(editor.props.freight.id,'234');assert.equal(editor.props.fleet.canManagePayments,true);assert.equal(editor.props.fleet.canDeleteFreights,false);
+ const editor=find(tree,n=>n.type===FleetFreightFormScreen);assert.equal(find(tree,n=>n.type===FreightTable),null);assert.equal(find(tree,n=>n.type===ui.PageHeader),null);assert.equal(editor.props.freight.id,'234');assert.equal(editor.props.fleet.canManagePayments,true);assert.equal(editor.props.fleet.canDeleteFreights,true);
  assert.ok(urls.includes('/api/fleet/freights/options?freightId=234'));
  editor.props.onSaved('Pagamento atualizado.');tree=render();assert.equal(find(tree,n=>n.type===FleetFreightFormScreen),null);assert.equal(refreshes,2);
 });
@@ -742,4 +742,12 @@ test('Editar frete mantém Excluir visível no cabeçalho e rodapé só quando a
   assert.equal(Boolean(button),canDelete);const footer=find(tree,n=>n.props?.className==='sale-form-actions');assert.equal(Boolean(find(footer,n=>n.type==='button'&&n.props.children==='Excluir frete')),canDelete);
   if(canDelete){assert.equal(button.props.type,'button');await button.props.onClick();assert.deepEqual(deleted,['234']);}
  }
+});
+
+test('vendedor confirma exclusão no editor e volta à lista; cancelar não envia DELETE',async()=>{
+ const state=hooks(),calls=[],FreightTable=()=>null,FleetFreightFormScreen=()=>null;let refreshes=0;
+ const freight={id:'234',saleNumber:'234',origin:'A',destination:'B',sellerId:'seller'};
+ const {SellerFleetScreen}=compile('components/seller-fleet-screen.tsx',{react:state.react,'next/link':{__esModule:true,default:()=>null},'@/components/fleet-freight-table':{FreightTable},'@/components/fleet-freight-form-screen':{FleetFreightFormScreen},'@/components/fleet-freight-detail':{FleetFreightDetail:()=>null},'@/components/icons':{Icons:new Proxy({},{get:()=>icon})},'@/lib/domain/fleet':fleetDomain,'@/components/ui':ui,'@/components/use-transient-message':{useTransientMessage:()=>[null,()=>{}]},'@/components/use-api':{useApi:url=>({loading:false,data:url?.startsWith('/api/fleet/freights/options')?{fleet:{canDeleteFreights:true}}:url?.startsWith('/api/fleet/freights?')?{freights:[freight]}:{freight},refresh:()=>refreshes++}),apiMutation:async(url,options)=>calls.push({url,method:options.method})}});
+ const render=()=>{state.reset();return SellerFleetScreen();};let tree=render();find(tree,n=>n.type===FreightTable).props.onEdit(freight);tree=render();const editor=find(tree,n=>n.type===FleetFreightFormScreen);assert.equal(editor.props.fleet.canDeleteFreights,true);
+ const original=globalThis.window;try{globalThis.window={confirm:()=>false};await editor.props.onDelete(freight);assert.equal(calls.length,0);globalThis.window={confirm:()=>true};await editor.props.onDelete(freight);assert.deepEqual(calls,[{url:'/api/fleet/freights/234',method:'DELETE'}]);tree=render();assert.ok(find(tree,n=>n.type===FreightTable));assert.equal(refreshes,1);}finally{if(original===undefined)delete globalThis.window;else globalThis.window=original;}
 });

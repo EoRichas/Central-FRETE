@@ -632,7 +632,7 @@ test('exclusão real de frete pago remove anexos, mantém venda e OS e desacopla
  stored.set('delete-fleet/proof.pdf',new ArrayBuffer(12));
  await pg.query("update fleet_freights set proof_attachment_id='delete-proof',payment_status='PAGO',paid_at='2030-01-01' where id=$1",[id]);
  await pg.exec("insert into users(id,email,name,role) values('delete-manager','delete-manager@example.test','Manager','GERENCIA') on conflict do nothing");
- for (const role of ['seller','operator','delete-manager']) assert.equal((await remove.DELETE(await request('/api/fleet/freights/x',role,'DELETE'),{params:Promise.resolve({id})})).status,403);
+ for (const role of ['delete-manager']) assert.equal((await remove.DELETE(await request('/api/fleet/freights/x',role,'DELETE'),{params:Promise.resolve({id})})).status,403);
  const deleted=await remove.DELETE(await request('/api/fleet/freights/x','finance','DELETE'),{params:Promise.resolve({id})});assert.equal(deleted.status,200,await deleted.clone().text());
  assert.equal(await queryFirst('select id from fleet_freights where id=?',[id]),null);assert.equal(stored.has('delete-fleet/proof.pdf'),false);
  const kept=await queryFirst('select fleet_freight_id,cargo_vehicles from freight_sales where id=?',[sale.id]) as {fleet_freight_id:string|null;cargo_vehicles:unknown[]};assert.equal(kept.fleet_freight_id,null);assert.equal(kept.cargo_vehicles.length,2);
@@ -1335,7 +1335,7 @@ test('vendedor cria frete e consulta somente os próprios sem receber administra
  const response=await options.GET(await request('/api/fleet/freights/options','seller'));
  assert.equal(response.status,200,await response.clone().text());
  const {fleet}=await response.json();
- assert.equal(fleet.canEditFreights,true); assert.equal(fleet.canDeleteFreights,false); assert.equal(fleet.canManagePayments,true);
+ assert.equal(fleet.canEditFreights,true); assert.equal(fleet.canDeleteFreights,true); assert.equal(fleet.canManagePayments,true);
  assert.equal(fleet.parameters.officeMonthlyCostCents,null); assert.equal('freights' in fleet,false);
  assert.ok(fleet.vehicles.every((v:{costs:unknown[]})=>v.costs.length===0));
  assert.ok(fleet.drivers.every((d:{cpf:unknown;phone:unknown;address:unknown})=>d.cpf===null&&d.phone===null&&d.address===null));
@@ -1350,7 +1350,7 @@ test('vendedor cria frete e consulta somente os próprios sem receber administra
  assert.ok(ownIds.includes(id));
  for(const ownId of ownIds)assert.equal((await queryFirst('select seller_id from fleet_freights where id=?',[ownId]) as {seller_id:string}).seller_id,'seller');
  assert.equal((await edit.PATCH(await request(`/api/fleet/freights/${id}`,'seller','PATCH',payload),context)).status,200);
- assert.equal((await edit.DELETE(await request(`/api/fleet/freights/${id}`,'seller','DELETE'),context)).status,403);
+ assert.equal((await edit.DELETE(await request(`/api/fleet/freights/${id}`,'delete-manager','DELETE'),context)).status,403);
  assert.equal((await options.GET(await request('/api/fleet/freights/options','finance'))).status,200);
 });
 
@@ -1549,7 +1549,7 @@ test('operacional cria frete Frota com comissão própria, cadastra cliente e co
  assert.equal(client.status,201,await client.clone().text());
  assert.equal((await providers.GET(await request('/api/providers','operator'))).status,200);
  assert.equal((await providers.POST(await request('/api/providers','operator','POST',{}))).status,403);
- assert.equal((await detail.DELETE(await request('/api/fleet/freights/x','operator','DELETE'),context)).status,403);
+ assert.equal((await detail.DELETE(await request('/api/fleet/freights/x','delete-manager','DELETE'),context)).status,403);
 });
 
 test('operacional fatura vendas de terceiros, anexa comprovante e confirma recebimentos sem assumir comissão', async()=>{
@@ -1911,7 +1911,7 @@ test('vendedor edita frete, anexa e baixa só os próprios; opções preservam c
  assert.equal((await download.GET(await request('/api/fleet/freights/x/attachments/p','seller'),{params:Promise.resolve({id:other,attachmentId:proof})})).status,404);
  assert.equal((await options.GET(await request('/api/fleet/freights/options?freightId='+other,'seller'))).status,404);
  const mismatch=await payment.PATCH(await request('/api/fleet/freights/x/payment','operator','PATCH',body),otherCtx);assert.equal(mismatch.status,400);
- assert.equal((await edit.DELETE(await request('/api/fleet/freights/x','seller','DELETE'),ctx)).status,403);
+ assert.equal((await edit.DELETE(await request('/api/fleet/freights/x','seller','DELETE'),otherCtx)).status,404);
  await pg.exec("update fleet_vehicles set active=0 where id='calc-vehicle';update fleet_drivers set active=0 where id='calc-driver'");
  try {
   const data=await (await options.GET(await request('/api/fleet/freights/options?freightId='+id,'seller'))).json();
@@ -1950,7 +1950,7 @@ test('operacional edita sem transferir autoria/comissão, emite OS e relatórios
  assert.equal((await freightEdit.PATCH(await request('/api/fleet/freights/x','operator','PATCH',{notes:'OBS OPERACIONAL',serviceSituation:'ENTREGA'}),ctx)).status,200);
  assert.equal((await fleetOrders.POST(await request('/api/fleet/freights/x/service-order','operator','POST'),ctx)).status,200);
  assert.equal((await fleetOrders.GET(await request('/api/fleet/freights/x/service-order?format=pdf','operator'),ctx)).status,200);
- assert.equal((await freightEdit.DELETE(await request('/api/fleet/freights/x','operator','DELETE'),ctx)).status,403);
+ assert.equal((await freightEdit.DELETE(await request('/api/fleet/freights/x','delete-manager','DELETE'),ctx)).status,403);
  assert.equal((await (await import('../../app/api/users/route.ts')).GET(await request('/api/users','operator'))).status,403);
  assert.equal((await (await import('../../app/api/fleet/monthly/route.ts')).POST(await request('/api/fleet/monthly','operator','POST',{action:'CLOSE',competency:'2094-05',reviewed:true}))).status,403);
  const clientReports=await import('../../app/api/fleet/client-report/route.ts');
@@ -2345,4 +2345,26 @@ test('relatório motorista ignora filtro de veículo e relatório veículo ignor
  const vehicles=await api.GET(await request(`/api/reports/driver-commissions?${query}&by=vehicle&driver=nao-existe`,'finance'));assert.equal(vehicles.status,200);assert.equal((await vehicles.json()).report.rows.length,2);
  const onlyDriver=await api.GET(await request(`/api/reports/driver-commissions?${query}&by=driver&driver=historical%3AMOTORISTA%20A&vehicle=nao-existe`,'finance'));assert.deepEqual((await onlyDriver.json()).report.rows.map((r:{id:string})=>r.id),['review-driver-a']);
  const onlyVehicle=await api.GET(await request(`/api/reports/driver-commissions?${query}&by=vehicle&vehicle=historical%3AREV2B22&driver=nao-existe`,'finance'));assert.deepEqual((await onlyVehicle.json()).report.rows.map((r:{id:string})=>r.id),['review-driver-b']);
+});
+
+test('vendedor exclui somente seu frete e operacional exclui frete acessível; venda e OS vinculadas são preservadas',async()=>{
+ const create=await import('../../app/api/fleet/freights/route.ts'),edit=await import('../../app/api/fleet/freights/[id]/route.ts'),options=await import('../../app/api/fleet/freights/options/route.ts'),fleetApi=await import('../../app/api/fleet/route.ts');
+ const sales=await import('../../app/api/sales/route.ts'),orders=await import('../../app/api/sales/[id]/service-order/route.ts');
+ const cargo=[{model:'MODELO TESTE',plate:'TST1A11',identification:null}];
+ const make=async(actor:string,sellerId?:string)=>{const response=await create.POST(await request('/api/fleet/freights',actor,'POST',{...registeredFreight,cargoVehicles:cargo,clientId:'lookup-a',pickupDate:'2299-02-01',...(sellerId?{sellerId}:{} )}));assert.equal(response.status,201,await response.clone().text());return (await response.json()).id as string;};
+ await pg.exec("insert into users(id,email,name,role,active) values('delete-other-seller','delete-other-seller@example.test','OUTRO VENDEDOR','VENDEDOR',1)");
+ const own=await make('seller'),other=await make('admin','delete-other-seller'),ctx={params:Promise.resolve({id:own})},foreign={params:Promise.resolve({id:other})};
+ for(const actor of ['admin','finance','seller','operator','delete-manager']){const response=await options.GET(await request(`/api/fleet/freights/options?freightId=${own}`,actor));assert.equal(response.status,200);assert.equal((await response.json()).fleet.canDeleteFreights,actor!=='delete-manager');}
+ const operatorFleet=await fleetApi.GET(await request('/api/fleet?from=2299-02-01&to=2299-02-01','operator'));assert.equal((await operatorFleet.json()).fleet.canDeleteFreights,true);
+ assert.equal((await edit.DELETE(await request('/api/fleet/freights/x','seller','DELETE'),foreign)).status,404);assert.ok(await queryFirst('select id from fleet_freights where id=?',[other]));
+ assert.equal((await options.GET(await request('/api/fleet/freights/options?freightId='+other,'seller'))).status,404);
+ assert.equal((await edit.DELETE(await request('/api/fleet/freights/x','delete-manager','DELETE'),ctx)).status,403);assert.equal((await edit.DELETE(await request('/api/fleet/freights/x','missing','DELETE'),ctx)).status,401);
+ const made=await sales.POST(await request('/api/sales','admin','POST',{...salePayload,cargoVehicles:cargo,saleChannel:'FROTA',fleetFreightId:own,clientId:'lookup-a',sellerId:'seller',saleDate:'2299-02-01',financialDueDate:'2299-02-28'}));assert.equal(made.status,201,await made.clone().text());const sale=(await made.json()).id;
+ assert.equal((await orders.POST(await request('/api/sales/x/service-order','admin','POST'),{params:Promise.resolve({id:sale})})).status,200);
+ const linkedBefore=await queryFirst('select cargo_vehicles from freight_sales where id=?',[sale]);
+ const deleted=await edit.DELETE(await request('/api/fleet/freights/x','seller','DELETE'),ctx);assert.equal(deleted.status,200,await deleted.clone().text());assert.equal(await queryFirst('select id from fleet_freights where id=?',[own]),null);
+ assert.deepEqual(await queryFirst('select cargo_vehicles from freight_sales where id=?',[sale]),linkedBefore);assert.deepEqual(await queryFirst('select fleet_freight_id from freight_sales where id=?',[sale]),{fleet_freight_id:null});assert.ok(await queryFirst('select id from service_orders where sale_id=?',[sale]));
+ const opDelete=await edit.DELETE(await request('/api/fleet/freights/x','operator','DELETE'),foreign);assert.equal(opDelete.status,200,await opDelete.clone().text());assert.equal(await queryFirst('select id from fleet_freights where id=?',[other]),null);
+ assert.deepEqual(await queryFirst("select actor_user_id from audit_logs where entity_type='FLEET_FREIGHT' and entity_id=? and action='DELETED'",[own]),{actor_user_id:'seller'});
+ assert.deepEqual(await queryFirst("select actor_user_id from audit_logs where entity_type='FLEET_FREIGHT' and entity_id=? and action='DELETED'",[other]),{actor_user_id:'operator'});
 });

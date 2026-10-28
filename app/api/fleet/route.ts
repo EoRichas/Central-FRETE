@@ -1,3 +1,4 @@
+import { canDeleteFleetFreights } from "@/lib/domain/permissions";
 import { readDatePeriod } from "@/lib/server/date-period";
 import { freightForViewer } from "@/lib/server/seller-commission";
 import { authorize } from "@/lib/server/auth";
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
       user.role === "FINANCEIRO",
       {user,period},
     );
-    fleet.canDeleteFreights = ["ADMIN", "FINANCEIRO"].includes(user.role);
+    fleet.canDeleteFreights = canDeleteFleetFreights(user.role);
     return Response.json({ fleet: {...fleet,
       freights: fleet.freights.map(f => freightForViewer(f,user)),
       billing: {...fleet.billing,freights: fleet.billing.freights.map(f => freightForViewer(f,user)),drivers: fleet.billing.drivers.map(d => ({...d,freights:d.freights.map(f=>freightForViewer(f,user))}))},

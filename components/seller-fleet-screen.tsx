@@ -9,7 +9,7 @@ import { FleetFreightFormScreen } from '@/components/fleet-freight-form-screen';
 import { FreightTable } from '@/components/fleet-freight-table';
 import { Icons } from '@/components/icons';
 import { ErrorState, LoadingState, PageHeader } from '@/components/ui';
-import { useApi } from '@/components/use-api';
+import { apiMutation,useApi } from '@/components/use-api';
 import { useTransientMessage } from '@/components/use-transient-message';
 import { FLEET_OPERATIONAL_STATUSES, FLEET_OPERATIONAL_STATUS_LABELS, FLEET_FINANCIAL_STATUSES, FLEET_FINANCIAL_STATUS_LABELS, fleetFinancialStatus, type FleetFreight, type FleetFreightFormData, type SellerFreightSummary } from '@/lib/domain/fleet';
 
@@ -28,13 +28,18 @@ export function SellerFleetScreen() {
   const sellers = [...new Map(freights.map(f=>[sellerKey(f),f.sellerName||'Não informado'])).entries()].sort((a,b)=>a[1].localeCompare(b[1],'pt-BR'));
   const normalized = search.trim().toLocaleUpperCase('pt-BR');
   const filtered = freights.filter(f=>(!normalized||[f.saleNumber,f.clientName,f.origin,f.destination,f.vehiclePlate,f.driverName].some(v=>v?.toLocaleUpperCase('pt-BR').includes(normalized)))&&(!status||f.operationalStatus===status)&&(!financialStatus||fleetFinancialStatus(f)===financialStatus)&&(!seller||sellerKey(f)===seller));
+  async function deleteFreight(freight:FleetFreight){
+    if(!window.confirm(`Excluir o frete de ${freight.origin} para ${freight.destination}? A OS própria deste frete será removida. Uma venda vinculada e sua OS serão preservadas.`))return;
+    await apiMutation(`/api/fleet/freights/${freight.id}`,{method:'DELETE'});
+    setSelectedId(null);setEditing(false);setOpen(false);setSuccess('Frete excluído.');list.refresh();
+  }
   const edit = () => {setEditing(true);setOpen(true);};
   if (open) return <div className="fleet-module">
     {options.loading&&<LoadingState label="Preparando frete…"/>}
     {options.error&&<ErrorState message={options.error} retry={options.refresh}/>}
     {editing&&detail.loading&&<LoadingState label="Carregando detalhes…"/>}
     {editing&&detail.error&&<ErrorState message={detail.error} retry={detail.refresh}/>}
-    {!options.loading&&options.data&&(!editing||(!detail.loading&&detail.data?.freight.id===selectedId)) ? <FleetFreightFormScreen key={editing?selectedId:'new'} freight={editing?detail.data!.freight:null} fleet={options.data.fleet} onClose={()=>setOpen(false)} onSaved={(message,_id,_competency,accessTransferred,savedPickupDate)=>{if(!accessTransferred&&savedPickupDate)setPeriod(current=>({from:savedPickupDate<current.from?savedPickupDate:current.from,to:savedPickupDate>current.to?savedPickupDate:current.to}));setOpen(false);setSuccess(message);list.refresh();if(accessTransferred){setSelectedId(null);setEditing(false);}else if(editing)detail.refresh();}} onDelete={async()=>{throw new Error('Exclusão não permitida.');}}/> : <button type="button" className="button secondary" onClick={()=>setOpen(false)}>Voltar à Frota</button>}
+    {!options.loading&&options.data&&(!editing||(!detail.loading&&detail.data?.freight.id===selectedId)) ? <FleetFreightFormScreen key={editing?selectedId:'new'} freight={editing?detail.data!.freight:null} fleet={options.data.fleet} onClose={()=>setOpen(false)} onSaved={(message,_id,_competency,accessTransferred,savedPickupDate)=>{if(!accessTransferred&&savedPickupDate)setPeriod(current=>({from:savedPickupDate<current.from?savedPickupDate:current.from,to:savedPickupDate>current.to?savedPickupDate:current.to}));setOpen(false);setSuccess(message);list.refresh();if(accessTransferred){setSelectedId(null);setEditing(false);}else if(editing)detail.refresh();}} onDelete={deleteFreight}/> : <button type="button" className="button secondary" onClick={()=>setOpen(false)}>Voltar à Frota</button>}
   </div>;
   return <div className="fleet-module">
     {selectedId ? <>

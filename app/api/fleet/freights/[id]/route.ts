@@ -1,3 +1,4 @@
+import { FLEET_DELETE_ROLES } from "@/lib/domain/permissions";
 import { parseProviderServices } from '@/lib/server/provider-services';
 import { resolveSaleSeller,resolveEditedSeller,sellerEditGuard } from '@/lib/server/seller-commission';
 import { booleanValue } from '@/lib/server/fleet-validation';
@@ -196,7 +197,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
 export async function DELETE(request: Request, context: RouteContext) {
   try {
-    const user = await authorize(request, ["ADMIN", "FINANCEIRO"]);
+    const user = await authorize(request, [...FLEET_DELETE_ROLES]);
     const { id } = await context.params;
     await assertFleetAccess(user, id);
     const previous = await freightSnapshot(id);
@@ -221,7 +222,7 @@ export async function DELETE(request: Request, context: RouteContext) {
       db.prepare("delete from service_order_versions where order_id in (select id from service_orders where fleet_freight_id=?)").bind(id),
       db.prepare("delete from service_orders where fleet_freight_id=?").bind(id),
       db.prepare("delete from fleet_freights where id = ?").bind(id),
-    ]);
+    ],sellerEditGuard(user,{previousSellerId:previous.sellerId},'freight',id));
     return Response.json({ id, deleted: true, storageCleanupPending: await drainStorageCleanup() });
   } catch (error) {
     return jsonError(error);
