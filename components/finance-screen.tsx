@@ -7,7 +7,8 @@ import { partialResultMessage, type SalesReport } from "@/lib/domain/reports";
 import type { FleetFreight } from "@/lib/domain/fleet";
 import { FleetFreightDetail } from "@/components/fleet-freight-detail";
 import { Modal } from "@/components/ui";
-import { currentCompetency } from "@/lib/domain/dates";
+import { currentDatePeriod } from "@/lib/domain/date-period";
+import { DatePeriodFields } from "./date-period-fields";
 import { formatDate, formatMoney, formatPercent } from "@/lib/format";
 import { Icons } from "@/components/icons";
 import {
@@ -19,11 +20,11 @@ import {
 import { useApi } from "@/components/use-api";
 
 export function FinanceScreen() {
-  const [competency, setCompetency] = useState(currentCompetency);
+  const [period,setPeriod]=useState(currentDatePeriod);
   const [channel, setChannel] = useState("");
   const [selectedFreight, setSelectedFreight] = useState<string | null>(null);
   const detail = useApi<{freight:FleetFreight}>(selectedFreight ? `/api/fleet/freights/${selectedFreight}` : null);
-  const api = useApi<{ report: SalesReport; showCommission: boolean }>(`/api/reports/sales?competency=${competency}&saleChannel=${channel}`);
+  const api = useApi<{ report: SalesReport; showCommission: boolean }>(`/api/reports/sales?${new URLSearchParams(period)}&saleChannel=${channel}`);
   const showCommission = Boolean(api.data?.showCommission);
   const sales = useMemo(() => api.data?.report.sales ?? [], [api.data]);
   const totals = useMemo(
@@ -48,14 +49,7 @@ export function FinanceScreen() {
         description="Vendas Cegonha e fretes da Frota, pela data da venda ou da coleta, sem duplicar vínculos."
       />
       <section className="filter-panel compact finance-filters">
-        <label>
-          <span>Competência</span>
-          <input
-            type="month"
-            value={competency}
-            onChange={(event) => setCompetency(event.target.value || currentCompetency())}
-          />
-        </label>
+        <DatePeriodFields value={period} onChange={setPeriod}/>
         <div className="filter-stat" role="status">
           <strong>{api.loading||api.error?"—":sales.length}</strong>
           <span>vendas exibidas</span>
@@ -68,7 +62,7 @@ export function FinanceScreen() {
       {!api.loading && !api.error && !sales.length && (
         <EmptyState
           title="Nenhuma venda encontrada"
-          description="Não há vendas para a competência selecionada."
+          description="Não há vendas para a período selecionado."
         />
       )}
       {sales.length > 0 && (
@@ -88,7 +82,7 @@ export function FinanceScreen() {
               <strong>{formatMoney(totals.costs)}</strong>
             </div>
           </section>
-          <BulkPaymentPanel sales={!api.loading&&!api.error?sales:[]} onSaved={api.refresh} />
+          <BulkPaymentPanel period={period} saleChannel={channel} sales={!api.loading&&!api.error?sales:[]} onSaved={api.refresh} />
           <section className="panel table-panel">
             <div className="responsive-table">
               <table>

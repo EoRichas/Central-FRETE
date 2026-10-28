@@ -1,3 +1,4 @@
+import { readDatePeriod } from "@/lib/server/date-period";
 import { freightForViewer } from "@/lib/server/seller-commission";
 import { authorize } from "@/lib/server/auth";
 import { ApiError, jsonError } from "@/lib/server/d1";
@@ -10,7 +11,9 @@ export async function GET(request: Request) {
   try {
     const user = await authorize(request, [...FLEET_VIEW_ROLES]);
     const params = new URL(request.url).searchParams;
-    const competency = params.get("period") === "all" ? undefined : params.get("competency") || currentCompetency();
+    const period = readDatePeriod(params);
+    const competency = period || params.get("period") === "all" ? undefined : params.get("competency") || currentCompetency();
+    /* legacy month requests remain supported */
     if (competency && !isCompetency(competency)) throw new ApiError(400, "Competência inválida.");
     const isManager = user.role === "ADMIN" || user.role === "GERENCIA" || user.role === "FINANCEIRO";
     const isOperational = user.role === "OPERACIONAL";
@@ -21,7 +24,7 @@ export async function GET(request: Request) {
       isOperational,
       competency,
       user.role === "FINANCEIRO",
-      {user},
+      {user,period},
     );
     fleet.canDeleteFreights = ["ADMIN", "FINANCEIRO"].includes(user.role);
     return Response.json({ fleet: {...fleet,

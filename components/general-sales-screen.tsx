@@ -1,6 +1,8 @@
 "use client";
 
 
+import { DriverCommissionsPanel } from "./driver-commissions-panel";
+import type { CurrentUser } from "@/lib/contracts";
 import { FleetClientReportPanel } from "./fleet-client-report";
 import { ProviderReportPanel } from "./provider-report-panel";
 import { useState } from "react";
@@ -152,5 +154,7 @@ function PortfolioSalesTable({ sales,showCommission }: { sales: ReportSale[];sho
 
 export function GeneralSalesScreen() {
   const [tab, setTab] = useState("existing");
-  return <><nav className="cegonha-tabs module-tabs no-print" aria-label="Relatórios">{[["existing", "Fechamento / resultado"], ["sales", "Relatório de vendas"], ["providers", "Relatório de prestadores"]].map(([id, label]) => <button key={id} type="button" className={tab === id ? "active" : ""} aria-pressed={tab === id} onClick={() => setTab(id)}>{label}</button>)}</nav>{tab === "existing" ? <ExistingSalesReport /> : <><PageHeader title="Relatórios" description="Consulte e exporte os relatórios da operação." />{tab === "sales" ? <FleetClientReportPanel /> : <ProviderReportPanel />}</>}</>;
+  const me=useApi<{user:CurrentUser}>("/api/me");
+  const canViewDrivers=['ADMIN','GERENCIA','FINANCEIRO','OPERACIONAL'].includes(me.data?.user.role??'');
+  return <><nav className="cegonha-tabs module-tabs no-print" aria-label="Relatórios">{[["existing", "Fechamento / resultado"], ["sales", "Relatório de vendas"], ["providers", "Relatório de prestadores"], ...(canViewDrivers?[["drivers","Relatório motorista"],["vehicles","Relatório veículo"]]:[])].map(([id, label]) => <button key={id} type="button" className={tab === id ? "active" : ""} aria-pressed={tab === id} onClick={() => setTab(id)}>{label}</button>)}</nav>{tab === "existing" ? <ExistingSalesReport /> : <><PageHeader title="Relatórios" description="Consulte e exporte os relatórios da operação." />{tab === "sales" ? <FleetClientReportPanel /> : <>{tab === "providers" ? <ProviderReportPanel /> : canViewDrivers ? <DriverCommissionsPanel reportBy={tab === "drivers" ? "driver" : "vehicle"}/> : null}</>}</>}</>;
 }

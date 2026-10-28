@@ -304,5 +304,11 @@ export type FleetBillingData = {
 };
 
 export type FleetFreightFormData = Pick<FleetData, "vehicles" | "drivers" | "parameters" | "canEditFreights" | "canEditFreightFinancials" | "canManagePayments" | "canDeleteFreights">;
-export type FleetFreightListRow = Pick<FleetFreight, "id" | "saleNumber" | "clientName" | "origin" | "destination" | "pickupDate" | "freightAmountCents" | "vehiclePlate" | "driverName" | "sellerId" | "sellerName" | "operationalStatus" | "paymentStatus" | "priority">;
+export type FleetFreightListRow = Pick<FleetFreight, "id" | "saleNumber" | "clientName" | "origin" | "destination" | "pickupDate" | "freightAmountCents" | "vehiclePlate" | "driverName" | "sellerId" | "sellerName" | "operationalStatus" | "paymentStatus" | "billingDate" | "priority">;
 export type SellerFreightSummary = FleetFreightListRow;
+
+export const FLEET_FINANCIAL_STATUSES = ["EM_ABERTO", "PAGO", "FATURADO"] as const;
+export const FLEET_FINANCIAL_STATUS_LABELS = {EM_ABERTO:"Em aberto",PAGO:"Pago",FATURADO:"Faturado"};
+export function fleetFinancialStatus(freight:{paymentStatus:string;billingDate?:string|null;operationalStatus:string}) {
+ return freight.paymentStatus==="PAGO"?"PAGO":freight.billingDate||freight.operationalStatus==="FATURADO"?"FATURADO":"EM_ABERTO";
+}

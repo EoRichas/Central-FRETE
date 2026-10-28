@@ -7,8 +7,8 @@ import type { CurrentUser } from "@/lib/contracts";
 
 import { StorageCleanupNotice } from "@/components/storage-cleanup-notice";
 import { useMemo, useState } from "react";
-import { FleetBilling } from "@/components/fleet-billing";
-import { currentCompetency } from "@/lib/domain/dates";
+import { DatePeriodFields } from "./date-period-fields";
+import { currentDatePeriod } from "@/lib/domain/date-period";
 import { cargoVehiclesOrLegacy } from "@/lib/domain/cargo-vehicles";
 import { Icons } from "@/components/icons";
 import {
@@ -21,8 +21,9 @@ import { apiMutation, useApi } from "@/components/use-api";
 import {
   FLEET_OPERATIONAL_STATUSES,
   FLEET_OPERATIONAL_STATUS_LABELS,
-  FLEET_PRIORITIES,
-  FLEET_PRIORITY_LABELS,
+  FLEET_FINANCIAL_STATUSES,
+  FLEET_FINANCIAL_STATUS_LABELS,
+  fleetFinancialStatus,
   type FleetData,
   type FleetDriver,
   type FleetFreight,
@@ -38,7 +39,7 @@ import {
   DriverModal,
 } from "@/components/fleet-assets";
 
-type FleetTab = "freights" | "assets" | "billing";
+type FleetTab = "freights" | "assets";
 
 function sellerFilterValue(freight: FleetFreight) {
   if (freight.sellerId) return `id:${freight.sellerId}`;
@@ -58,21 +59,15 @@ export function FleetScreen() {
 function FleetOperationsScreen() {
   const [calculationOpen, setCalculationOpen] = useState(false);
   const [selectedTab, setTab] = useState<FleetTab>("freights");
-  const [periods, setPeriods] = useState<Record<FleetTab, string>>(() => {
-    const month = currentCompetency();
-    return {freights: month, assets: month, billing: month};
-  });
-  const competency = periods[selectedTab];
-  const setCompetency = (value: string) => setPeriods(current => ({...current, [selectedTab]: value}));
-  const api = useApi<{ fleet: FleetData }>(
-    `/api/fleet?${competency ? `competency=${competency}` : "period=all"}`,
-  );
+  const [period,setPeriod]=useState(currentDatePeriod);
+  const competency=period.from.slice(0,7);
+  const api = useApi<{ fleet: FleetData }>(`/api/fleet?${new URLSearchParams(period)}`);
   const fleet = api.data?.fleet;
   const tab = fleet?.freightOnly ? "freights" : selectedTab;
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
-  const [priority, setPriority] = useState("");
+  const [financialStatus, setFinancialStatus] = useState("");
   const [seller, setSeller] = useState("");
   const [freightFormOpen, setFreightFormOpen] = useState(false);
   const [editingFreight, setEditingFreight] = useState<FleetFreight | null>(
@@ -118,11 +113,11 @@ function FleetOperationsScreen() {
       return (
         matchesSearch &&
         (!status || freight.operationalStatus === status) &&
-        (!priority || freight.priority === priority) &&
+        (!financialStatus || fleetFinancialStatus(freight) === financialStatus) &&
         (!seller || sellerFilterValue(freight) === seller)
       );
     });
-  }, [fleet, priority, search, seller, status]);
+  }, [fleet, financialStatus, search, seller, status]);
 
   function openNewFreight() {
     setEditingFreight(null);
@@ -134,8 +129,10 @@ function FleetOperationsScreen() {
     setMutationError(null);
     setFreightFormOpen(true);
   }
-  function finishMutation(message: string, id?: string, savedCompetency?: string) {
-    if (savedCompetency) setCompetency(savedCompetency);
+  function finishMutation(message: string, id?: string, savedCompetency?: string, _accessTransferred?: boolean, savedPickupDate?: string) {
+    if(savedPickupDate && (savedPickupDate<period.from||savedPickupDate>period.to)) {
+      setPeriod(current=>({from:savedPickupDate<current.from?savedPickupDate:current.from,to:savedPickupDate>current.to?savedPickupDate:current.to}));
+    } else if(!savedPickupDate && savedCompetency && (savedCompetency<period.from.slice(0,7)||savedCompetency>period.to.slice(0,7))){const d=new Date(`${savedCompetency}-01T12:00:00Z`);d.setUTCMonth(d.getUTCMonth()+1);d.setUTCDate(0);setPeriod({from:`${savedCompetency}-01`,to:d.toISOString().slice(0,10)});}
     if (id) setViewingId(id);
     setFreightFormOpen(false);
     setVehicleModalOpen(false);
@@ -166,7 +163,6 @@ function FleetOperationsScreen() {
   const allTabs: Array<{ id: FleetTab; label: string }> = [
     { id: "freights", label: "Fretes" },
     { id: "assets", label: "Veículos e motoristas" },
-    { id: "billing", label: "Faturamento" },
   ];
   const tabs = fleet?.freightOnly
     ? allTabs.filter((item) => item.id === "freights")
@@ -193,23 +189,10 @@ function FleetOperationsScreen() {
       <PageHeader
         eyebrow="Operação logística"
         title="Frota"
-        description="Acompanhe os fretes, o resultado por caminhão e o fechamento mensal."
+        description="Acompanhe os fretes e a situação financeira pelo período de coleta."
         actions={
           <>
-            {<label className="compact-filter">
-              <span>
-                {tab === "billing"
-                  ? "Mês de faturamento"
-                  : "Competência"}
-              </span>
-              <input
-                type="month"
-                value={competency}
-                onChange={(event) =>
-                  setCompetency(event.target.value || currentCompetency())
-                }
-              />
-            </label>}
+            <DatePeriodFields value={period} onChange={setPeriod} />
             {fleet?.freightOnly && <Link className="button secondary" href={`/vendas?canal=FROTA&competency=${competency}`}>Vendas Frota</Link>}
             {tab === "freights" && fleet?.canEditFreights && (
               <button className="button secondary create-sale-action" onClick={openNewFreight}>
@@ -281,15 +264,15 @@ function FleetOperationsScreen() {
                   </select>
                 </label>
                 <label>
-                  <span>Prioridade</span>
+                  <span>Situação financeira</span>
                   <select
-                    value={priority}
-                    onChange={(event) => setPriority(event.target.value)}
+                    value={financialStatus}
+                    onChange={(event) => setFinancialStatus(event.target.value)}
                   >
                     <option value="">Todas</option>
-                    {FLEET_PRIORITIES.map((item) => (
+                    {FLEET_FINANCIAL_STATUSES.map((item) => (
                       <option key={item} value={item}>
-                        {FLEET_PRIORITY_LABELS[item]}
+                        {FLEET_FINANCIAL_STATUS_LABELS[item]}
                       </option>
                     ))}
                   </select>
@@ -320,9 +303,6 @@ function FleetOperationsScreen() {
             </>
           )}
           {tab === "assets" && !fleet.freightOnly && <FleetAssetsPanel fleet={fleet} openVehicle={openVehicle} openDriver={openDriver} />}
-          {tab === "billing" && !fleet.freightOnly && (
-            <FleetBilling data={fleet.billing} onOpen={f => setViewingId(f.id)} />
-          )}
         </div>
       )}
       </>}

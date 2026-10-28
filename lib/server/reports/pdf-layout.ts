@@ -10,14 +10,14 @@ export class ReportPdf {
   get width(){return (this.portrait ? 595.28 : W)-2*M;} readonly left=M;
   page!:PDFPage; y=0;
   private constructor(readonly doc:PDFDocument,private normal:PDFFont,private bold:PDFFont,private logo:Awaited<ReturnType<PDFDocument['embedPng']>>,private title:string,private filters:[string,string][], private portrait=false){}
-  static async create(title:string,filters:[string,string][],portrait=false) {
+  static async create(title:string,filters:[string,string][],portrait=false,subtitle?:string) {
     const doc=await PDFDocument.create();doc.registerFontkit(fontkit);
     const [r,b,l]=await Promise.all([
       readFile(path.join(process.cwd(),'node_modules/@fontsource/noto-sans/files/noto-sans-latin-400-normal.woff')),
       readFile(path.join(process.cwd(),'node_modules/@fontsource/noto-sans/files/noto-sans-latin-700-normal.woff')),
       readFile(path.join(process.cwd(),'public/central-express-logo.png'))]);
     const result=new ReportPdf(doc,await doc.embedFont(r,{subset:true}),await doc.embedFont(b,{subset:true}),await doc.embedPng(l),title,filters,portrait);
-    doc.setTitle(`${title} | Central Express`);doc.setAuthor('Central Express');result.newPage();return result;
+    doc.setTitle(`${title} | Central Express`);doc.setAuthor('Central Express');result.newPage(subtitle);return result;
   }
   private safe(value:string) {const chars=new Set(this.normal.getCharacterSet());return [...value.replace(/[\u0000-\u0008\u000b-\u001f]/g,'').normalize('NFC')].map(c=>c==='\n'||chars.has(c.codePointAt(0)!)?c:'?').join('');}
   text(value:string,x:number,y:number,size=9,bold=false,color:RGB=reportColors.ink,align:'left'|'right'='left') {

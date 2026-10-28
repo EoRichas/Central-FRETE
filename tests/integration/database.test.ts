@@ -2315,3 +2315,22 @@ test('baixa todas as 251 vendas selecionadas, aceita JSON maior que 16 KiB e pre
  const replay=await send('large-all');assert.equal(replay.status,200);assert.equal((await replay.json()).duplicate,true);assert.deepEqual(await counts(),{receipts:152,paid:100});
  const tooLarge=await request('/api/finance/payments/batch','finance','POST',body);tooLarge.headers.set('idempotency-key','large-payload');tooLarge.headers.set('content-length',String(1024*1024+1));assert.equal((await api.POST(tooLarge)).status,413);
 });
+
+test('períodos Frota incluem extremos e virada anual sem limite de 100 ou acesso à carteira alheia; comissão usa coleta',async()=>{
+ const fleet=await import('../../app/api/fleet/route.ts'),sellerList=await import('../../app/api/fleet/freights/route.ts'),commissions=await import('../../app/api/reports/driver-commissions/route.ts');
+ await pg.exec(`insert into users(id,email,name,role) values ('period-seller','period-seller@example.test','VENDEDOR PERIODO','VENDEDOR');
+ insert into fleet_drivers(id,name) values ('period-driver-a','MESMO NOME'),('period-driver-b','MESMO NOME');
+ insert into fleet_vehicles(id,plate) values ('period-vehicle-a','PER1A11'),('period-vehicle-b','PER2A22');`);
+ const rows=[['period-a','2197-12-31','period-driver-a','period-vehicle-a','period-seller',100],['period-b','2198-01-01','period-driver-a','period-vehicle-a','period-seller',200],['period-c','2198-01-02','period-driver-b','period-vehicle-b','admin',300],['period-out','2198-01-03','period-driver-a','period-vehicle-a','period-seller',900]] as const;
+ for(const [id,date,driver,vehicle,seller,commission] of rows)await queryFirst(`insert into fleet_freights(id,vehicle_id,vehicle_plate,driver_id,driver_name,client_name,origin,destination,pickup_date,billing_date,operational_status,seller_id,seller_name,freight_amount_cents,distance_meters,driver_commission_cents) values (?,?,'PER1A11',?,'MESMO NOME','CLIENTE DE TESTE','A','B',?,'2198-02-01','EM_ROTA',?,'VENDEDOR PERIODO',10000,1000,?) returning id`,[id,vehicle,driver,date,seller,commission]);
+ const query='from=2197-12-31&to=2198-01-02';
+ const response=await fleet.GET(await request(`/api/fleet?${query}`));assert.equal(response.status,200,await response.clone().text());assert.deepEqual((await response.json()).fleet.freights.map((f:{id:string})=>f.id).sort(),['period-a','period-b','period-c']);
+ const own=await sellerList.GET(await request(`/api/fleet/freights?${query}`,'period-seller'));assert.equal(own.status,200);assert.deepEqual((await own.json()).freights.map((f:{id:string})=>f.id).sort(),['period-a','period-b']);
+ const result=await commissions.GET(await request(`/api/reports/driver-commissions?${query}`,'finance'));assert.equal(result.status,200);const {report}=await result.json();assert.equal(report.rows.length,3);assert.equal(report.rows.reduce((n:number,r:{driverCommissionCents:number})=>n+r.driverCommissionCents,0),600);assert.equal(report.drivers.length,2);assert.equal(report.rows[0].sellerName,undefined);assert.equal(report.rows[0].cpf,undefined);
+ const specific=await commissions.GET(await request(`/api/reports/driver-commissions?${query}&driver=id%3Aperiod-driver-b&vehicle=id%3Aperiod-vehicle-b`,'finance'));assert.deepEqual((await specific.json()).report.rows.map((r:{id:string})=>r.id),['period-c']);
+ assert.equal((await commissions.GET(await request(`/api/reports/driver-commissions?${query}`,'period-seller'))).status,403);assert.equal((await commissions.GET(await request(`/api/reports/driver-commissions?${query}`,'missing'))).status,401);
+ for(const invalid of ['from=2198-02-31&to=2198-03-01','from=2198-01-02&to=2197-12-31','from=2198-01-01']){assert.equal((await fleet.GET(await request(`/api/fleet?${invalid}`))).status,400);assert.equal((await commissions.GET(await request(`/api/reports/driver-commissions?${invalid}`))).status,400);}
+ await pg.exec(`insert into fleet_freights(id,vehicle_plate,driver_name,client_name,origin,destination,pickup_date,operational_status,seller_id,seller_name,freight_amount_cents,distance_meters,driver_commission_cents)
+ select 'period-many-'||g,'PER1A11','MOTORISTA','CLIENTE','A','B','2198-03-01','EM_ROTA','period-seller','VENDEDOR PERIODO',10000,1000,100 from generate_series(1,125) g`);
+ const many=await sellerList.GET(await request('/api/fleet/freights?from=2198-03-01&to=2198-03-01','period-seller'));assert.equal((await many.json()).freights.length,125);
+});

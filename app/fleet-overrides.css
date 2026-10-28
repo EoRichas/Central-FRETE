@@ -30,3 +30,33 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Date periods and independently scrollable, vertically stacked registries. */
+.date-period-fields { display: grid; gap: .4rem; min-width: 265px; }
+.date-period-fields > span, .date-period-fields label > span { color: var(--muted, #5c7385); font-size: .7rem; font-weight: 700; }
+.date-period-fields > div { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .6rem; }
+.date-period-fields label { display: grid; gap: .3rem; min-width: 0; }
+.date-period-fields input { width: 100%; min-width: 0; }
+.fleet-assets-stack { display: grid; grid-template-columns: minmax(0,1fr); gap: 1.25rem; }
+.fleet-asset-scroll { max-height: 240px; overflow: auto; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: #8aa0ad #edf2f5; overscroll-behavior: contain; }
+.fleet-asset-scroll:focus-visible { outline: 2px solid #098398; outline-offset: -2px; }
+.fleet-asset-scroll thead th { position: sticky; top: 0; z-index: 1; background: #f4f7fa; }
+.fleet-asset-scroll::-webkit-scrollbar { width: 9px; height: 9px; }
+.fleet-asset-scroll::-webkit-scrollbar-thumb { background: #8aa0ad; border: 2px solid #edf2f5; border-radius: 6px; }
+.driver-commission-filters { grid-template-columns: minmax(265px,1.4fr) repeat(2,minmax(160px,1fr)) auto; align-items: end; }
+@media(max-width:1000px){.driver-commission-filters { grid-template-columns: repeat(2,minmax(0,1fr)); }}
+@media(max-width:640px){.date-period-fields{min-width:0;width:100%}.driver-commission-filters{grid-template-columns:minmax(0,1fr)}}
+.payment-proof-disclosure { border: 1px solid #cddbe5; border-radius: 8px; background: #f7fafc; }
+.payment-proof-disclosure > summary { display: flex; align-items: center; gap: .7rem; padding: .9rem 1rem; cursor: pointer; list-style: none; }
+.payment-proof-disclosure > summary::-webkit-details-marker { display:none; }
+.payment-proof-disclosure > summary svg { width: 18px; height: 18px; flex: none; }
+.payment-proof-disclosure > summary strong span { font-weight: 400; }
+.payment-proof-disclosure > summary small { margin-left: auto; color: #496f68; }
+.payment-proof-disclosure > summary > svg:last-child { transform: rotate(90deg); }
+.payment-proof-disclosure[open] > summary > svg:last-child { transform: rotate(-90deg); }
+.payment-proof-disclosure > summary:focus-visible { outline: 2px solid #098398; outline-offset: 2px; }
+.payment-proof-content { display:grid; gap:.8rem; padding: 1rem; border-top:1px solid #dce5ec; }
+.payment-proof-file, .payment-proof-footer { display:flex; justify-content:space-between; align-items:center; gap:1rem; }
+.payment-proof-file a { overflow-wrap:anywhere; }
+.payment-proof-file small, .payment-proof-footer small { color: #617b8c; }
+@media(max-width:640px){.payment-proof-disclosure > summary { flex-wrap:wrap; }.payment-proof-disclosure > summary small{margin-left:0}.payment-proof-footer{align-items:stretch;flex-direction:column}.payment-proof-file{align-items:flex-start;flex-direction:column}}

@@ -22,9 +22,9 @@ import { apiMutation, useApi } from "@/components/use-api";
 
 
 export function SellersScreen({
-  initialCompetency,
+  initialCompetency, embedded=false,
 }: {
-  initialCompetency?: string;
+  initialCompetency?: string; embedded?:boolean;
 }) {
   const [competency, setCompetency] = useState(() =>
     initialCompetency && /^\d{4}-(0[1-9]|1[0-2])$/.test(initialCompetency)
@@ -114,7 +114,7 @@ export function SellersScreen({
 
   return (
     <>
-      <PageHeader
+      {embedded ? <section className="filter-panel compact"><label><span>Competência</span><input type="month" value={competency} onChange={e=>setCompetency(e.target.value)}/></label></section> : <PageHeader
         eyebrow="Gestão comercial"
         title="Comissões"
         description="Acompanhe as vendas e a comissão calculada pelo percentual do cadastro do vendedor."
@@ -128,7 +128,7 @@ export function SellersScreen({
             />
           </label>
         }
-      />
+      />}
       {mutationError && (
         <p className="form-error" role="alert">{mutationError}</p>
       )}
