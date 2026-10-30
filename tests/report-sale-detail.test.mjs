@@ -319,7 +319,13 @@ test('formulário Frota remove hodômetro e abastecimento, posiciona CTE e avari
   const fleet={parameters:fleetDomain.DEFAULT_FLEET_PARAMETERS,vehicles:[{id:'truck',active:true}],drivers:[{id:'driver',active:true}],canEditFreights:true};
   let closed=0;const tree=FleetFreightFormScreen({freight,fleet,onClose:()=>closed++,onSaved:()=>{},onDelete:()=>{}});
   assert.equal(find(tree,n=>n.type===ui.Modal),null);assert.equal(find(tree,n=>n.type==='form').props.className,'form-page');const header=find(tree,n=>n.type===ui.PageHeader);assert.equal(header.props.title,'Editar frete da frota');find(header.props.actions,n=>n.type==='button'&&n.props.children==='Cancelar').props.onClick();assert.equal(closed,1);
-  for(const label of ['KM inicial','KM final','Litros abastecidos','Valor bomba (R$)','Valor pago combustível (R$)','ICMS (R$)','Prioridade','Status operacional']) assert.equal(find(tree,n=>n.props?.label===label),null,label);
+  for(const label of ['KM inicial','KM final','Litros abastecidos','Valor bomba (R$)','Valor pago combustível (R$)','ICMS (R$)','Prioridade']) assert.equal(find(tree,n=>n.props?.label===label),null,label);
+  const statusField=find(tree,n=>n.props?.label==='Status operacional'),statusSelect=find(statusField,n=>n.type==='select');
+  assert.equal(statusSelect.props.name,'operationalStatus');assert.equal(statusSelect.props.defaultValue,'EM_ROTA');assert.equal(statusSelect.props.disabled,undefined);
+  assert.deepEqual(statusSelect.props.children.map(option=>option.props.value),fleetDomain.FLEET_OPERATIONAL_STATUSES);
+  assert.ok(statusSelect.props.children.some(option=>option.props.children==='Aguardando embarque'));
+  const statusRow=find(tree,n=>n.props?.className==='form-grid three'&&n.props.children?.[0]?.props?.label==='Situação do serviço');
+  assert.deepEqual(statusRow.props.children.map(n=>n.props.label),['Situação do serviço','Status operacional','Valor do frete']);
   const cte=find(tree,n=>n.props?.label==='CTE/MDF (R$)'),damages=find(tree,n=>n.props?.label==='Avarias (R$)');
   assert.ok(cte&&damages);assert.equal(find(cte,n=>n.type==='input').props.value,'20,00');assert.equal(find(damages,n=>n.type==='input').props.value,'30,00');
   const fields=find(tree,n=>n.props?.className==='form-grid four'&&n.props.children[0]?.props.label==='Seguro (R$)');assert.deepEqual(fields.props.children.map(n=>n.props.label),['Seguro (R$)','Nota Fiscal (R$)','CTE/MDF (R$)','Avarias (R$)']);
@@ -327,11 +333,12 @@ test('formulário Frota remove hodômetro e abastecimento, posiciona CTE e avari
   assert.deepEqual(aligned.props.children.map(n=>n.props.label),['Distância realizada','Pedágio','Motorista / comissão']);
   assert.ok(find(tree,n=>n.props?.mode==='identification'));
   assert.ok(find(tree,n=>n.props?.mode==='costs'));
-  const OriginalFormData=globalThis.FormData;globalThis.FormData=class {get(){return null;}};
+  const OriginalFormData=globalThis.FormData;globalThis.FormData=class {get(name){return name==='operationalStatus'?'AGUARDANDO_EMBARQUE':null;}};
   try {
     await find(tree,n=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{}});
     assert.equal(calls.length,1);const body=JSON.parse(calls[0].body);
-    for(const field of ['operationalStatus','priority','actualFuelCostCents','fuelLitersMilli','fuelPumpAmountCents','icmsCostCents','cteMdfeCostCents','damagesCostCents','odometerStartMeters','odometerEndMeters']) assert.equal(body[field],freight[field],field);
+    assert.equal(body.operationalStatus,'AGUARDANDO_EMBARQUE');
+    for(const field of ['priority','actualFuelCostCents','fuelLitersMilli','fuelPumpAmountCents','icmsCostCents','cteMdfeCostCents','damagesCostCents','odometerStartMeters','odometerEndMeters']) assert.equal(body[field],freight[field],field);
   } finally {globalThis.FormData=OriginalFormData;}
 });
 
