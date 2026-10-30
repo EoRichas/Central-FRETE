@@ -17,6 +17,8 @@ import { Field, PageHeader } from "@/components/ui";
 import type { CurrentUser } from "@/lib/contracts";
 import { apiMutation, useApi } from "@/components/use-api";
 import {
+  FLEET_OPERATIONAL_STATUSES,
+  FLEET_OPERATIONAL_STATUS_LABELS,
   calculateFleetFreightPreview,
   type FleetFreightFormData,
   type FleetFreight,
@@ -362,7 +364,7 @@ export function FleetFreightFormScreen({
         billingDate: financialOnly
           ? freight!.billingDate
           : form.get("billingDate") || null,
-        operationalStatus: freight?.operationalStatus ?? "SEM_PREVISAO",
+        operationalStatus: financialOnly ? freight!.operationalStatus : form.get("operationalStatus"),
         priority: freight?.priority ?? "NORMAL",
         freightAmountCents: moneyInputToCents(freightValue || "0"),
         ...distanceValues(),
@@ -588,8 +590,13 @@ export function FleetFreightFormScreen({
             </div>
           </fieldset>
           <div className="section-divider">Operação e valores</div>
-          <div className="form-grid two">
+          <div className="form-grid three">
             <Field label="Situação do serviço"><select name="serviceSituation" disabled={financialOnly} defaultValue={freight?.serviceSituation ?? ""} required><option value="">Selecione</option>{FLEET_RELATION_SITUATIONS.map(value => <option key={value} value={value}>{value}</option>)}</select></Field>
+            <Field label="Status operacional">
+              <select name="operationalStatus" disabled={financialOnly} defaultValue={freight?.operationalStatus ?? "SEM_PREVISAO"} required>
+                {FLEET_OPERATIONAL_STATUSES.map(status => <option key={status} value={status}>{FLEET_OPERATIONAL_STATUS_LABELS[status]}</option>)}
+              </select>
+            </Field>
             <Field label="Valor do frete">
               <div className="money-field">
                 <span>R$</span>
