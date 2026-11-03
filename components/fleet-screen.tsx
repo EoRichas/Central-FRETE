@@ -7,6 +7,7 @@ import type { CurrentUser } from "@/lib/contracts";
 
 import { StorageCleanupNotice } from "@/components/storage-cleanup-notice";
 import { useMemo, useState } from "react";
+import { FleetFinancialFilter, FleetProviderFilter, type FinancialStatus } from "./fleet-list-filters";
 import { DatePeriodFields } from "./date-period-fields";
 import { currentDatePeriod } from "@/lib/domain/date-period";
 import { cargoVehiclesOrLegacy } from "@/lib/domain/cargo-vehicles";
@@ -21,8 +22,6 @@ import { apiMutation, useApi } from "@/components/use-api";
 import {
   FLEET_OPERATIONAL_STATUSES,
   FLEET_OPERATIONAL_STATUS_LABELS,
-  FLEET_FINANCIAL_STATUSES,
-  FLEET_FINANCIAL_STATUS_LABELS,
   fleetFinancialStatus,
   type FleetData,
   type FleetDriver,
@@ -67,7 +66,8 @@ function FleetOperationsScreen() {
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
-  const [financialStatus, setFinancialStatus] = useState("");
+  const [financialStatuses, setFinancialStatuses] = useState<FinancialStatus[]>([]);
+  const [providerId, setProviderId] = useState("");
   const [seller, setSeller] = useState("");
   const [freightFormOpen, setFreightFormOpen] = useState(false);
   const [editingFreight, setEditingFreight] = useState<FleetFreight | null>(
@@ -113,11 +113,12 @@ function FleetOperationsScreen() {
       return (
         matchesSearch &&
         (!status || freight.operationalStatus === status) &&
-        (!financialStatus || fleetFinancialStatus(freight) === financialStatus) &&
+        (!financialStatuses.length || financialStatuses.includes(fleetFinancialStatus(freight))) &&
+        (!providerId || freight.providerServices?.some(service => service.providerId === providerId)) &&
         (!seller || sellerFilterValue(freight) === seller)
       );
     });
-  }, [fleet, financialStatus, search, seller, status]);
+  }, [fleet, financialStatuses, providerId, search, seller, status]);
 
   function openNewFreight() {
     setEditingFreight(null);
@@ -263,20 +264,8 @@ function FleetOperationsScreen() {
                     ))}
                   </select>
                 </label>
-                <label>
-                  <span>Situação financeira</span>
-                  <select
-                    value={financialStatus}
-                    onChange={(event) => setFinancialStatus(event.target.value)}
-                  >
-                    <option value="">Todas</option>
-                    {FLEET_FINANCIAL_STATUSES.map((item) => (
-                      <option key={item} value={item}>
-                        {FLEET_FINANCIAL_STATUS_LABELS[item]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <FleetFinancialFilter value={financialStatuses} onChange={setFinancialStatuses} />
+                <FleetProviderFilter freights={fleet.freights} value={providerId} onChange={setProviderId} />
                 <label>
                   <span>Vendedor</span>
                   <select

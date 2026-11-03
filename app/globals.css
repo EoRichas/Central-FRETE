@@ -675,8 +675,46 @@ td > small { max-width: 270px; margin-top: 2px; overflow: hidden; color: var(--m
 }
 .fleet-match-badge.opportunity { color: #8a5007; background: var(--yellow-soft); }
 .fleet-filter-panel {
-  grid-template-columns: minmax(220px, 1.5fr) repeat(3, minmax(140px, .65fr)) auto;
+  grid-template-columns: minmax(180px, 1.5fr) repeat(4, minmax(115px, 1fr)) auto;
 }
+.fleet-financial-filter details { position: relative; }
+.fleet-financial-filter summary {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 11px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.fleet-financial-filter summary::-webkit-details-marker { display: none; }
+.fleet-financial-filter summary::after {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border: solid currentColor;
+  border-width: 0 1px 1px 0;
+  transform: rotate(45deg);
+}
+.fleet-financial-filter summary span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fleet-financial-options {
+  position: absolute;
+  z-index: 5;
+  inset: calc(100% + 4px) 0 auto;
+  min-width: max-content;
+  padding: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+.fleet-financial-options label { flex-direction: row; align-items: center; padding: 6px; cursor: pointer; }
+.fleet-financial-options input { width: 16px; min-height: 16px; margin: 0; }
 .fleet-unit-field { display: flex; align-items: stretch; }
 .fleet-unit-field > input {
   min-width: 0;

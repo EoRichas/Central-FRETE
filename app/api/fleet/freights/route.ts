@@ -106,7 +106,9 @@ export async function GET(request: Request) {
     const params=[...(user.role==='VENDEDOR'?[user.id]:[]),...(period?[period.from,period.to]:[])];
     const freights = await queryAll<import("@/lib/domain/fleet").SellerFreightSummary>(
       `select id, sale_number as saleNumber, client_name as clientName, origin, destination,
-        pickup_date as pickupDate, freight_amount_cents as freightAmountCents, vehicle_plate as vehiclePlate, driver_name as driverName, seller_id as sellerId, seller_name as sellerName, operational_status as operationalStatus, payment_status as paymentStatus, billing_date as billingDate, priority
+        pickup_date as pickupDate, freight_amount_cents as freightAmountCents, vehicle_plate as vehiclePlate, driver_name as driverName, seller_id as sellerId, seller_name as sellerName, operational_status as operationalStatus, payment_status as paymentStatus, billing_date as billingDate, priority,
+        (select coalesce(jsonb_agg(jsonb_build_object('providerId', service->>'providerId', 'providerName', service->>'providerName')), '[]'::jsonb)
+         from jsonb_array_elements(provider_services) as services(service)) as providerServices
        from fleet_freights ${conditions.length?'where '+conditions.join(' and '):''} order by created_at desc, id desc ${period?'':'limit 100'}`,params);
     return Response.json({freights});
   } catch (error) { return jsonError(error); }

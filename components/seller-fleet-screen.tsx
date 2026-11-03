@@ -1,6 +1,7 @@
 "use client";
 
 import Link from 'next/link';
+import { FleetFinancialFilter, FleetProviderFilter, type FinancialStatus } from "./fleet-list-filters";
 import { DatePeriodFields } from './date-period-fields';
 import { currentDatePeriod } from '@/lib/domain/date-period';
 import { useState } from 'react';
@@ -11,14 +12,16 @@ import { Icons } from '@/components/icons';
 import { ErrorState, LoadingState, PageHeader } from '@/components/ui';
 import { apiMutation,useApi } from '@/components/use-api';
 import { useTransientMessage } from '@/components/use-transient-message';
-import { FLEET_OPERATIONAL_STATUSES, FLEET_OPERATIONAL_STATUS_LABELS, FLEET_FINANCIAL_STATUSES, FLEET_FINANCIAL_STATUS_LABELS, fleetFinancialStatus, type FleetFreight, type FleetFreightFormData, type SellerFreightSummary } from '@/lib/domain/fleet';
+import { FLEET_OPERATIONAL_STATUSES, FLEET_OPERATIONAL_STATUS_LABELS, fleetFinancialStatus, type FleetFreight, type FleetFreightFormData, type SellerFreightSummary } from '@/lib/domain/fleet';
 
 export function SellerFleetScreen() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const detail = useApi<{freight:FleetFreight}>(selectedId ? `/api/fleet/freights/${selectedId}` : null);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [search, setSearch] = useState(''), [status, setStatus] = useState(''), [financialStatus, setFinancialStatus] = useState(''), [seller, setSeller] = useState('');
+  const [search, setSearch] = useState(''), [status, setStatus] = useState(''), [seller, setSeller] = useState('');
+  const [financialStatuses, setFinancialStatuses] = useState<FinancialStatus[]>([]);
+  const [providerId, setProviderId] = useState("");
   const [success, setSuccess] = useTransientMessage();
   const options = useApi<{fleet:FleetFreightFormData}>(open ? `/api/fleet/freights/options${editing && selectedId ? `?freightId=${encodeURIComponent(selectedId)}` : ''}` : null);
   const [period,setPeriod]=useState(currentDatePeriod);
@@ -27,7 +30,7 @@ export function SellerFleetScreen() {
   const sellerKey = (f:SellerFreightSummary) => f.sellerId ? `id:${f.sellerId}` : f.sellerName ? `name:${f.sellerName}` : 'unassigned';
   const sellers = [...new Map(freights.map(f=>[sellerKey(f),f.sellerName||'Não informado'])).entries()].sort((a,b)=>a[1].localeCompare(b[1],'pt-BR'));
   const normalized = search.trim().toLocaleUpperCase('pt-BR');
-  const filtered = freights.filter(f=>(!normalized||[f.saleNumber,f.clientName,f.origin,f.destination,f.vehiclePlate,f.driverName].some(v=>v?.toLocaleUpperCase('pt-BR').includes(normalized)))&&(!status||f.operationalStatus===status)&&(!financialStatus||fleetFinancialStatus(f)===financialStatus)&&(!seller||sellerKey(f)===seller));
+  const filtered = freights.filter(f=>(!normalized||[f.saleNumber,f.clientName,f.origin,f.destination,f.vehiclePlate,f.driverName].some(v=>v?.toLocaleUpperCase('pt-BR').includes(normalized)))&&(!status||f.operationalStatus===status)&&(!financialStatuses.length||financialStatuses.includes(fleetFinancialStatus(f)))&&(!providerId||f.providerServices?.some(service=>service.providerId===providerId))&&(!seller||sellerKey(f)===seller));
   async function deleteFreight(freight:FleetFreight){
     if(!window.confirm(`Excluir o frete de ${freight.origin} para ${freight.destination}? A OS própria deste frete será removida. Uma venda vinculada e sua OS serão preservadas.`))return;
     await apiMutation(`/api/fleet/freights/${freight.id}`,{method:'DELETE'});
@@ -52,7 +55,8 @@ export function SellerFleetScreen() {
         <section className="filter-panel fleet-filter-panel">
           <label><span>Buscar</span><div className="search-input"><Icons.search/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Cliente, rota, placa ou motorista" /></div></label>
           <label><span>Status</span><select value={status} onChange={e=>setStatus(e.target.value)}><option value="">Todos</option>{FLEET_OPERATIONAL_STATUSES.map(v=><option key={v} value={v}>{FLEET_OPERATIONAL_STATUS_LABELS[v]}</option>)}</select></label>
-          <label><span>Situação financeira</span><select value={financialStatus} onChange={e=>setFinancialStatus(e.target.value)}><option value="">Todas</option>{FLEET_FINANCIAL_STATUSES.map(v=><option key={v} value={v}>{FLEET_FINANCIAL_STATUS_LABELS[v]}</option>)}</select></label>
+          <FleetFinancialFilter value={financialStatuses} onChange={setFinancialStatuses} />
+          <FleetProviderFilter freights={freights} value={providerId} onChange={setProviderId} />
           <label><span>Vendedor</span><select value={seller} onChange={e=>setSeller(e.target.value)}><option value="">Todos</option>{sellers.map(([id,name])=><option key={id} value={id}>{name}</option>)}</select></label>
           <div className="filter-stat"><strong>{filtered.length}</strong><span>frete{filtered.length===1?'':'s'}</span></div>
         </section>
