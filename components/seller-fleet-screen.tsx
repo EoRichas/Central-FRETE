@@ -30,7 +30,7 @@ export function SellerFleetScreen() {
   const sellerKey = (f:SellerFreightSummary) => f.sellerId ? `id:${f.sellerId}` : f.sellerName ? `name:${f.sellerName}` : 'unassigned';
   const sellers = [...new Map(freights.map(f=>[sellerKey(f),f.sellerName||'Não informado'])).entries()].sort((a,b)=>a[1].localeCompare(b[1],'pt-BR'));
   const normalized = search.trim().toLocaleUpperCase('pt-BR');
-  const filtered = freights.filter(f=>(!normalized||[f.saleNumber,f.clientName,f.origin,f.destination,f.vehiclePlate,f.driverName].some(v=>v?.toLocaleUpperCase('pt-BR').includes(normalized)))&&(!status||f.operationalStatus===status)&&(!financialStatuses.length||financialStatuses.includes(fleetFinancialStatus(f)))&&(!providerId||f.providerServices?.some(service=>service.providerId===providerId))&&(!seller||sellerKey(f)===seller));
+  const filtered = freights.filter(f=>(!normalized||[f.saleNumber,f.clientName,f.origin,f.destination,f.driverName].some(v=>v?.toLocaleUpperCase('pt-BR').includes(normalized)))&&(!status||f.operationalStatus===status)&&(!financialStatuses.length||financialStatuses.includes(fleetFinancialStatus(f)))&&(!providerId||f.providerServices?.some(service=>service.providerId===providerId))&&(!seller||sellerKey(f)===seller));
   async function deleteFreight(freight:FleetFreight){
     if(!window.confirm(`Excluir o frete de ${freight.origin} para ${freight.destination}? A OS própria deste frete será removida. Uma venda vinculada e sua OS serão preservadas.`))return;
     await apiMutation(`/api/fleet/freights/${freight.id}`,{method:'DELETE'});
@@ -53,7 +53,7 @@ export function SellerFleetScreen() {
       <div className="fleet-stack">
         <div className="cegonha-tabs module-tabs" role="tablist" aria-label="Áreas da Frota"><button type="button" role="tab" aria-selected={true} className="active">Fretes</button></div>
         <section className="filter-panel fleet-filter-panel">
-          <label><span>Buscar</span><div className="search-input"><Icons.search/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Cliente, rota, placa ou motorista" /></div></label>
+          <label><span>Buscar</span><div className="search-input"><Icons.search/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Cliente, rota ou motorista" /></div></label>
           <label><span>Status</span><select value={status} onChange={e=>setStatus(e.target.value)}><option value="">Todos</option>{FLEET_OPERATIONAL_STATUSES.map(v=><option key={v} value={v}>{FLEET_OPERATIONAL_STATUS_LABELS[v]}</option>)}</select></label>
           <FleetFinancialFilter value={financialStatuses} onChange={setFinancialStatuses} />
           <FleetProviderFilter freights={freights} value={providerId} onChange={setProviderId} />
