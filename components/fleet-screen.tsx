@@ -97,14 +97,13 @@ function FleetOperationsScreen() {
         !normalized ||
         [
           freight.saleNumber,
-          freight.vehiclePlate,
           freight.driverName,
           freight.clientName,
           ...cargoVehiclesOrLegacy(
             freight.cargoVehicles,
             freight.cargoVehicleModel,
             freight.cargoPlate,
-          ).flatMap((v) => [v.model, v.plate, v.identification]),
+          ).map((vehicle) => vehicle.model),
           freight.origin,
           freight.destination,
         ].some((value) =>
@@ -246,7 +245,7 @@ function FleetOperationsScreen() {
                     <input
                       value={search}
                       onChange={(event) => setSearch(event.target.value)}
-                      placeholder="Cliente, rota, placa ou motorista"
+                      placeholder="Cliente, rota ou motorista"
                     />
                   </div>
                 </label>

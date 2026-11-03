@@ -38,11 +38,12 @@ export function FleetFinancialFilter({ value, onChange }: {
 }) {
   const labelId = useId();
   const all = value.length === 0;
+  const selectedLabel = all ? "Todas" : value.map(status => FLEET_FINANCIAL_STATUS_LABELS[status]).join(", ");
   return <div className="fleet-financial-filter field">
     <span id={labelId}>Situação financeira</span>
     <details>
-      <summary aria-labelledby={labelId + " " + labelId + "-value"}>
-        <span id={labelId + "-value"}>{all ? "Todas" : value.map(status => FLEET_FINANCIAL_STATUS_LABELS[status]).join(", ")}</span>
+      <summary title={selectedLabel} aria-labelledby={labelId + " " + labelId + "-value"}>
+        <span id={labelId + "-value"}>{selectedLabel}</span>
       </summary>
       <div className="fleet-financial-options" role="group" aria-labelledby={labelId}>
         <label><input type="checkbox" checked={all} onChange={() => onChange([])} /> Todas</label>
