@@ -1,7 +1,7 @@
 "use client";
 
 import Link from 'next/link';
-import { FleetFinancialFilter, FleetProviderFilter, type FinancialStatus } from "./fleet-list-filters";
+import { FleetFinancialFilter, FleetOperationalFilter, FleetProviderFilter, type FinancialStatus } from "./fleet-list-filters";
 import { DatePeriodFields } from './date-period-fields';
 import { currentDatePeriod } from '@/lib/domain/date-period';
 import { useState } from 'react';
@@ -54,7 +54,7 @@ export function SellerFleetScreen() {
         <div className="cegonha-tabs module-tabs" role="tablist" aria-label="Áreas da Frota"><button type="button" role="tab" aria-selected={true} className="active">Fretes</button></div>
         <section className="filter-panel fleet-filter-panel">
           <label><span>Buscar</span><div className="search-input"><Icons.search/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Cliente, rota ou motorista" /></div></label>
-          <label><span>Status</span><select value={status} onChange={e=>setStatus(e.target.value)}><option value="">Todos</option>{FLEET_OPERATIONAL_STATUSES.map(v=><option key={v} value={v}>{FLEET_OPERATIONAL_STATUS_LABELS[v]}</option>)}</select></label>
+          <FleetOperationalFilter value={status} onChange={setStatus} options={FLEET_OPERATIONAL_STATUSES.map(value => ({ value, label: FLEET_OPERATIONAL_STATUS_LABELS[value] }))} />
           <FleetFinancialFilter value={financialStatuses} onChange={setFinancialStatuses} />
           <FleetProviderFilter freights={freights} value={providerId} onChange={setProviderId} />
           <label><span>Vendedor</span><select value={seller} onChange={e=>setSeller(e.target.value)}><option value="">Todos</option>{sellers.map(([id,name])=><option key={id} value={id}>{name}</option>)}</select></label>

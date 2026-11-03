@@ -7,7 +7,7 @@ import type { CurrentUser } from "@/lib/contracts";
 
 import { StorageCleanupNotice } from "@/components/storage-cleanup-notice";
 import { useMemo, useState } from "react";
-import { FleetFinancialFilter, FleetProviderFilter, type FinancialStatus } from "./fleet-list-filters";
+import { FleetFinancialFilter, FleetOperationalFilter, FleetProviderFilter, type FinancialStatus } from "./fleet-list-filters";
 import { DatePeriodFields } from "./date-period-fields";
 import { currentDatePeriod } from "@/lib/domain/date-period";
 import { cargoVehiclesOrLegacy } from "@/lib/domain/cargo-vehicles";
@@ -249,20 +249,7 @@ function FleetOperationsScreen() {
                     />
                   </div>
                 </label>
-                <label>
-                  <span>Status</span>
-                  <select
-                    value={status}
-                    onChange={(event) => setStatus(event.target.value)}
-                  >
-                    <option value="">Todos</option>
-                    {FLEET_OPERATIONAL_STATUSES.map((item) => (
-                      <option key={item} value={item}>
-                        {FLEET_OPERATIONAL_STATUS_LABELS[item]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <FleetOperationalFilter value={status} onChange={setStatus} options={FLEET_OPERATIONAL_STATUSES.map(value => ({ value, label: FLEET_OPERATIONAL_STATUS_LABELS[value] }))} />
                 <FleetFinancialFilter value={financialStatuses} onChange={setFinancialStatuses} />
                 <FleetProviderFilter freights={fleet.freights} value={providerId} onChange={setProviderId} />
                 <label>
