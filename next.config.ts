@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // Shared hosting can expose host CPU count while enforcing a low process quota.
+  experimental: { cpus: 2 },
   async headers() {
     return [{source: '/:path*', headers: [
       {key: 'X-Robots-Tag', value: 'noindex, nofollow, noarchive'},
