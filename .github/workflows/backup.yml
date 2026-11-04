@@ -1,0 +1,57 @@
+name: Backup criptografado da Central
+
+on:
+  schedule:
+    # 03:17 em São Paulo (UTC-3). GitHub pode atrasar execuções agendadas.
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: central-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    if: github.event_name == 'workflow_dispatch' || vars.CENTRAL_BACKUPS_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    container: postgres:17-bookworm
+    steps:
+      - name: Baixar somente o código
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Instalar ferramentas de criptografia
+        run: |
+          apt-get update -qq
+          apt-get install --no-install-recommends -y python3 age ca-certificates
+      - name: Verificar criptografia e tratamento de falhas com dados fictícios
+        run: python3 -m unittest discover -s tests/backup -v
+      - name: Copiar e criptografar banco e comprovantes
+        env:
+          BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          BACKUP_DATABASE_SSL_CA: ${{ secrets.BACKUP_DATABASE_SSL_CA }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BACKUP_AGE_RECIPIENT: ${{ secrets.BACKUP_AGE_RECIPIENT }}
+          SUPABASE_STORAGE_BUCKET: ${{ vars.SUPABASE_STORAGE_BUCKET || 'central-frete' }}
+          BACKUP_OUTPUT_DIR: ${{ runner.temp }}/central-backup
+        run: python3 scripts/backup/central_backup.py
+      - name: Guardar somente a cópia criptografada
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: central-backup-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/central-backup/**/*.age
+            ${{ runner.temp }}/central-backup/**/complete.json
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+      - name: Remover arquivos temporários
+        if: always()
+        env:
+          BACKUP_OUTPUT_DIR: ${{ runner.temp }}/central-backup
+        run: python3 -c 'import os,shutil; shutil.rmtree(os.environ["BACKUP_OUTPUT_DIR"],ignore_errors=True)'
