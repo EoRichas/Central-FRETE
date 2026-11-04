@@ -7,3 +7,10 @@ coverage/
 !.env.example
 *.tsbuildinfo
 npm-debug.log*
+
+# Nunca versionar cópias de dados ou chaves de recuperação.
+.backups/
+*.age
+*.dump
+*.key
+__pycache__/

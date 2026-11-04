@@ -25,6 +25,9 @@ jobs:
       - name: Instalar dependências
         run: npm ci --include=dev
 
+      - name: Verificar rotina de backup sem acesso a produção
+        run: python3 -m unittest discover -s tests/backup -v
+
       - name: Executar testes de regressão
         run: npm test
 
