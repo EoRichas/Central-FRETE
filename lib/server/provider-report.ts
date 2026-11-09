@@ -9,13 +9,17 @@ type FreightInfo={id:string;saleNumber:string;date:string;createdDate:string;cli
 export type ProviderReportRow=ProviderService&Omit<FreightInfo,'id'|'vehicle'|'plate'|'createdDate'>&{freightId:string;createdDate:string;vehicles:CargoVehicle[]};
 const normalizeProviderName = (value: string) =>
  value.normalize('NFD').replace(/\p{Diacritic}/gu,'').trim().replace(/\s+/g,' ').toLocaleLowerCase('pt-BR');
-export async function loadProviderReportClients(user: CurrentUser) {
+export async function loadProviderReportOptions(user: CurrentUser) {
  const own = user.role === 'VENDEDOR';
- return queryAll<{id: string; name: string}>(`
-   select c.id, c.legal_name as name from clients c where exists (
-     select 1 from fleet_freights f where f.client_id=c.id and jsonb_array_length(f.provider_services)>0
-       ${own ? 'and f.seller_id=?' : ''}
-   ) order by c.legal_name,c.id`, own ? [user.id] : []);
+ const providers = await queryAll<{id: string; name: string}>(`
+   select item->>'providerId' as id,
+     coalesce(p.name, max(nullif(item->>'providerName','')), 'Prestador sem nome') as name
+   from fleet_freights f
+   cross join lateral jsonb_array_elements(f.provider_services) as service(item)
+   left join providers p on p.id=item->>'providerId'
+   where nullif(item->>'providerId','') is not null ${own ? 'and f.seller_id=?' : ''}
+   group by item->>'providerId', p.name`, own ? [user.id] : []);
+ return providers.sort((a,b)=>a.name.localeCompare(b.name,'pt-BR') || a.id.localeCompare(b.id));
 }
 
 export async function loadProviderReport(user:CurrentUser,params:URLSearchParams){
@@ -27,7 +31,7 @@ export async function loadProviderReport(user:CurrentUser,params:URLSearchParams
  const providerName=normalizeProviderName(params.get('providerName')||'');
  if(providerName.length>160)throw new ApiError(400,'Nome do prestador inválido.');
  const source=await queryAll<FreightInfo&{services:ProviderService[]}>(
-  `select id,sale_number as saleNumber,pickup_date as date,client_name as clientName,${reportCreationDateSql()}::text as createdDate,driver_name as driverName,cargo_vehicles as vehicles,cargo_vehicle_model as vehicle,cargo_plate as plate,service_situation as serviceSituation,freight_amount_cents as saleAmountCents,payment_status as paymentStatus,paid_at as paidAt,notes,order_observation as orderObservation,order_include_observation as orderIncludeObservation,provider_services as services from fleet_freights where ${reportCreationDateSql()} between ?::date and ?::date and jsonb_array_length(provider_services)>0 ${clientId==='*'?'':'and client_id=?'} ${user.role==='VENDEDOR'?'and seller_id=?':''} order by ${reportCreationDateSql()} desc,id limit 5001`,[from,to,...(clientId==='*'?[]:[clientId]),...(user.role==='VENDEDOR'?[user.id]:[])]);
+  `select id,sale_number as saleNumber,pickup_date as date,client_name as clientName,${reportCreationDateSql()}::text as createdDate,driver_name as driverName,cargo_vehicles as vehicles,cargo_vehicle_model as vehicle,cargo_plate as plate,service_situation as serviceSituation,freight_amount_cents as saleAmountCents,payment_status as paymentStatus,paid_at as paidAt,notes,order_observation as orderObservation,order_include_observation as orderIncludeObservation,provider_services as services from fleet_freights where ${reportCreationDateSql()} between ?::date and ?::date and jsonb_array_length(provider_services)>0 ${clientId==='*'?'':'and client_id=?'} ${user.role==='VENDEDOR'?'and seller_id=?':''} ${providerId?"and provider_services @> jsonb_build_array(jsonb_build_object('providerId', ?::text))":''} order by ${reportCreationDateSql()} desc,id limit 5001`,[from,to,...(clientId==='*'?[]:[clientId]),...(user.role==='VENDEDOR'?[user.id]:[]),...(providerId?[providerId]:[])]);
  if(source.length>5000)throw new ApiError(400,'O período contém mais de 5.000 fretes com prestadores. Reduza o intervalo.');
  const rows:ProviderReportRow[]=source.flatMap(f=>f.services.filter(p=>(!providerId||p.providerId===providerId)&&(!providerName||normalizeProviderName(p.providerName).includes(providerName))).map(p=>({...p,freightId:f.id,saleNumber:f.saleNumber,date:f.date,createdDate:f.createdDate,clientName:f.clientName,driverName:f.driverName,vehicles:cargoVehiclesOrLegacy(f.vehicles,f.vehicle,f.plate),serviceSituation:f.serviceSituation,saleAmountCents:f.saleAmountCents,paymentStatus:f.paymentStatus,paidAt:f.paidAt,notes:f.notes,orderObservation:f.orderObservation,orderIncludeObservation:f.orderIncludeObservation}))).sort(newestCreatedFirst);
  const groups=new Map<string,{id:string;name:string;pickupCents:number;deliveryCents:number;otherCents:number;totalCents:number;sales:Set<string>}>();

@@ -2444,14 +2444,14 @@ test('datas de criação retroativas filtram e ordenam relatórios sem alterar o
  const clients=await import('../../app/api/fleet/client-report/route.ts');
  const driverReport=await import('../../app/api/reports/driver-commissions/route.ts');
  const body={...oct23Freight,clientId:'retro-a',pickupDate:'2130-04-15',providerServices:[{id:'retro-service',providerId:'oct23-provider-b',kind:'COLETA',amountCents:5500}]};
- async function createFreight(creationDate:string,clientId='retro-a',actor='retro-seller'){
-  const response=await fleets.POST(await request('/api/fleet/freights',actor,'POST',{...body,creationDate,clientId}));
+ async function createFreight(creationDate:string,clientId='retro-a',actor='retro-seller',providerId='oct23-provider-b'){
+  const response=await fleets.POST(await request('/api/fleet/freights',actor,'POST',{...body,creationDate,clientId,providerServices:[{...body.providerServices[0],providerId}]}));
   assert.equal(response.status,201,response.ok?undefined:await response.text());
   return (await response.json()).id as string;
  }
- const sameDay=await createFreight('1997-03-09');
+ const sameDay=await createFreight('1997-03-09','retro-b');
  const freight=await createFreight('1997-03-01'), second=await createFreight('1997-03-04');
- const other=await createFreight('1997-03-06','retro-b','admin');
+ const other=await createFreight('1997-03-06','retro-b','admin','oct23-provider-a');
  const payload={...salePayload,clientId:'retro-a',saleDate:'2130-04-16',financialDueDate:'2130-04-30',creationDate:'1997-03-03'};
  const created=await sales.POST(await request('/api/sales','retro-seller','POST',payload));
  assert.equal(created.status,201,created.ok?undefined:await created.text());
@@ -2477,9 +2477,11 @@ test('datas de criação retroativas filtram e ordenam relatórios sem alterar o
  const route='/api/reports/sales?'+period;
  const report=(await (await general.GET(await request(route))).json()).report;
  assert.deepEqual(report.sales.map((row:{id:string})=>row.id),[`freight:${freight}`,`freight:${sameDay}`,sale,`freight:${other}`,`freight:${second}`]);
- const options=(await (await providers.GET(await request('/api/reports/providers?options=clients','retro-seller'))).json()).clients;
- assert.deepEqual(options,[{id:'retro-a',name:'CLIENTE TESTE A'}]);
- const providerRoute='/api/reports/providers?'+period+'&clientId=retro-a';
+ const options=(await (await providers.GET(await request('/api/reports/providers?options=providers','retro-seller'))).json()).providers;
+ assert.deepEqual(options,[{id:'oct23-provider-b',name:'PRESTADOR DOIS'}]);
+ const allProviders=(await (await providers.GET(await request('/api/reports/providers?'+period))).json()).report;
+ assert.deepEqual(allProviders.rows.map((row:{freightId:string})=>row.freightId),[freight,sameDay,other,second]);
+ const providerRoute='/api/reports/providers?'+period+'&providerId=oct23-provider-b';
  const providerReport=(await (await providers.GET(await request(providerRoute))).json()).report;
  // The higher number on the earlier date sorts last; same-day numbers descend.
  const expectedSaleNumbers=await Promise.all([freight,sameDay,second].map(async id=>
@@ -2487,7 +2489,7 @@ test('datas de criação retroativas filtram e ordenam relatórios sem alterar o
  assert.deepEqual(providerReport.rows.map((row:{saleNumber:string})=>row.saleNumber),expectedSaleNumbers);
  assert.equal(providerReport.totalCents,16500);
  const clientReport=(await (await clients.GET(await request('/api/fleet/client-report?'+period+'&clientId=retro-a'))).json()).report;
- assert.deepEqual(clientReport.rows.map((row:{saleNumber:string})=>row.saleNumber),expectedSaleNumbers);
+ assert.deepEqual(clientReport.rows.map((row:{saleNumber:string})=>row.saleNumber),[expectedSaleNumbers[0],expectedSaleNumbers[2]]);
  const drivers=(await (await driverReport.GET(await request('/api/reports/driver-commissions?'+period+'&dateBasis=creation'))).json()).report;
  assert.deepEqual(drivers.rows.map((row:{id:string})=>row.id),[freight,sameDay,other,second]);
  const operational=(await (await general.GET(await request(route+'&dateBasis=operational'))).json()).report;

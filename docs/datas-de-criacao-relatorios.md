@@ -11,7 +11,7 @@ de cada dia, as vendas aparecem pelo número original, do maior para o menor.
 Assim, a venda 492 de um dia mais recente aparece antes da 495 de um dia anterior.
 Quando não há uma data informada, vale o dia do cadastro real em São Paulo. As
 exportações usam os mesmos filtros e a mesma ordem. O relatório de prestadores
-permite selecionar um cliente ou consultar todos; o nome do prestador é opcional.
+permite selecionar um prestador com serviços registrados ou consultar todos.
 
 Coleta, entrega, data da venda, faturamento, pagamentos e apurações financeiras
 continuam com suas datas próprias.
