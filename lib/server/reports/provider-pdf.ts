@@ -3,7 +3,7 @@ import { providerKindLabel } from '@/lib/domain/provider-services';
 import { formatDate,formatMoney } from '@/lib/format';
 import { ReportPdf } from './pdf-layout';
 export async function renderProviderPdf(report:Awaited<ReturnType<typeof loadProviderReport>>) {
- const p=await ReportPdf.create('Relatório de prestadores',[['Coleta de',formatDate(report.from)],['Até',formatDate(report.to)]],true);
+ const p=await ReportPdf.create('Relatório de prestadores',[['Criação de',formatDate(report.from)],['Até',formatDate(report.to)]],true);
  p.note('Os valores dos prestadores são separados do frete. A confirmação de pagamento abaixo se refere ao recebimento da venda, não ao pagamento do prestador.');
  p.table([{label:'Venda / datas / recebimento',width:145},{label:'Motorista / cliente / veículo',width:175},{label:'Prestador / serviço / observação',width:p.width-320}],report.rows.map(r=>[
   `Venda ${r.saleNumber}\nCriação: ${formatDate(r.createdDate)}\nSaída / coleta: ${formatDate(r.date)}\nValor do frete: ${formatMoney(r.saleAmountCents)}\nRecebido: ${formatMoney(r.paymentStatus==='PAGO'?r.saleAmountCents:0)}\nPago: ${r.paymentStatus==='PAGO'?'Sim':'Não'}\nData do recebimento: ${r.paymentStatus==='PAGO'&&r.paidAt?formatDate(r.paidAt):'Não informada'}`,

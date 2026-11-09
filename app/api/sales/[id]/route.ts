@@ -1,3 +1,4 @@
+import { readReportCreationDate } from "@/lib/server/report-creation-date";
 import { parseServiceSituation } from '@/lib/server/fleet-service-situation';
 import { resolveEditedSeller, sellerEditGuard, saleForViewer, saleCommissionOverride } from "@/lib/server/seller-commission";
 import { validateSaleClient } from "@/lib/server/registry-validation";
@@ -105,7 +106,11 @@ export async function PATCH(request: Request, context: RouteContext) {
     if (payload.saleNumber !== undefined && payload.saleNumber !== sale.saleNumber) throw new ApiError(400, 'O número da venda não pode ser alterado.');
     if (payload.saleChannel !== undefined && payload.saleChannel !== sale.saleChannel) throw new ApiError(400, "O canal da venda não pode ser alterado.");
     const saleNumber = sale.saleNumber;
+    const requestedCreationDate = readReportCreationDate(payload.creationDate);
     const cargo = await parseSaleCargo(payload, user, sale);
+    if (requestedCreationDate && cargo.fleetFreightId) {
+      throw new ApiError(400, "Altere a data de criação no frete Frota vinculado.");
+    }
     const saleDate = dateOnly(payload.saleDate, "Data da venda");
     if (new Date(`${saleDate}T12:00:00Z`).toISOString().slice(0,10) !== saleDate) throw new ApiError(400,"Data da venda inválida.");
     const competency = saleDate.slice(0, 7);
@@ -285,6 +290,7 @@ export async function PATCH(request: Request, context: RouteContext) {
             delivery_deadline = ?, financial_due_date = ?,
             operational_status = ?, notes = ?, freight_amount_cents = ?,
             commission_basis_points = ?, commission_override_cents = ?, costs_pending = ?, cargo_vehicles = ?::text::jsonb, fleet_freight_id = ?, destination_location_type = ?, billing_date = ?,
+            report_creation_date = coalesce(?::date, report_creation_date),
             updated_at = to_char(timezone('UTC', now()), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
           where id = ?`,
         )
@@ -314,7 +320,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           freightAmountCents,
           commissionBasisPoints, commissionOverrideCents,
           costsPending ? 1 : 0,
-          JSON.stringify(cargo.cargoVehicles), cargo.fleetFreightId, destinationLocationType, billingDate,
+          JSON.stringify(cargo.cargoVehicles), cargo.fleetFreightId, destinationLocationType, billingDate, requestedCreationDate,
           id,
         ),
       db.prepare("delete from freight_costs where sale_id = ?").bind(id),
@@ -406,7 +412,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           JSON.stringify({
             saleNumber: sale.saleNumber,
             saleChannel: sale.saleChannel, fleetFreightId: sale.fleetFreightId,
-            saleDate: sale.saleDate, billingDate: sale.billingDate ?? null,
+            saleDate: sale.saleDate, billingDate: sale.billingDate ?? null, creationDate: sale.creationDate,
             clientId: sale.clientId,
             serviceSituation: sale.serviceSituation, operationalStatus: sale.operationalStatus,
             freightAmountCents: sale.freightAmountCents,
@@ -415,7 +421,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           }),
           JSON.stringify({
             saleNumber, saleChannel: sale.saleChannel, fleetFreightId: cargo.fleetFreightId,
-            saleDate, billingDate,
+            saleDate, billingDate, creationDate: requestedCreationDate ?? sale.creationDate,
             clientId,
             serviceSituation, operationalStatus,
             freightAmountCents,

@@ -13,7 +13,7 @@ export function BulkPaymentPanel({sales,onSaved,period,saleChannel=''}:{sales:Sa
  const [open,setOpen]=useState(false),[clientId,setClient]=useState(''),[selected,setSelected]=useState<string[]>([]);
  const [paidAt,setDate]=useState(todaySaoPaulo),[paymentMethod,setMethod]=useState('PIX'),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const [dates,setDates]=useState<DatePeriod>(period??currentDatePeriod());
- const sourceApi=useApi<{report:SalesReport}>(open&&period?`/api/reports/sales?${new URLSearchParams(dates)}&saleChannel=${encodeURIComponent(saleChannel)}`:null);
+ const sourceApi=useApi<{report:SalesReport}>(open&&period?`/api/reports/sales?${new URLSearchParams(dates)}&saleChannel=${encodeURIComponent(saleChannel)}&dateBasis=operational`:null);
  const fetching=Boolean(period&&(sourceApi.loading||sourceApi.error));
  const source=period?(fetching?[]:sourceApi.data?.report.sales??[]):sales;
  const datedSales=source.filter(s=>!period||inDatePeriod(s.saleDate,dates));

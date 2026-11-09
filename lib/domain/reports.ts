@@ -3,8 +3,10 @@ import type { SaleRecord } from '@/lib/contracts';
 import type { FleetFreight } from './fleet';
 import { weightedMarginBasisPoints } from './finance';
 import { costCategoryLabel } from './operations';
+import { newestCreatedFirst } from './report-order';
 
 export type ReportSale = Pick<SaleRecord, 'id'|'saleNumber'|'saleDate'|'saleChannel'|'sellerId'|'sellerName'|'clientName'|'freightAmountCents'|'commissionBasisPoints'|'costsPending'> & {
+  createdDate?: string;
   pendingReason?: 'COSTS' | 'FUEL' | null;
   origin?: string; destination?: string;
   clientId?: string|null;
@@ -17,9 +19,9 @@ export type ReportSale = Pick<SaleRecord, 'id'|'saleNumber'|'saleDate'|'saleChan
 export const reportSellerKey = (sale: Pick<ReportSale,'sellerId'|'sellerName'>) => sale.sellerId || `historical:${sale.sellerName || 'Não informado'}`;
 
 // Operational Frota records are authoritative when a commercial mirror exists.
-export function consolidateReportSales(sales: (ReportSale & Pick<SaleRecord, 'fleetFreightId'> & {clientId?:string|null;financial:ReportSale['financial']})[], freights: FleetFreight[]): ReportSale[] {
-  return [...sales.filter(s => s.saleChannel !== 'FROTA' || !s.fleetFreightId).map((s):ReportSale=>({id:s.id,clientId:s.clientId,origin:s.origin,destination:s.destination,saleNumber:s.saleNumber,saleDate:s.saleDate,saleChannel:s.saleChannel,sellerId:s.sellerId,sellerName:s.sellerName,clientName:s.clientName,freightAmountCents:s.freightAmountCents,commissionBasisPoints:s.commissionBasisPoints,costsPending:s.costsPending,costs:s.costs.map(c=>({category:c.category,amountCents:c.amountCents})),financial:{commissionCents:s.financial.commissionCents,transportCostCents:s.financial.transportCostCents,marginCents:s.financial.marginCents,marginBasisPoints:s.financial.marginBasisPoints,balanceCents:s.financial.balanceCents,totalReceivedCents:s.financial.totalReceivedCents,status:s.financial.status}})), ...freights.map((f):ReportSale => ({
-    id: `freight:${f.id}`,clientId:f.clientId,providerServices:f.providerServices,returnFreight:f.returnFreight,vehiclePlate:f.vehiclePlate, origin:f.origin, destination:f.destination, saleNumber:f.saleNumber || 'Não disponível', saleDate:f.pickupDate, saleChannel:'FROTA',
+export function consolidateReportSales(sales: (ReportSale & Pick<SaleRecord, 'fleetFreightId'|'creationDate'> & {clientId?:string|null;financial:ReportSale['financial']})[], freights: FleetFreight[]): ReportSale[] {
+  return [...sales.filter(s => s.saleChannel !== 'FROTA' || !s.fleetFreightId).map((s):ReportSale=>({id:s.id,clientId:s.clientId,origin:s.origin,destination:s.destination,saleNumber:s.saleNumber,saleDate:s.saleDate,createdDate:s.creationDate,saleChannel:s.saleChannel,sellerId:s.sellerId,sellerName:s.sellerName,clientName:s.clientName,freightAmountCents:s.freightAmountCents,commissionBasisPoints:s.commissionBasisPoints,costsPending:s.costsPending,costs:s.costs.map(c=>({category:c.category,amountCents:c.amountCents})),financial:{commissionCents:s.financial.commissionCents,transportCostCents:s.financial.transportCostCents,marginCents:s.financial.marginCents,marginBasisPoints:s.financial.marginBasisPoints,balanceCents:s.financial.balanceCents,totalReceivedCents:s.financial.totalReceivedCents,status:s.financial.status}})), ...freights.map((f):ReportSale => ({
+    id: `freight:${f.id}`,clientId:f.clientId,providerServices:f.providerServices,returnFreight:f.returnFreight,vehiclePlate:f.vehiclePlate, origin:f.origin, destination:f.destination, saleNumber:f.saleNumber || 'Não disponível', saleDate:f.pickupDate, createdDate:f.creationDate, saleChannel:'FROTA',
     sellerId:f.sellerId ?? null, sellerName:f.sellerName || 'Não informado', clientName:f.clientName,
     freightAmountCents:f.freightAmountCents, commissionBasisPoints:f.sellerCommissionBasisPoints ?? 0,
     costsPending:f.fuelCostSource === 'ESTIMADO',
@@ -29,8 +31,15 @@ export function consolidateReportSales(sales: (ReportSale & Pick<SaleRecord, 'fl
   }))];
 }
 
-export function buildSalesReport(sales: ReportSale[], showCommission = true) {
-  const ordered = [...sales].sort((a,b)=>a.saleNumber.localeCompare(b.saleNumber,'pt-BR',{numeric:true}));
+export type ReportDateBasis = 'creation' | 'operational';
+export function salesReportDate(sale: Pick<ReportSale, 'createdDate' | 'saleDate'>, dateBasis: ReportDateBasis) {
+  return dateBasis === 'creation' ? sale.createdDate ?? sale.saleDate : sale.saleDate;
+}
+
+export function buildSalesReport(sales: ReportSale[], showCommission = true, dateBasis: ReportDateBasis = 'operational') {
+  const ordered = [...sales].sort((a,b)=>dateBasis === 'creation'
+    ? newestCreatedFirst({...a, createdDate:salesReportDate(a, dateBasis)}, {...b, createdDate:salesReportDate(b, dateBasis)})
+    : a.saleNumber.localeCompare(b.saleNumber,'pt-BR',{numeric:true}));
   const groups = new Map<string,ReportSale[]>();
   const sellers = new Map<string,ReportSale[]>();
   const expenses = new Map<string,number>();
@@ -63,15 +72,16 @@ export function buildSalesReport(sales: ReportSale[], showCommission = true) {
   for (const sale of ordered) {
     if (sale.saleChannel !== 'FROTA' || !sale.returnFreight || counted.has(sale.id)) continue;
     counted.add(sale.id);
-    const competency = /^\d{4}-\d{2}/.test(sale.saleDate) ? sale.saleDate.slice(0,7) : '';
+    const day = salesReportDate(sale, dateBasis);
+    const competency = /^\d{4}-\d{2}/.test(day) ? day.slice(0,7) : '';
     const vehiclePlate = sale.vehiclePlate?.trim().toLocaleUpperCase('pt-BR') || 'Não informado';
     const key = JSON.stringify([competency,vehiclePlate]);
     const group = returns.get(key) ?? {competency,vehiclePlate,count:0};
     group.count++; returns.set(key,group);
   }
-  const returnFreights = [...returns.values()].sort((a,b)=>a.competency.localeCompare(b.competency)||a.vehiclePlate.localeCompare(b.vehiclePlate));
+  const returnFreights = [...returns.values()].sort((a,b)=>(dateBasis==='creation'?b.competency.localeCompare(a.competency):a.competency.localeCompare(b.competency))||a.vehiclePlate.localeCompare(b.vehiclePlate));
   const credited = [...sellers.values()].flat();
-  return {sales:ordered,returnFreights,returnFreightCount:counted.size,totals,sellerTotals:{sales:credited.length,...sum(credited)},commissions,pendingCosts:pendingCostCount+pendingFuelCount,pendingCostCount,pendingFuelCount,
+  return {dateBasis,sales:ordered,returnFreights,returnFreightCount:counted.size,totals,sellerTotals:{sales:credited.length,...sum(credited)},commissions,pendingCosts:pendingCostCount+pendingFuelCount,pendingCostCount,pendingFuelCount,
     sellers:[...sellers.entries()].map(([id,items])=>({id,name:items[0].sellerName,sales:items.length,...sum(items),...(showCommission ? {commission:items.reduce((total,s)=>total+s.financial.commissionCents,0)} : {})})).sort((a,b)=>b.freight-a.freight),
     clients:[...groups.entries()].map(([name,items])=>({name,sales:items.length,...sum(items)})).sort((a,b)=>b.freight-a.freight),
     expenses:[...expenses].map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value)};

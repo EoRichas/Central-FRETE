@@ -1,5 +1,5 @@
 export type DriverCommissionRow = {
- id:string; saleNumber:string; pickupDate:string; clientName:string;
+ id:string; saleNumber:string; pickupDate:string; createdDate?:string; clientName:string;
  driverId:string|null; driverName:string; vehicleId:string|null; vehiclePlate:string;
  freightAmountCents:number; driverCommissionCents:number;
  commissionStatus?:'EM_ABERTO'|'PAGO'; commissionPaidAt?:string|null;
@@ -15,4 +15,4 @@ export function groupDriverCommissions(rows:DriverCommissionRow[],by:'driver'|'v
  }
  return [...groups.values()].sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));
 }
-export type DriverCommissionReport={from:string;to:string;rows:DriverCommissionRow[];drivers:{key:string;name:string}[];vehicles:{key:string;name:string}[];driverLabel:string;vehicleLabel:string};
+export type DriverCommissionReport={dateBasis?:'creation'|'operational';from:string;to:string;rows:DriverCommissionRow[];drivers:{key:string;name:string}[];vehicles:{key:string;name:string}[];driverLabel:string;vehicleLabel:string};

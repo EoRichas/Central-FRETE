@@ -4,11 +4,12 @@ import { cargoVehiclesOrLegacy } from '@/lib/domain/cargo-vehicles';
 import { FLEET_OPERATIONAL_STATUS_LABELS, type FleetOperationalStatus } from '@/lib/domain/fleet';
 import { buildFleetClientReport, creationDate, type FleetClientReportData, type FleetClientReportRow } from '@/lib/domain/fleet-client-report';
 import { ApiError, queryAll } from './d1';
+import { reportCreationDateSql } from './report-creation-date';
 
 type SourceRow = {
   providerServices?: import("@/lib/domain/provider-services").ProviderService[];
   returnFreight?: boolean;
-  id: string; saleNumber: string; createdAt: string; clientId: string; clientName: string;
+  id: string; saleNumber: string; createdDate: string; clientId: string; clientName: string;
   vehicles: CargoVehicle[] | null; vehicle: string | null; plate: string | null;
   driverName: string | null; serviceSituation: FleetClientReportRow["serviceSituation"]; situation: string; departureDate: string | null;
   amountCents: number; paidStatus: string | null; paidAt: string | null; notes: string | null; orderObservation: string | null; orderIncludeObservation: boolean | null;
@@ -37,25 +38,25 @@ export async function loadFleetClientReport(user: CurrentUser, params: URLSearch
   if (!client) throw new ApiError(404, 'Cliente sem vendas Frota disponíveis para seu perfil.');
   // TEXT timestamps in this project contain ISO timestamps. Convert in SQL so the
   // filter uses creation in São Paulo, including the complete end day.
-  const period = (alias: string) => `(${alias}.created_at::timestamptz at time zone 'America/Sao_Paulo')::date between ?::date and ?::date`;
+  const period = (alias: string) => `${reportCreationDateSql(alias)} between ?::date and ?::date`;
   const [freights, sales] = await Promise.all([
-    queryAll<SourceRow>(`select f.provider_services as providerServices,f.return_freight as returnFreight,f.id,f.sale_number as saleNumber,f.created_at as createdAt,
+    queryAll<SourceRow>(`select f.provider_services as providerServices,f.return_freight as returnFreight,f.id,f.sale_number as saleNumber,${reportCreationDateSql("f")}::text as createdDate,
       f.client_id as clientId,c.legal_name as clientName,f.cargo_vehicles as vehicles,
       f.cargo_vehicle_model as vehicle,f.cargo_plate as plate,f.driver_name as driverName,
       f.service_situation as serviceSituation,f.operational_status as situation,f.pickup_date as departureDate,
       f.freight_amount_cents as amountCents,f.payment_status as paidStatus,f.paid_at as paidAt,f.notes,f.order_observation as orderObservation,f.order_include_observation as orderIncludeObservation
       from fleet_freights f join clients c on c.id=f.client_id
       where ${clientId==='*'?'':'f.client_id=? and '}${period('f')} ${own ? 'and f.seller_id=?' : ''}
-      order by f.created_at,f.id limit 2001`, [...(clientId==='*'?[]:[clientId]),from,to,...(own?[user.id]:[])]),
+      order by ${reportCreationDateSql("f")} desc,f.id limit 2001`, [...(clientId==='*'?[]:[clientId]),from,to,...(own?[user.id]:[])]),
     // A linked commercial sale is represented by its operation, exactly once.
-    queryAll<SourceRow>(`select s.id,s.sale_number as saleNumber,s.created_at as createdAt,
+    queryAll<SourceRow>(`select s.id,s.sale_number as saleNumber,${reportCreationDateSql("s")}::text as createdDate,
       s.client_id as clientId,c.legal_name as clientName,s.cargo_vehicles as vehicles,
       s.vehicle,s.plate,null::text as driverName,s.service_situation as serviceSituation,s.operational_status as situation,
       null::text as departureDate,s.freight_amount_cents as amountCents,
       null::text as paidStatus,null::text as paidAt,s.notes,s.order_observation as orderObservation,s.order_include_observation as orderIncludeObservation
       from freight_sales s join clients c on c.id=s.client_id
       where s.sale_channel='FROTA' and s.fleet_freight_id is null and ${clientId==='*'?'':'s.client_id=? and '}${period('s')}
-      ${own ? 'and s.seller_id=?' : ''} order by s.created_at,s.id limit 2001`, [...(clientId==='*'?[]:[clientId]),from,to,...(own?[user.id]:[])]),
+      ${own ? 'and s.seller_id=?' : ''} order by ${reportCreationDateSql("s")} desc,s.id limit 2001`, [...(clientId==='*'?[]:[clientId]),from,to,...(own?[user.id]:[])]),
   ]);
   if (freights.length + sales.length > 2000) throw new ApiError(400, 'O período contém mais de 2.000 vendas. Reduza o intervalo para gerar o relatório completo.');
   const receipts = sales.length ? await queryAll<Receipt>(`select sale_id as saleId,type,amount_cents as amountCents,occurred_at as occurredAt
@@ -63,7 +64,7 @@ export async function loadFleetClientReport(user: CurrentUser, params: URLSearch
     order by occurred_at,id`, sales.map(s => s.id)) : [];
   const rows: FleetClientReportRow[] = [
     ...freights.map((f): FleetClientReportRow => ({
-      id: `freight:${f.id}`,providerServices:f.providerServices,returnFreight:f.returnFreight, saleNumber: f.saleNumber, createdDate: creationDate(f.createdAt), clientId: f.clientId, clientName: f.clientName,
+      id: `freight:${f.id}`,providerServices:f.providerServices,returnFreight:f.returnFreight, saleNumber: f.saleNumber, createdDate: f.createdDate, clientId: f.clientId, clientName: f.clientName,
       vehicles: cargoVehiclesOrLegacy(f.vehicles, f.vehicle, f.plate), driverName: f.driverName, serviceSituation: f.serviceSituation,
       situation: FLEET_OPERATIONAL_STATUS_LABELS[f.situation as FleetOperationalStatus] ?? f.situation,
       departureDate: f.departureDate, amountCents: f.amountCents,
@@ -74,7 +75,7 @@ export async function loadFleetClientReport(user: CurrentUser, params: URLSearch
     ...sales.map((s): FleetClientReportRow => {
       const payments = receipts.filter(p => p.saleId === s.id);
       const receivedCents = Math.max(0, payments.reduce((sum, p) => sum + (p.type === 'ESTORNO' ? -p.amountCents : p.amountCents), 0));
-      return {id: `sale:${s.id}`, saleNumber: s.saleNumber, createdDate: creationDate(s.createdAt), clientId: s.clientId, clientName: s.clientName,
+      return {id: `sale:${s.id}`, saleNumber: s.saleNumber, createdDate: s.createdDate, clientId: s.clientId, clientName: s.clientName,
         vehicles: cargoVehiclesOrLegacy(s.vehicles, s.vehicle, s.plate), driverName: s.driverName, serviceSituation: s.serviceSituation, situation: s.situation,
         departureDate: s.departureDate, amountCents: s.amountCents, receivedCents,
         receivedDates: [...new Set(payments.filter(p => p.type !== 'ESTORNO').map(p => receiptDate(p.occurredAt)))],

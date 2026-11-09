@@ -578,17 +578,17 @@ test('prestadores gera prévia sem baixar, permite imprimir e salvar e mostra fa
 });
 
 test('prestadores mostra dados da venda, usa filtros aplicados na prévia e abre detalhes preservando consulta',()=>{
- const state=hooks(['2026-10-01','2026-10-31','PRESTADOR','from=2026-10-01&to=2026-10-31&providerName=PRESTADOR']);
+ const state=hooks(['2026-10-01','2026-10-31','PRESTADOR','from=2026-10-01&to=2026-10-31&clientId=client&providerName=PRESTADOR','client']);
  const Preview=()=>null,Detail=()=>null;
  const row={id:'service',freightId:'freight',saleNumber:'234',createdDate:'2026-10-24',date:'2026-10-26',clientName:'CLIENTE',driverName:'MOTORISTA',vehicles:[{model:'FIAT STRADA',plate:'AAA1A11'}],serviceSituation:'ENTREGA',saleAmountCents:150000,paymentStatus:'PAGO',paidAt:'2026-10-26',orderIncludeObservation:true,orderObservation:'OBSERVAÇÃO SALVA',providerName:'PRESTADOR',kind:'COLETA',amountCents:12345};
  const {ProviderReportPanel}=compile('components/provider-report-panel.tsx',{
   react:state.react,'./report-preview-button':{ReportPreviewButton:Preview},'./fleet-report-sale-detail':{FleetReportSaleDetail:Detail},'./icons':{Icons:{chevron:icon,search:icon}},'./ui':ui,
   '@/lib/domain/provider-services':{providerKindLabel:String},'@/lib/domain/dates':{currentCompetency:()=> '2026-10',todaySaoPaulo:()=> '2026-10-26'},'@/lib/format':fullFormat,
-  './use-api':{useApi:url=>({data:url==='/api/providers'?{providers:[]}:{report:{from:'2026-10-01',to:'2026-10-31',totalCents:12345,providers:[],rows:[row]}}})},
+  './use-api':{useApi:url=>({data:url==='/api/reports/providers?options=clients'?{clients:[{id:'client',name:'CLIENTE'}]}:{report:{from:'2026-10-01',to:'2026-10-31',totalCents:12345,providers:[],rows:[row]}}})},
  });
  const render=()=>{state.reset();return ProviderReportPanel();};let tree=render();
- const html=renderToStaticMarkup(tree);for(const text of ['MOTORISTA','FIAT STRADA','AAA1A11','ENTREGA','OBSERVAÇÃO SALVA'])assert.ok(html.includes(text),text);
- const preview=find(tree,n=>n.type===Preview);assert.equal(preview.props.label,'Gerar relatório de prestadores');assert.equal(preview.props.url,'/api/reports/providers?from=2026-10-01&to=2026-10-31&providerName=PRESTADOR&format=pdf');
+ const html=renderToStaticMarkup(tree);for(const text of ['Selecione um cliente','MOTORISTA','FIAT STRADA','AAA1A11','ENTREGA','OBSERVAÇÃO SALVA'])assert.ok(html.includes(text),text);
+ const preview=find(tree,n=>n.type===Preview);assert.equal(preview.props.label,'Gerar relatório de prestadores');assert.equal(preview.props.url,'/api/reports/providers?from=2026-10-01&to=2026-10-31&clientId=client&providerName=PRESTADOR&format=pdf');
  find(tree,n=>n.props?.['aria-label']==='Abrir venda 234').props.onClick();tree=render();assert.equal(tree.type,Detail);assert.equal(tree.props.id,'freight:freight');tree.props.onBack();tree=render();assert.equal(find(tree,n=>n.type===Preview).props.url,preview.props.url);
 });
 
@@ -714,7 +714,7 @@ test('baixa em lote consulta as datas do modal e seleciona somente vendas elegí
  const {BulkPaymentPanel}=compile('components/bulk-payment-panel.tsx',{react:state.react,'./ui':ui,'@/lib/format':fullFormat,'@/lib/domain/dates':{todaySaoPaulo:()=>'2026-10-28'},'./use-api':{useApi:url=>{urls.push(url);return {loading:false,data:url==='/api/me'?{user:{role:'FINANCEIRO'}}:{report:{sales:rows}}};},apiMutation:async(url,options)=>calls.push(JSON.parse(options.body))}});
  const render=()=>{state.reset();return BulkPaymentPanel({sales:[],period:{from:'2026-12-31',to:'2027-01-02'},saleChannel:'CEGONHA',onSaved(){}});};
  let tree=render();find(tree,n=>n.type==='button'&&n.props.children==='Baixa em lote').props.onClick();tree=render();find(find(tree,n=>n.props?.label==='Cliente'),n=>n.type==='select').props.onChange({target:{value:'client'}});tree=render();find(tree,n=>n.type==='input'&&n.props.type==='checkbox'&&!n.props['aria-label']).props.onChange({target:{checked:true}});tree=render();await find(tree,n=>n.type==='form').props.onSubmit({preventDefault(){}});
- assert.deepEqual(calls[0].items.map(i=>i.id),['sale-one','sale-two']);assert.ok(urls.some(u=>u==='/api/reports/sales?from=2026-12-31&to=2027-01-02&saleChannel=CEGONHA'));
+ assert.deepEqual(calls[0].items.map(i=>i.id),['sale-one','sale-two']);assert.ok(urls.some(u=>u==='/api/reports/sales?from=2026-12-31&to=2027-01-02&saleChannel=CEGONHA&dateBasis=operational'));
 });
 
 test('relatórios motorista e veículo têm somente seu filtro e aplicam a busca antes da prévia',()=>{

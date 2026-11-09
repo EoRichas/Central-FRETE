@@ -1,4 +1,5 @@
 import type { ServiceOrderVersion } from '@/lib/domain/service-order';
+import { reportCreationDateSql } from './report-creation-date';
 import { buildFleetClientReport } from '@/lib/domain/fleet-client-report';
 import { renderFleetClientPdf } from './reports/fleet-client-pdf';
 
@@ -16,7 +17,7 @@ export function fleetOrderRelationSql(kind: 'fleet' | 'sale') {
   const name = fleet ? 'f.client_name' : "coalesce(c.legal_name,f.client_name,'Não informado')";
   return `jsonb_build_object('fleetRelation',jsonb_build_object(
     'id',${field('id', 's.id')},'saleNumber',${field('sale_number', 's.sale_number')},
-    'createdDate',(${field('created_at', 's.created_at')}::timestamptz at time zone 'America/Sao_Paulo')::date::text,
+    'createdDate',(${fleet ? reportCreationDateSql('f') : `case when f.id is not null then ${reportCreationDateSql('f')} else ${reportCreationDateSql('s')} end`})::text,
     'clientId',coalesce(${field('client_id', 's.client_id')},${field('id', 's.id')}),'clientName',${name},
     'vehicles',coalesce(${cargo},jsonb_build_array(jsonb_build_object('model',${model},'plate',${plate},'identification',null))),
     'returnFreight',${field('return_freight','false')},'driverName',${field('driver_name', 'null::text')},'serviceSituation',${field('service_situation', 's.service_situation')},

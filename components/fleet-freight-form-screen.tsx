@@ -358,6 +358,7 @@ export function FleetFreightFormScreen({
           ? freight!.destination
           : form.get("destination"),
         pickupDate: financialOnly ? freight!.pickupDate : pickupDate,
+        creationDate: financialOnly ? undefined : form.get("creationDate") ?? undefined,
         deliveryDate: financialOnly
           ? freight!.deliveryDate
           : form.get("deliveryDate") || null,
@@ -564,6 +565,9 @@ export function FleetFreightFormScreen({
               </Field>
             </div>
             <div className="form-grid three">
+              <Field label="Data de criação" hint="Pode ser retroativa. Define o período nos relatórios.">
+                <input name="creationDate" type="date" max={todaySaoPaulo()} defaultValue={freight?.creationDate ?? todaySaoPaulo()} disabled={financialOnly} required />
+              </Field>
               <Field label="Data da coleta">
                 <input
                   name="pickupDate"

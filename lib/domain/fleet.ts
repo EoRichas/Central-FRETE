@@ -160,6 +160,7 @@ export type FleetFreight = FleetFreightBase & FleetFreightMetrics & {
   originCep: string | null;
   destinationCep: string | null;
   createdAt: string;
+  creationDate?: string;
   updatedAt: string;
 };
 

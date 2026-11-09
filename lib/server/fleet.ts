@@ -1,3 +1,4 @@
+import { reportCreationDateSql } from "@/lib/server/report-creation-date";
 import { exclusivePeriodEnd, inDatePeriod, type DatePeriod } from "@/lib/domain/date-period";
 import type { CurrentUser } from "@/lib/contracts";
 import { allocateTripCost } from "@/lib/domain/trip-allocation";
@@ -194,7 +195,7 @@ export async function loadFleetData(
           priority, freight_amount_cents as freightAmountCents,
           route_distance_meters as routeDistanceMeters, odometer_start_meters as odometerStartMeters, odometer_end_meters as odometerEndMeters, distance_meters as distanceMeters, toll_cents as tollCents,
           driver_commission_cents as driverCommissionCents,
-          created_at as createdAt, updated_at as updatedAt
+          created_at as createdAt, ${reportCreationDateSql()}::text as creationDate, updated_at as updatedAt
          , (select s.id from freight_sales s where s.fleet_freight_id=fleet_freights.id and s.sale_channel='FROTA' limit 1) as linkedFleetSaleId
          from fleet_freights
          ${scope ? 'where id in (select id from selected_freights) or trip_id in (select id from selected_trips)' : ''}

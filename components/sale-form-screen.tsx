@@ -225,6 +225,7 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
         ...(!editing&&meApi.data?.user.role==='VENDEDOR'?{assignSellerOnCreate:true}:{}),
         ...(editing?{previousSellerId:initialSale?.sellerId??null}:{}),
         saleDate: form.get("saleDate"),
+        creationDate: fleetFreightId ? undefined : form.get("creationDate") ?? undefined,
         billingDate: saleChannel === "FROTA" ? form.get("billingDate") || null : initialSale?.billingDate ?? null,
         sellerName: sellersApi.data?.sellers.find(s => s.id === sellerId)?.name ?? initialSale?.sellerName,
         clientId: client?.id ?? null,
@@ -328,6 +329,9 @@ export function SaleFormScreen({ initialSale, saleChannel: requestedChannel = "C
             <div className="form-grid four operation-identification-grid">
               <Field label="Número da venda" hint="Sequência automática compartilhada entre Cegonha e Frota."><input value={initialSale?.saleNumber ?? "Automático ao salvar"} readOnly /></Field>
               {saleChannel === "FROTA" && <Field label="Data do faturamento" hint={fleetFreightId ? "No faturamento, prevalece a data da operação vinculada." : "Preencha quando a venda for faturada."}><input name="billingDate" type="date" defaultValue={initialSale?.billingDate ?? ""}/></Field>}
+              <Field label="Data de criação" hint={fleetFreightId ? "Altere esta data no frete Frota vinculado." : "Pode ser retroativa. Define o período nos relatórios."}>
+                <input name="creationDate" type="date" max={today} defaultValue={initialSale?.creationDate ?? today} disabled={Boolean(fleetFreightId)} required />
+              </Field>
               <Field label="Data da venda"><input name="saleDate" type="date" defaultValue={initialSale?.saleDate ?? today} required /></Field>
               {canChooseSeller && <Field label="Vendedor"><select disabled={sellersApi.loading||Boolean(sellersApi.error)} value={sellerId||(!editing&&meApi.data?.user.role==='VENDEDOR'?meApi.data.user.id:'')} onChange={e=>setSellerId(e.target.value)} required><option value="">Selecione um vendedor</option>{initialSale && !sellersApi.data?.sellers.some(s=>s.id===initialSale.sellerId) && <option value={initialSale.sellerId ?? 'historical'}>{initialSale.sellerName} (histórico)</option>}{sellersApi.data?.sellers.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select>{sellerChanged&&<small>{editing?'A troca será salva com o frete. Comissão automática pelo novo cadastro; valores combinados e baixas são preservados.':'A venda será atribuída ao vendedor escolhido, com a comissão calculada pelo cadastro dele.'}</small>}{sellersApi.error && <span role="alert">{sellersApi.error}</span>}</Field>}
               {saleChannel === "FROTA" && <Field label="Situação do serviço"><select name="serviceSituation" defaultValue={initialSale?.serviceSituation ?? ""} required><option value="">Selecione</option>{FLEET_RELATION_SITUATIONS.map(value => <option key={value} value={value}>{value}</option>)}</select></Field>}
