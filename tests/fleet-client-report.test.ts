@@ -12,7 +12,7 @@ test('relatório usa criação em São Paulo, cliente por ID e inclui os dois li
   assert.equal(creationDate('2026-10-01T03:00:00Z'), '2026-10-01');
   assert.throws(() => creationDate('inválida'));
   const report = buildFleetClientReport({id: 'one', name: 'Cliente'}, '2026-10-01', '2026-10-31', [row, {...row, id: 'two', createdDate: '2026-10-31', receivedCents: 15000}, {...row, id: 'foreign', clientId: 'homonym'}, {...row, id: 'outside', createdDate: '2026-09-30'}]);
-  assert.deepEqual(report.rows.map(r => r.id), ['freight:one', 'two']);
+  assert.deepEqual(report.rows.map(r => r.id), ['two', 'freight:one']);
   assert.deepEqual(report.totals, {sales: 2, vehicles: 2, amountCents: 20000, receivedCents: 20000, balanceCents: 5000});
   assert.equal(row.notes, 'Observação existente');
   assert.deepEqual(reportObservations(report, ['freight:one', 'foreign']).map(r => r.id), ['freight:one']);

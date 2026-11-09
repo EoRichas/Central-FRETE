@@ -1,3 +1,4 @@
+import { readReportCreationDate } from "@/lib/server/report-creation-date";
 import { readDatePeriod } from "@/lib/server/date-period";
 import { parseProviderServices } from '@/lib/server/provider-services';
 import { booleanValue } from '@/lib/server/fleet-validation';
@@ -17,6 +18,7 @@ export async function POST(request: Request) {
     if ((user.role === "VENDEDOR" || user.role === "OPERACIONAL") && payload.tripId) throw new ApiError(403, "Seu perfil não pode vincular viagens administrativas.");
     const providerServices=await parseProviderServices(payload.providerServices);
     const returnFreight=payload.returnFreight===undefined?false:booleanValue(payload.returnFreight,'Frete retorno');
+    const creationDate = readReportCreationDate(payload.creationDate);
     const parsed = parseFleetFreightPayload(payload);
     const data = { ...parsed, ...await resolveFreightClient(parsed) };
     const { vehicle, driver } = await resolveFleetReferences(
@@ -37,8 +39,8 @@ export async function POST(request: Request) {
             client_id, client_name, cargo_vehicle_model, cargo_plate, origin, destination, origin_location_type, destination_location_type,
             pickup_date, delivery_date, billing_date, operational_status,
             priority, freight_amount_cents, distance_meters, toll_cents,
-            driver_commission_cents, created_by, updated_by, origin_cep, destination_cep, trip_id, yard_cost_cents, pickup_cost_cents, delivery_cost_cents, other_cost_cents, actual_fuel_cost_cents, cargo_vehicles, fuel_liters_milli, fuel_pump_amount_cents, route_distance_meters, odometer_start_meters, odometer_end_meters, insurance_cost_cents, invoice_cost_cents, icms_cost_cents, cte_mdfe_cost_cents
-          ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::text::jsonb, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            driver_commission_cents, created_by, updated_by, origin_cep, destination_cep, trip_id, yard_cost_cents, pickup_cost_cents, delivery_cost_cents, other_cost_cents, actual_fuel_cost_cents, cargo_vehicles, fuel_liters_milli, fuel_pump_amount_cents, route_distance_meters, odometer_start_meters, odometer_end_meters, insurance_cost_cents, invoice_cost_cents, icms_cost_cents, cte_mdfe_cost_cents, report_creation_date
+          ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::text::jsonb, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::date)`,
         )
         .bind(
           id,
@@ -68,7 +70,7 @@ export async function POST(request: Request) {
           data.tripId, data.yardCostCents, data.pickupCostCents, data.deliveryCostCents, data.otherCostCents, data.actualFuelCostCents,
           JSON.stringify(data.cargoVehicles), data.fuelLitersMilli, data.fuelPumpAmountCents,
           data.routeDistanceMeters, data.odometerStartMeters, data.odometerEndMeters,
-          data.insuranceCostCents, data.invoiceCostCents, data.icmsCostCents, data.cteMdfeCostCents,
+          data.insuranceCostCents, data.invoiceCostCents, data.icmsCostCents, data.cteMdfeCostCents, creationDate,
         ),
       db.prepare("update fleet_freights set provider_services=?::text::jsonb,return_freight=? where id=?").bind(JSON.stringify(providerServices),returnFreight,id),
       db.prepare("update fleet_freights set service_situation=?,notes=?,seller_commission_override_cents=?,damages_cost_cents=? where id=?").bind(data.serviceSituation,data.notes,commissionOverrideCents,data.damagesCostCents,id),
@@ -85,7 +87,7 @@ export async function POST(request: Request) {
           user.id,
           user.email,
           JSON.stringify({
-            ...data, providerServices, returnFreight, sellerCommissionOverrideCents: commissionOverrideCents, sellerId: seller.id, sellerName: seller.name, sellerCommissionBasisPoints: seller.commissionBasisPoints,
+            ...data, creationDate, providerServices, returnFreight, sellerCommissionOverrideCents: commissionOverrideCents, sellerId: seller.id, sellerName: seller.name, sellerCommissionBasisPoints: seller.commissionBasisPoints,
             vehiclePlate: vehicle.plate,
             driverName: driver.name,
           }),

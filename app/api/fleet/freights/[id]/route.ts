@@ -1,3 +1,4 @@
+import { readReportCreationDate, reportCreationDateSql } from "@/lib/server/report-creation-date";
 import { FLEET_DELETE_ROLES } from "@/lib/domain/permissions";
 import { parseProviderServices } from '@/lib/server/provider-services';
 import { resolveSaleSeller,resolveEditedSeller,sellerEditGuard } from '@/lib/server/seller-commission';
@@ -55,6 +56,7 @@ type FreightSnapshot = {
   originCep: string | null;
   destinationCep: string | null;
   pickupDate: string;
+  creationDate: string;
   deliveryDate: string | null;
   billingDate: string | null;
   operationalStatus: string;
@@ -78,7 +80,7 @@ async function freightSnapshot(id: string) {
       client_id as clientId, client_name as clientName, cargo_vehicle_model as cargoVehicleModel,
       cargo_plate as cargoPlate, origin, destination,
       origin_location_type as originLocationType, destination_location_type as destinationLocationType, origin_cep as originCep, destination_cep as destinationCep,
-      pickup_date as pickupDate, delivery_date as deliveryDate,
+      pickup_date as pickupDate, delivery_date as deliveryDate, ${reportCreationDateSql()}::text as creationDate,
       billing_date as billingDate, operational_status as operationalStatus,
       priority, freight_amount_cents as freightAmountCents,
       route_distance_meters as routeDistanceMeters, odometer_start_meters as odometerStartMeters, odometer_end_meters as odometerEndMeters, distance_meters as distanceMeters, toll_cents as tollCents,
@@ -97,6 +99,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     if (!previous) throw new ApiError(404, "Frete da frota não encontrado.");
     const payload = asObject(await request.json());
     if (payload.saleNumber !== undefined) throw new ApiError(400, "O número da venda não pode ser alterado.");
+    const creationDate = readReportCreationDate(payload.creationDate);
     const providerServices=await parseProviderServices(payload.providerServices,previous.providerServices);
     const returnFreight=payload.returnFreight===undefined?previous.returnFreight:booleanValue(payload.returnFreight,'Frete retorno');
     let sellerAssignment: Awaited<ReturnType<typeof resolveSaleSeller>>|null=null;
@@ -119,7 +122,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     );
     const db = await getD1();
     const next = {
-      ...data, providerServices, returnFreight, sellerAssignment, sellerCommissionOverrideCents: commissionOverrideCents,
+      ...data, creationDate: creationDate ?? previous.creationDate, providerServices, returnFreight, sellerAssignment, sellerCommissionOverrideCents: commissionOverrideCents,
       vehiclePlate: vehicle.plate,
       driverName: driver.name,
     };
@@ -135,6 +138,7 @@ export async function PATCH(request: Request, context: RouteContext) {
             driver_commission_cents = ?, updated_by = ?, origin_cep = ?, destination_cep = ?,
             trip_id = ?, yard_cost_cents = ?, pickup_cost_cents = ?, delivery_cost_cents = ?, other_cost_cents = ?, actual_fuel_cost_cents = ?,
             cargo_vehicles = ?::text::jsonb, fuel_liters_milli = ?, fuel_pump_amount_cents = ?, route_distance_meters = ?, odometer_start_meters = ?, odometer_end_meters = ?, insurance_cost_cents = ?, invoice_cost_cents = ?, icms_cost_cents = ?, cte_mdfe_cost_cents = ?, damages_cost_cents = ?,
+            report_creation_date = coalesce(?::date, report_creation_date),
             updated_at = to_char(timezone('UTC', now()), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
            where id = ?`,
         )
@@ -163,7 +167,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           data.tripId, data.yardCostCents, data.pickupCostCents, data.deliveryCostCents, data.otherCostCents, data.actualFuelCostCents,
           JSON.stringify(data.cargoVehicles), data.fuelLitersMilli, data.fuelPumpAmountCents,
           data.routeDistanceMeters, data.odometerStartMeters, data.odometerEndMeters,
-          data.insuranceCostCents, data.invoiceCostCents, data.icmsCostCents, data.cteMdfeCostCents, data.damagesCostCents,
+          data.insuranceCostCents, data.invoiceCostCents, data.icmsCostCents, data.cteMdfeCostCents, data.damagesCostCents, creationDate,
           id,
         ),
       db.prepare("update fleet_freights set provider_services=?::text::jsonb,return_freight=? where id=?").bind(JSON.stringify(providerServices),returnFreight,id),

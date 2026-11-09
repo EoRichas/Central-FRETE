@@ -1,3 +1,4 @@
+import { reportCreationDateSql } from "@/lib/server/report-creation-date";
 import { saleOwnership } from "@/lib/server/seller-commission";
 import { SALE_ORDER_SQL, type SaleChannel, type SaleSort } from "@/lib/domain/sales";
 import { cargoVehiclesOrLegacy } from "@/lib/domain/cargo-vehicles";
@@ -101,6 +102,7 @@ export async function listSales(
     `select
       s.id, s.sale_channel as saleChannel, s.fleet_freight_id as fleetFreightId, s.destination_location_type as destinationLocationType,
       case when f.id is not null then f.cargo_vehicles else s.cargo_vehicles end as cargoVehicles, s.sale_number as saleNumber, s.sale_date as saleDate, s.billing_date as billingDate,
+      (case when f.id is not null then ${reportCreationDateSql("f")} else ${reportCreationDateSql("s")} end)::text as creationDate,
       s.competency, s.seller_id as sellerId, s.seller_name as sellerName,
       s.client_id as clientId, c.legal_name as clientName,
       c.cpf_cnpj as clientDocument, case when f.id is not null then f.cargo_vehicle_model else s.vehicle end as vehicle, case when f.id is not null then f.cargo_plate else s.plate end as plate,

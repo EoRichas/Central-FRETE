@@ -18,7 +18,7 @@ export function DriverCommissionsPanel({reportBy}:{reportBy?:'driver'|'vehicle'}
  const [paidAt,setPaidAt]=useState(todaySaoPaulo),[pixDetails,setPixDetails]=useState('');
  const [saving,setSaving]=useState(false),[mutationError,setMutationError]=useState<string|null>(null);
  const [applied,setApplied]=useState(()=>({...currentDatePeriod(),driver:'',vehicle:''}));
- const query=new URLSearchParams(reportBy?{...applied,by:reportBy}:{...period,driver,vehicle});
+ const query=new URLSearchParams(reportBy?{...applied,by:reportBy,dateBasis:'creation'}:{...period,driver,vehicle});
  // Each report has its own dimension; the commissions consultation can combine both.
  if(reportBy==='driver')query.delete('vehicle');
  if(reportBy==='vehicle')query.delete('driver');
@@ -42,7 +42,7 @@ export function DriverCommissionsPanel({reportBy}:{reportBy?:'driver'|'vehicle'}
   if(JSON.stringify(next)===JSON.stringify(applied))api.refresh();else setApplied(next);
  }}>
   {reportBy==='driver'?driverField:vehicleField}
-  <label><span>Coleta de</span><input type="date" required value={period.from} max={period.to||undefined} onChange={e=>setPeriod({...period,from:e.target.value})}/></label>
+  <label><span>Criada de</span><input type="date" required value={period.from} max={period.to||undefined} onChange={e=>setPeriod({...period,from:e.target.value})}/></label>
   <label><span>Até</span><input type="date" required value={period.to} min={period.from||undefined} onChange={e=>setPeriod({...period,to:e.target.value})}/></label>
   <button className="button primary" disabled={api.loading}>Consultar</button>
  </form>:<section className="filter-panel driver-commission-filters">
@@ -52,7 +52,7 @@ export function DriverCommissionsPanel({reportBy}:{reportBy?:'driver'|'vehicle'}
  {available&&<>
   {reportBy&&<div className="order-actions"><ReportPreviewButton key={query.toString()} title={reportBy==='driver'?'Relatório motorista':'Relatório veículo'} label="Visualizar relatório" filename={reportBy==='driver'?'Comissoes-Motoristas.pdf':'Comissoes-Veiculos.pdf'} url={`/api/reports/driver-commissions?${query}&format=pdf`}/></div>}
   <section className="kpi-grid"><article className="kpi-card"><span>Fretes no período</span><strong>{rows.length}</strong></article><article className="kpi-card"><span>Valor dos fretes</span><strong>{formatMoney(rows.reduce((n,r)=>n+r.freightAmountCents,0))}</strong></article><article className="kpi-card accent"><span>Comissão dos motoristas</span><strong>{formatMoney(rows.reduce((n,r)=>n+r.driverCommissionCents,0))}</strong></article></section>
-  <p className="fleet-update-note">{reportBy?'Comissão gerada pelos fretes na data da coleta, incluindo os ainda não faturados.':'A situação abaixo indica o pagamento individual da comissão ao motorista, independente do recebimento do frete.'}</p>
+  <p className="fleet-update-note">{reportBy?'Período pela data de criação do frete, incluindo os ainda não faturados.':'A situação abaixo indica o pagamento individual da comissão ao motorista, independente do recebimento do frete.'}</p>
   {!rows.length?<EmptyState title="Nenhuma comissão no período" description="Altere as datas ou os filtros para consultar outros fretes."/>:reportBy?<section className="panel table-panel"><div className="responsive-table"><table>
    <thead><tr><th>{reportBy==='driver'?'Motorista':'Veículo'}</th><th>Fretes</th><th>Valor dos fretes</th><th>Comissão</th></tr></thead><tbody>{groups.map(g=><tr key={g.key}><td>{g.name}</td><td>{g.freights}</td><td>{formatMoney(g.amountCents)}</td><td><strong>{formatMoney(g.commissionCents)}</strong></td></tr>)}</tbody>
   </table></div></section>:<div className="seller-commission-stack">{[...paymentGroups.values()].sort((a,b)=>a.name.localeCompare(b.name,'pt-BR')).map(group=><details className="panel seller-commission-group" key={group.key}>

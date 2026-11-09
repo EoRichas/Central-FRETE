@@ -1,5 +1,5 @@
 import type { CurrentUser } from '@/lib/contracts';
-import { buildSalesReport, consolidateReportSales, reportSellerKey } from '@/lib/domain/reports';
+import { buildSalesReport, consolidateReportSales, reportSellerKey, salesReportDate } from '@/lib/domain/reports';
 import { canViewSellerCommission } from '@/lib/domain/permissions';
 import { SALE_CHANNELS } from '@/lib/domain/sales';
 import { isCompetency } from '@/lib/domain/dates';
@@ -21,13 +21,17 @@ export async function loadSalesReport(user:CurrentUser, params:URLSearchParams) 
   const channel=params.get('saleChannel') ? enumValue(params.get('saleChannel'),'Canal',SALE_CHANNELS) : undefined;
   const seller=params.get('seller') || '';
   const showCommission=canViewSellerCommission(user.role);
+  const dateBasis=params.get('dateBasis')==='operational'?'operational':'creation';
   const [sales,fleet]=await Promise.all([
     listSales(user,{all:true}),
     channel==='CEGONHA' ? Promise.resolve({freights:[]}) : loadFleetData(false,false,false,true,undefined,false,{user}),
   ]);
-  const inPeriod=consolidateReportSales(sales,fleet.freights).filter(s=>(!channel || s.saleChannel===channel)
-    && (!competency || s.saleDate.startsWith(competency)) && (!from || s.saleDate>=from) && (!to || s.saleDate<=to));
+  const inPeriod=consolidateReportSales(sales,fleet.freights).filter(s=>{
+    const date=salesReportDate(s,dateBasis);
+    return (!channel || s.saleChannel===channel) && (!competency || date.startsWith(competency))
+      && (!from || date>=from) && (!to || date<=to);
+  });
   const sellers=[...new Map(inPeriod.map(s=>[reportSellerKey(s),{id:reportSellerKey(s),name:s.sellerName}])).values()].sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));
-  const report=buildSalesReport(inPeriod.filter(s=>!seller || reportSellerKey(s)===seller),showCommission);
+  const report=buildSalesReport(inPeriod.filter(s=>!seller || reportSellerKey(s)===seller),showCommission,dateBasis);
   return {report,showCommission,sellers,period:competency || (from || to ? `${from || 'Início'} a ${to || 'hoje'}` : 'Todo o histórico'),channel:channel==='FROTA'?'Frota':channel==='CEGONHA'?'Cegonha':'Frota e Cegonha',seller:seller ? sellers.find(s=>s.id===seller)?.name || 'Sem correspondência' : 'Todos'};
 }

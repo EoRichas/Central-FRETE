@@ -53,13 +53,13 @@ function ExistingSalesReport() {
         }
       />
       <form className="filter-panel report-filters report-search-filters no-print" onSubmit={event=>{event.preventDefault();setFilters({...draft});setPage(0);}}>
-        <label><span>De</span><input type="date" value={draft.from} onChange={e=>setDraft({...draft,from:e.target.value})} /></label>
+        <label><span>Criada de</span><input type="date" value={draft.from} onChange={e=>setDraft({...draft,from:e.target.value})} /></label>
         <label><span>Até</span><input type="date" min={draft.from || undefined} value={draft.to} onChange={e=>setDraft({...draft,to:e.target.value})} /></label>
         <label><span>Canal</span><select value={draft.saleChannel} onChange={e=>setDraft({...draft,saleChannel:e.target.value,seller:''})}><option value="">Frota e Cegonha</option><option value="FROTA">Frota</option><option value="CEGONHA">Cegonha</option></select></label>
         <label><span>Vendedor</span><select value={draft.seller} onChange={e=>setDraft({...draft,seller:e.target.value})}><option value="">Todos</option>{api.data?.sellers.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
         <button className="button primary" type="submit">Aplicar filtros</button>
       </form>
-      <p className="report-basis">Sem datas, inclui todo o histórico. Base: data da venda na Cegonha e data de coleta nos fretes da Frota. Exportações seguem os filtros aplicados.</p>
+      <p className="report-basis">Sem datas, inclui todo o histórico. Base: data de criação informada, da mais recente para a mais antiga. Exportações seguem os filtros aplicados.</p>
       {api.loading && <LoadingState label="Consultando vendas…" />}
       {api.error && <ErrorState message={api.error} retry={api.refresh} />}
       {!api.loading && !api.error && !sales.length && (
@@ -92,7 +92,7 @@ function ExistingSalesReport() {
             </article>
             {api.data?.showCommission && <article className="kpi-card"><span>Comissões dos vendedores</span><strong>{formatMoney(api.data.report.commissions)}</strong></article>}
           </section>
-          <section className="panel table-panel"><header className="fleet-panel-header"><div><h2>Fretes retorno aproveitados</h2><p>{api.data?.report.returnFreightCount ?? 0} retorno(s) no período consultado. Agrupamento pelo mês da coleta e pela placa do caminhão da Frota.</p></div></header>
+          <section className="panel table-panel"><header className="fleet-panel-header"><div><h2>Fretes retorno aproveitados</h2><p>{api.data?.report.returnFreightCount ?? 0} retorno(s) no período consultado. Agrupamento pelo mês de criação e pela placa do caminhão da Frota.</p></div></header>
             {api.data?.report.returnFreights?.length ? <div className="responsive-table"><table><thead><tr><th>Mês</th><th>Caminhão / placa</th><th>Quantidade de retornos</th></tr></thead><tbody>{api.data.report.returnFreights.map(r=><tr key={`${r.competency}:${r.vehiclePlate}`}><td>{r.competency?competencyLabel(r.competency):'Não informada'}</td><td>{r.vehiclePlate}</td><td>{r.count}</td></tr>)}</tbody></table></div> : <p>Nenhum frete retorno aproveitado neste período.</p>}
           </section>
           <section className="panel table-panel"><header className="fleet-panel-header"><div><span className="eyebrow">Comparativo</span><h2>Resultado por vendedor</h2><p>Somente vendas com comissão entram no resultado individual. A listagem e os totais da empresa incluem todas as vendas.</p></div></header>
@@ -123,7 +123,7 @@ function PortfolioSalesTable({ sales,showCommission }: { sales: ReportSale[];sho
           <tr>
             <th>Venda</th>
             <th>Canal</th>
-            <th>Data</th>
+            <th>Criação</th>
             <th>Cliente</th>
             <th>Vendedor(a)</th>
             {showCommission && <><th>Percentual</th><th>Comissão</th></>}
@@ -136,7 +136,7 @@ function PortfolioSalesTable({ sales,showCommission }: { sales: ReportSale[];sho
             <tr key={sale.id}>
               <td data-label="Venda"><strong>{sale.saleNumber}</strong></td>
               <td data-label="Canal">{sale.saleChannel === "FROTA" ? "Frota" : "Cegonha"}</td>
-              <td data-label="Data">{formatDate(sale.saleDate)}</td>
+              <td data-label="Criação">{formatDate(sale.createdDate ?? sale.saleDate)}</td>
               <td data-label="Cliente">{sale.clientName ?? "—"}</td>
               <td data-label="Vendedor(a)"><strong>{sale.sellerName}</strong></td>
               {showCommission && <><td data-label="Percentual"><strong>{formatPercent(sale.commissionBasisPoints)}</strong></td>

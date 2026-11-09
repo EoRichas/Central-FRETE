@@ -1,3 +1,4 @@
+import { readReportCreationDate } from "@/lib/server/report-creation-date";
 import { parseServiceSituation } from '@/lib/server/fleet-service-situation';
 import { resolveSaleSeller, saleForViewer, saleCommissionOverride } from "@/lib/server/seller-commission";
 import { validateSaleClient } from "@/lib/server/registry-validation";
@@ -68,7 +69,11 @@ export async function POST(request: Request) {
     const saleChannel = enumValue(payload.saleChannel ?? "CEGONHA", "Canal da venda", SALE_CHANNELS);
     if (!roleCan(user.role, saleChannel === "FROTA" ? "CREATE_FLEET_SALE" : "CREATE_CEGONHA_SALE")) throw new ApiError(403, "Seu perfil não permite criar esta venda.");
     if (user.role === "OPERACIONAL" && Number(payload.advanceAmountCents || 0) !== 0) throw new ApiError(403, "Seu perfil não permite registrar recebimentos.");
+    const requestedCreationDate = readReportCreationDate(payload.creationDate);
     const cargo = await parseSaleCargo(payload, user);
+    if (requestedCreationDate && cargo.fleetFreightId) {
+      throw new ApiError(400, "Altere a data de criação no frete Frota vinculado.");
+    }
     const saleDate = dateOnly(payload.saleDate, "Data da venda");
     if (new Date(`${saleDate}T12:00:00Z`).toISOString().slice(0,10) !== saleDate) throw new ApiError(400,"Data da venda inválida.");
     const financialDueDate = dateOnly(
@@ -177,8 +182,8 @@ export async function POST(request: Request) {
             pickup_address_snapshot, delivery_address_snapshot,
             operational_deadline_days, origin_yard_entry_date, delivery_deadline,
             financial_due_date, operational_status, notes, freight_amount_cents,
-            commission_basis_points, costs_pending, created_by, cargo_vehicles, fleet_freight_id, destination_location_type, sale_channel, billing_date
-          ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::text::jsonb, ?, ?, ?, ?) returning sale_number as saleNumber`,
+            commission_basis_points, costs_pending, created_by, cargo_vehicles, fleet_freight_id, destination_location_type, sale_channel, billing_date, report_creation_date
+          ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::text::jsonb, ?, ?, ?, ?, ?::date) returning sale_number as saleNumber`,
         )
         .bind(
           saleId,
@@ -208,7 +213,7 @@ export async function POST(request: Request) {
           commissionBasisPoints,
           costsPending ? 1 : 0,
           user.id,
-          JSON.stringify(cargo.cargoVehicles), cargo.fleetFreightId, destinationLocationType, saleChannel, billingDate,
+          JSON.stringify(cargo.cargoVehicles), cargo.fleetFreightId, destinationLocationType, saleChannel, billingDate, requestedCreationDate,
         ),
       db
         .prepare(
@@ -301,7 +306,7 @@ export async function POST(request: Request) {
           user.id,
           user.email,
           JSON.stringify({
-            numbering: "AUTOMATIC_GLOBAL", serviceSituation, saleChannel, billingDate, actorRole: user.role, fleetFreightId: cargo.fleetFreightId,
+            numbering: "AUTOMATIC_GLOBAL", serviceSituation, saleChannel, billingDate, creationDate: requestedCreationDate, actorRole: user.role, fleetFreightId: cargo.fleetFreightId,
             freightAmountCents,
             commissionBasisPoints, commissionOverrideCents,
             costCount: costs.length,

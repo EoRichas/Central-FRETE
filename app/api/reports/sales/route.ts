@@ -1,3 +1,4 @@
+import { salesReportDate } from '@/lib/domain/reports';
 import { renderGeneralSalesXlsx } from '@/lib/server/reports/sales-xlsx';
 import { xlsxResponse } from '@/lib/server/reports/xlsx';
 import { authorize } from '@/lib/server/auth';
@@ -19,8 +20,8 @@ export async function GET(request:Request){try{
   if(params.get('format')==='pdf')return pdfResponse(await renderSalesReportPdf(report,period,channel,showCommission,seller),'Vendas-Geral-Central.pdf');
   if(params.get('format')==='csv') {
     const money=(n:number)=>(n/100).toFixed(2).replace('.',',');
-    const rows=[['Venda','Canal','Data','Cliente','Vendedor',...(showCommission?['Comissão %','Comissão (R$)']:[]),'Receita (R$)','Custo (R$)','Margem (R$)','Custos pendentes'],
-      ...report.sales.map(s=>[s.saleNumber,s.saleChannel,s.saleDate,s.clientName,s.sellerName,...(showCommission?[money(s.commissionBasisPoints),money(s.financial.commissionCents)]:[]),money(s.freightAmountCents),money(s.financial.transportCostCents),money(s.financial.marginCents),s.costsPending?'Sim':'Não'])];
+    const rows=[['Venda','Canal',report.dateBasis==='creation'?'Criação':'Data','Cliente','Vendedor',...(showCommission?['Comissão %','Comissão (R$)']:[]),'Receita (R$)','Custo (R$)','Margem (R$)','Custos pendentes'],
+      ...report.sales.map(s=>[s.saleNumber,s.saleChannel,salesReportDate(s,report.dateBasis),s.clientName,s.sellerName,...(showCommission?[money(s.commissionBasisPoints),money(s.financial.commissionCents)]:[]),money(s.freightAmountCents),money(s.financial.transportCostCents),money(s.financial.marginCents),s.costsPending?'Sim':'Não'])];
     return new Response(`\uFEFF${rows.map(r=>r.map(csvCell).join(';')).join('\r\n')}`,{headers:{'content-type':'text/csv; charset=utf-8','content-disposition':'attachment; filename="Vendas-Geral-Central.csv"','cache-control':'private, no-store'}});
   }
   const {commissions,...visibleReport}=report; void commissions;

@@ -24,7 +24,7 @@ export function FinanceScreen() {
   const [channel, setChannel] = useState("");
   const [selectedFreight, setSelectedFreight] = useState<string | null>(null);
   const detail = useApi<{freight:FleetFreight}>(selectedFreight ? `/api/fleet/freights/${selectedFreight}` : null);
-  const api = useApi<{ report: SalesReport; showCommission: boolean }>(`/api/reports/sales?${new URLSearchParams(period)}&saleChannel=${channel}`);
+  const api = useApi<{ report: SalesReport; showCommission: boolean }>(`/api/reports/sales?${new URLSearchParams(period)}&saleChannel=${channel}&dateBasis=operational`);
   const showCommission = Boolean(api.data?.showCommission);
   const sales = useMemo(() => api.data?.report.sales ?? [], [api.data]);
   const totals = useMemo(

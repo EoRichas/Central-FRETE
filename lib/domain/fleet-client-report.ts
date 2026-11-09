@@ -1,4 +1,5 @@
 import type { CargoVehicle } from './cargo-vehicles';
+import { newestCreatedFirst } from './report-order';
 
 export const FLEET_RELATION_SITUATIONS = ['ENTREGA', 'RETIRA', 'EMBARQUE'] as const;
 export type FleetServiceSituation = (typeof FLEET_RELATION_SITUATIONS)[number];
@@ -46,7 +47,7 @@ export function creationDate(value: string): string {
 
 export function buildFleetClientReport(client: FleetClientReport['client'], from: string, to: string, source: FleetClientReportRow[]): FleetClientReport {
   const rows = source.filter(row => (client.id==='*'||row.clientId === client.id) && row.createdDate >= from && row.createdDate <= to)
-    .sort((a, b) => a.createdDate.localeCompare(b.createdDate) || a.saleNumber.localeCompare(b.saleNumber, 'pt-BR', {numeric: true}));
+    .sort(newestCreatedFirst);
   const totals = rows.reduce((sum, row) => ({
     sales: sum.sales + 1, vehicles: sum.vehicles + row.vehicles.length,
     amountCents: sum.amountCents + row.amountCents,

@@ -105,6 +105,7 @@ export type SaleRecord = {
   id: string;
   saleNumber: string;
   saleDate: string;
+  creationDate?: string;
   billingDate?: string | null;
   competency: string;
   sellerId: string | null;
