@@ -16,13 +16,13 @@ export function ErrorState({ message, retry }: { message: string; retry?: () => 
 export function EmptyState({ title, description, href, action }: { title: string; description: string; href?: string; action?: string }) {
   return <div className="empty-state"><span className="empty-icon"><Icons.receipt /></span><h3>{title}</h3><p>{description}</p>{href && action && <Link className={/^(Nov[ao]|Adicionar|Criar|Cadastrar)/i.test(action) ? "button secondary create-sale-action" : "button primary"} href={href}>{/^(Nov[ao]|Adicionar|Criar|Cadastrar)/i.test(action) && <Icons.plus />}{action}</Link>}</div>;
 }
-export function StatusBadge({ status, partial = false }: { status: string; partial?: boolean }) {
+export function StatusBadge({ status, partial = false, label }: { status: string; partial?: boolean; label?: string }) {
   const normalized = status
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
     .replace(/\s+/g, "_")
     .toLowerCase();
-  return <span className={`status-badge status-${normalized}`}>{partial ? "PARCIAL · " : ""}{status.replace(/_/g, " ")}</span>;
+  return <span className={`status-badge status-${normalized}`}>{partial ? "PARCIAL · " : ""}{label ?? status.replace(/_/g, " ")}</span>;
 }
 export function Modal({ title, description, open, onClose, children, wide = false, titleId = "modal-title" }: { titleId?: string; title: string; description?: string; open: boolean; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
   if (!open) return null;

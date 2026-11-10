@@ -12,6 +12,7 @@ import * as operations from '../lib/domain/operations.ts';
 import * as datePeriod from '../lib/domain/date-period.ts';
 import * as permissions from '../lib/domain/permissions.ts';
 import * as clientReport from '../lib/domain/fleet-client-report.ts';
+import * as cargoVehicles from '../lib/domain/cargo-vehicles.ts';
 const require = createRequire(import.meta.url);
 
 function compile(file, overrides) {
@@ -26,6 +27,8 @@ function compile(file, overrides) {
     if (id === 'react' || id === 'react/jsx-runtime') return require(id);
     if(id==='./provider-report-panel')return {ProviderReportPanel:()=>null};
     if(id==='@/lib/domain/provider-services')return {providerKindLabel:value=>value};
+    if(id==='@/lib/domain/cargo-vehicles')return cargoVehicles;
+    if(id==='@/lib/domain/fleet-client-report')return clientReport;
     throw new Error('Unexpected dependency: ' + id);
   }, compiledModule, compiledModule.exports);
   return compiledModule.exports;
@@ -77,7 +80,7 @@ test('relatório preserva filtros e acesso à venda com retorno aos filtros e bo
     './fleet-client-report.module.css': {default: {}}, '@/lib/format': format,
     '@/lib/domain/fleet-client-report': clientReport,
     '@/lib/domain/dates': {currentCompetency: () => '2026-10', todaySaoPaulo: () => '2026-10-21'},
-    './use-api': {useApi: () => ({loading: false, data: {clients: [{id: 'client', name: 'CLIENTE'}], report: {client: {name: 'CLIENTE'}, from: '2026-10-01', to: '2026-10-31', totals: {sales: 1, vehicles: 1, amountCents: 10000, receivedCents: 0, balanceCents: 10000}, rows: [{id: 'freight:operation', saleNumber: '201', vehicles: [], receivedDates: [], notes: ''}]}}})},
+    './use-api': {useApi: () => ({loading: false, data: {clients: [{id: 'client', name: 'CLIENTE'}], report: {client: {id:'client',name: 'CLIENTE'}, from: '2026-10-01', to: '2026-10-31', paymentFilter:'TODOS', totals: {sales: 1, vehicles: 1, amountCents: 10000, receivedCents: 0, balanceCents: 10000}, rows: [{id: 'freight:operation', saleNumber: '201', vehicles: [], receivedDates: [], notes: ''}]}}})},
   });
   const render = () => {state.reset(); return FleetClientReportPanel();};
   let tree = render();
@@ -161,7 +164,7 @@ test('fretes filtra vendedor ao lado da situação financeira, combinando filtro
   const overrides = Object.fromEntries([...source.matchAll(/from\s+["']([^"']+)["']/g)].map(m => [m[1], mod]));
   const row = (id, sellerId, sellerName, extra = {}) => ({id, sellerId, sellerName, clientName: 'CLIENTE M1', paymentStatus:'EM_ABERTO', priority: 'URGENTE', operationalStatus: 'EM_ROTA', ...extra});
   const freights = [
-    row('1', 'a', 'ANA'), row('2', 'a', 'ANA', {paymentStatus:'PAGO',priority: 'NORMAL'}),
+    row('1', 'a', 'ANA', {cargoVehicles:[{model:'Onix',plate:'BCD2K30'},{model:'Argo',plate:'AZX1J29'}]}), row('2', 'a', 'ANA', {paymentStatus:'PAGO',priority: 'NORMAL'}),
     row('3', 'a', 'ANA', {operationalStatus: 'ENTREGUE'}), row('4', 'b', 'ANA'),
     row('5', null, 'HISTÓRICO'), row('6', null, null),
     row('7', 'a', 'ANA', {clientName: 'OUTRO CLIENTE'}),
@@ -204,6 +207,8 @@ test('fretes filtra vendedor ao lado da situação financeira, combinando filtro
   change(tree, 'Vendedor', 'name:HISTÓRICO'); tree = render(); assert.deepEqual(ids(tree), ['5']);
   change(tree, 'Vendedor', 'unassigned'); tree = render(); assert.deepEqual(ids(tree), ['6']);
   change(tree, 'Vendedor', ''); tree = render(); assert.deepEqual(ids(tree), ['1', '4', '5', '6']);
+  find(tree, n=>n.type==='input'&&n.props.placeholder.includes('placa')).props.onChange({target:{value:'azx-1j29'}});
+  tree=render();assert.deepEqual(ids(tree),['1']);
   assert.ok(endpoints.every(url => ['/api/me', '/api/fleet?from=2026-10-01&to=2026-10-31'].includes(url)));
 });
 
@@ -276,19 +281,24 @@ test('diálogo consulta somente a venda da OS e rejeita resposta com várias ven
 });
 
 
-test('relatório gera prévia com todas as OS salvas pelo filtro consultado e permite imprimir ou salvar', async () => {
-  const state=hooks(['client','2026-10-01','2026-10-31','clientId=client&from=2026-10-01&to=2026-10-31']);
-  const report={client:{name:'CLIENTE'},from:'2026-10-01',to:'2026-10-31',totals:{sales:1,vehicles:1,amountCents:10000,receivedCents:0,balanceCents:10000},rows:[{id:'freight:234',saleNumber:'234',vehicles:[],receivedDates:[],notes:''}]};
+test('relatório gera prévia e Excel pela confirmação consultada e permite imprimir ou salvar', async () => {
+  const state=hooks(['client','2026-10-01','2026-10-31']);
+  const path='/api/fleet/client-report?clientId=client&from=2026-10-01&to=2026-10-31&payment=PENDENTE';
+  const report={client:{id:'client',name:'CLIENTE'},from:'2026-10-01',to:'2026-10-31',paymentFilter:'PENDENTE',totals:{sales:1,vehicles:1,amountCents:10000,receivedCents:0,balanceCents:10000},rows:[{id:'freight:234',saleNumber:'234',vehicles:[],receivedDates:[],notes:''}]};
   const {FleetClientReportPanel}=compile('components/fleet-client-report.tsx',{
     react:state.react,'./fleet-report-sale-detail':{FleetReportSaleDetail:()=>null},'./icons':{Icons:new Proxy({},{get:()=>icon})},'./ui':ui,
     './fleet-client-report.module.css':{default:{}},'@/lib/format':format,'@/lib/domain/dates':{currentCompetency:()=>'2026-10',todaySaoPaulo:()=>'2026-10-21'},
-    './use-api':{useApi:()=>({data:{clients:[],report}})},
+    './use-api':{useApi:url=>({data:{clients:[{id:'client',name:'CLIENTE'}],report:url===path?report:null}})},
   });
-  const render=()=>{state.reset();return FleetClientReportPanel();};let tree=render();const calls=[];assert.equal(find(tree,n=>n.type==='input'&&n.props.type==='checkbox'),null);assert.ok(!find(tree,n=>n.type==='a'&&n.props.children==='Exportar Excel').props.href.includes('includeProviders'));
+  const render=()=>{state.reset();return FleetClientReportPanel();};let tree=render();const calls=[];
+  find(tree,n=>n.type==='select'&&n.props.value==='TODOS').props.onChange({target:{value:'PENDENTE'}});tree=render();
+  find(tree,n=>n.type==='form').props.onSubmit({preventDefault(){}});tree=render();
+  assert.equal(find(tree,n=>n.type==='a'&&n.props.children==='Exportar Excel').props.href,path+'&format=xlsx');
+  find(tree,n=>n.type==='select'&&n.props.value==='PENDENTE').props.onChange({target:{value:'CONFIRMADO'}});tree=render();
   const original=globalThis.fetch;globalThis.fetch=async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});return new Response(new Blob(['%PDF'],{type:'application/pdf'}));};
   try {
     await find(tree,n=>n.type==='button'&&n.props.children==='Gerar relatório de vendas').props.onClick();tree=render();
-    assert.deepEqual(calls,[{url:'/api/fleet/client-report?clientId=client&from=2026-10-01&to=2026-10-31',body:{useOrderObservations:true,includeProviders:false}}]);
+    assert.deepEqual(calls,[{url:path,body:{useOrderObservations:true,includeProviders:false}}]);
     const modal=find(tree,n=>n.type===ui.Modal);assert.equal(modal.props.open,true);
     const preview=find(modal,n=>n.type==='iframe').props.src;assert.ok(preview.startsWith('blob:'));
     assert.equal(find(modal,n=>n.type==='a'&&n.props.children==='Visualizar / imprimir').props.href,preview);
@@ -553,11 +563,11 @@ test('editar frete mantém seleção de vendedor na Frota e Cegonha e envia a tr
 });
 
 test('Relatórios centraliza resultado existente, vendas e prestadores em abas independentes', () => {
- const state=hooks(), Sales=()=>null, Providers=()=>null;
+ const state=hooks(), Sales=()=>null, Providers=()=>null, Vehicles=()=>null;
  const source=readFileSync(new URL('../components/general-sales-screen.tsx',import.meta.url),'utf8');
  const mod=new Proxy({},{get:()=>()=>null});
  const overrides=Object.fromEntries([...source.matchAll(/from\s+["']([^"']+)["']/g)].map(m=>[m[1],mod]));
- Object.assign(overrides,{react:state.react,'./fleet-client-report':{FleetClientReportPanel:Sales},'./provider-report-panel':{ProviderReportPanel:Providers},'@/components/use-api':{useApi:()=>({data:{user:{role:'ADMIN'}}})},'@/components/ui':ui});
+ Object.assign(overrides,{react:state.react,'./fleet-client-report':{FleetClientReportPanel:Sales},'./fleet-vehicle-report':{FleetVehicleReportPanel:Vehicles},'./provider-report-panel':{ProviderReportPanel:Providers},'@/components/use-api':{useApi:()=>({data:{user:{role:'ADMIN'}}})},'@/components/ui':ui});
  const {GeneralSalesScreen}=compile('components/general-sales-screen.tsx',overrides);
  const render=()=>{state.reset();return GeneralSalesScreen();};let tree=render();
  assert.ok(find(tree,n=>n.type?.name==='ExistingSalesReport'));
@@ -565,7 +575,8 @@ test('Relatórios centraliza resultado existente, vendas e prestadores em abas i
  assert.ok(find(tree,n=>n.type===Sales));assert.equal(find(tree,n=>n.type===Providers),null);
  find(tree,n=>n.type==='button'&&n.props.children==='Relatório de prestadores').props.onClick();tree=render();assert.ok(find(tree,n=>n.type===Providers));
  find(tree,n=>n.type==='button'&&n.props.children==='Relatório motorista').props.onClick();tree=render();assert.ok(find(tree,n=>n.props?.reportBy==='driver'));
- find(tree,n=>n.type==='button'&&n.props.children==='Relatório veículo').props.onClick();tree=render();assert.ok(find(tree,n=>n.props?.reportBy==='vehicle'));
+ find(tree,n=>n.type==='button'&&n.props.children==='Relatório de veículos').props.onClick();tree=render();assert.ok(find(tree,n=>n.type===Vehicles));
+ find(tree,n=>n.type==='button'&&n.props.children==='Comissões por caminhão').props.onClick();tree=render();assert.ok(find(tree,n=>n.props?.reportBy==='vehicle'));
  find(tree,n=>n.type==='button'&&n.props.children==='Fechamento / resultado').props.onClick();tree=render();assert.ok(find(tree,n=>n.type?.name==='ExistingSalesReport'));
 });
 
@@ -575,6 +586,28 @@ test('prestadores gera prévia sem baixar, permite imprimir e salvar e mostra fa
  const previous=globalThis.fetch,calls=[];globalThis.fetch=async(url,options)=>{calls.push({url,options});return new Response(new Blob(['%PDF'],{type:'application/pdf'}));};
  let preview;
  try{let tree=render();assert.equal(find(tree,n=>n.type===ui.Modal).props.open,false);await find(tree,n=>n.type==='button').props.onClick();tree=render();const modal=find(tree,n=>n.type===ui.Modal);assert.equal(modal.props.open,true);preview=find(modal,n=>n.type==='iframe').props.src;assert.ok(preview.startsWith('blob:'));assert.equal(find(modal,n=>n.type==='a'&&n.props.children==='Visualizar / imprimir').props.href,preview);assert.equal(find(modal,n=>n.type==='a'&&n.props.children==='Salvar PDF').props.download,'prestadores.pdf');assert.equal(calls[0].options.credentials,'same-origin');modal.props.onClose();tree=render();assert.equal(find(tree,n=>n.type===ui.Modal).props.open,false);globalThis.fetch=async()=>new Response(JSON.stringify({error:'Falha de exemplo'}),{status:500});await find(tree,n=>n.type==='button').props.onClick();tree=render();assert.equal(find(tree,n=>n.props?.role==='alert').props.children,'Falha de exemplo');assert.equal(find(tree,n=>n.type===ui.Modal).props.open,false);}finally{globalThis.fetch=previous;if(preview)URL.revokeObjectURL(preview);}
+});
+
+test('relatório de veículos aplica placa e situação ao detalhamento e à prévia',()=>{
+ const state=hooks(),Preview=()=>null,Detail=()=>null;
+ const query='plate=AZX1J29&from=2026-10-01&to=2026-10-31&payment=PENDENTE';
+ const url='/api/reports/vehicles?'+query;
+ const report={plate:'AZX1J29',from:'2026-10-01',to:'2026-10-31',paymentFilter:'PENDENTE',totals:{sales:1},rows:[
+  {id:'freight:test',saleNumber:'501',createdDate:'2026-10-09',clientName:'CLIENTE TESTE',vehicles:[{model:'ARGO',plate:'AZX1J29'}],amountCents:65000,paid:'Parcial'},
+ ]};
+ const {FleetVehicleReportPanel}=compile('components/fleet-vehicle-report.tsx',{
+  react:state.react,'./fleet-report-sale-detail':{FleetReportSaleDetail:Detail},'./icons':{Icons:{chevron:icon}},
+  './report-preview-button':{ReportPreviewButton:Preview},'./ui':{...ui,StatusBadge:({label})=>label},'./fleet-client-report.module.css':{default:{}},
+  '@/lib/domain/dates':{currentCompetency:()=> '2026-10',todaySaoPaulo:()=> '2026-10-31'},'@/lib/format':fullFormat,
+  './use-api':{useApi:path=>({data:path?.endsWith('options=plates')?{plates:['AZX1J29']}:path===url?{report}:null})},
+ });
+ const render=()=>{state.reset();return FleetVehicleReportPanel();};let tree=render();
+ find(tree,n=>n.type==='select'&&n.props.value==='').props.onChange({target:{value:'AZX1J29'}});tree=render();
+ find(tree,n=>n.type==='select'&&n.props.value==='TODOS').props.onChange({target:{value:'PENDENTE'}});tree=render();
+ find(tree,n=>n.type==='form').props.onSubmit({preventDefault(){}});tree=render();
+ assert.equal(find(tree,n=>n.type===Preview).props.url,url+'&format=pdf');
+ const html=renderToStaticMarkup(tree);assert.match(html,/AZX1J29/);assert.match(html,/Não pago/);assert.match(html,/Recebimento parcial/);
+ find(tree,n=>n.props?.['aria-label']==='Abrir venda 501').props.onClick();assert.equal(render().props.id,'freight:test');
 });
 
 test('prestadores mostra dados da venda, usa filtros aplicados na prévia e abre detalhes preservando consulta',()=>{
@@ -743,8 +776,10 @@ test('buscas de veículos e motoristas são independentes e ignoram acentuação
 });
 test('duplo clique da linha abre edição e ignora cliques sobre botões de detalhes',()=>{
  const state=hooks(),calls=[],{FreightTable}=compile('components/fleet-freight-table.tsx',{react:state.react,'@/components/ui':ui,'@/components/icons':{Icons:new Proxy({},{get:()=>icon})},'@/lib/domain/fleet':fleetDomain,'@/lib/format':fullFormat});
- const freight={id:'234',saleNumber:'234',pickupDate:'2026-10-28',operationalStatus:'EM_ROTA',paymentStatus:'EM_ABERTO',clientName:'CLIENTE',driverName:'MOTORISTA',freightAmountCents:10000};
- const tree=FreightTable({freights:[freight],onOpen:f=>calls.push(['details',f.id]),onEdit:f=>calls.push(['edit',f.id])}),row=find(tree,n=>n.type==='tr'&&n.props.onDoubleClick);
+ const freight={id:'234',saleNumber:'234',pickupDate:'2026-10-28',operationalStatus:'EM_ROTA',paymentStatus:'EM_ABERTO',clientName:'CLIENTE',driverName:'MOTORISTA',freightAmountCents:10000,cargoVehicles:[{plate:'BCD2K30'},{plate:'CDE3L31'},{plate:'AZX1J29',model:'Argo'}]};
+ const tree=FreightTable({freights:[freight],search:'azx-1j29',onOpen:f=>calls.push(['details',f.id]),onEdit:f=>calls.push(['edit',f.id])}),row=find(tree,n=>n.type==='tr'&&n.props.onDoubleClick);
+ const cargo=find(row,n=>n.props?.['data-label']==='Veículos transportados');
+ assert.equal(find(cargo,n=>n.type==='strong').props.children,'AZX1J29 · Argo');
  row.props.onDoubleClick({target:{closest:()=>null}});assert.deepEqual(calls,[['edit','234']]);row.props.onDoubleClick({target:{closest:()=>({})}});assert.equal(calls.length,1);
  const number=find(tree,n=>n.props?.['aria-label']==='Abrir venda 234');number.props.onClick({detail:1});number.props.onDoubleClick({stopPropagation(){}});assert.deepEqual(calls,[['edit','234'],['edit','234']]);
  number.props.onClick({detail:0});assert.deepEqual(calls.at(-1),['details','234']);

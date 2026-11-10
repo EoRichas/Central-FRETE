@@ -12,7 +12,7 @@ import { Icons } from '@/components/icons';
 import { ErrorState, LoadingState, PageHeader } from '@/components/ui';
 import { apiMutation,useApi } from '@/components/use-api';
 import { useTransientMessage } from '@/components/use-transient-message';
-import { FLEET_OPERATIONAL_STATUSES, FLEET_OPERATIONAL_STATUS_LABELS, fleetFinancialStatus, type FleetFreight, type FleetFreightFormData, type SellerFreightSummary } from '@/lib/domain/fleet';
+import { FLEET_OPERATIONAL_STATUSES, FLEET_OPERATIONAL_STATUS_LABELS, fleetFinancialStatus, matchesFleetFreightSearch, type FleetFreight, type FleetFreightFormData, type SellerFreightSummary } from '@/lib/domain/fleet';
 
 export function SellerFleetScreen() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -29,8 +29,7 @@ export function SellerFleetScreen() {
   const freights = list.data?.freights ?? [];
   const sellerKey = (f:SellerFreightSummary) => f.sellerId ? `id:${f.sellerId}` : f.sellerName ? `name:${f.sellerName}` : 'unassigned';
   const sellers = [...new Map(freights.map(f=>[sellerKey(f),f.sellerName||'Não informado'])).entries()].sort((a,b)=>a[1].localeCompare(b[1],'pt-BR'));
-  const normalized = search.trim().toLocaleUpperCase('pt-BR');
-  const filtered = freights.filter(f=>(!normalized||[f.saleNumber,f.clientName,f.origin,f.destination,f.driverName].some(v=>v?.toLocaleUpperCase('pt-BR').includes(normalized)))&&(!status||f.operationalStatus===status)&&(!financialStatuses.length||financialStatuses.includes(fleetFinancialStatus(f)))&&(!providerId||f.providerServices?.some(service=>service.providerId===providerId))&&(!seller||sellerKey(f)===seller));
+  const filtered = freights.filter(f=>matchesFleetFreightSearch(f,search)&&(!status||f.operationalStatus===status)&&(!financialStatuses.length||financialStatuses.includes(fleetFinancialStatus(f)))&&(!providerId||f.providerServices?.some(service=>service.providerId===providerId))&&(!seller||sellerKey(f)===seller));
   async function deleteFreight(freight:FleetFreight){
     if(!window.confirm(`Excluir o frete de ${freight.origin} para ${freight.destination}? A OS própria deste frete será removida. Uma venda vinculada e sua OS serão preservadas.`))return;
     await apiMutation(`/api/fleet/freights/${freight.id}`,{method:'DELETE'});
@@ -53,7 +52,7 @@ export function SellerFleetScreen() {
       <div className="fleet-stack">
         <div className="cegonha-tabs module-tabs" role="tablist" aria-label="Áreas da Frota"><button type="button" role="tab" aria-selected={true} className="active">Fretes</button></div>
         <section className="filter-panel fleet-filter-panel">
-          <label><span>Buscar</span><div className="search-input"><Icons.search/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Cliente, rota ou motorista" /></div></label>
+          <label><span>Buscar</span><div className="search-input"><Icons.search/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Venda, cliente, placa, rota ou motorista" /></div></label>
           <FleetOperationalFilter value={status} onChange={setStatus} options={FLEET_OPERATIONAL_STATUSES.map(value => ({ value, label: FLEET_OPERATIONAL_STATUS_LABELS[value] }))} />
           <FleetFinancialFilter value={financialStatuses} onChange={setFinancialStatuses} />
           <FleetProviderFilter freights={freights} value={providerId} onChange={setProviderId} />
@@ -61,7 +60,7 @@ export function SellerFleetScreen() {
           <div className="filter-stat"><strong>{filtered.length}</strong><span>frete{filtered.length===1?'':'s'}</span></div>
         </section>
         {list.loading&&<LoadingState label="Carregando seus fretes…"/>}{list.error&&<ErrorState message={list.error} retry={list.refresh}/>}
-        {list.data&&<section className="panel table-panel"><FreightTable freights={filtered} onEdit={f=>{setSelectedId(f.id);setEditing(true);setOpen(true);}} onOpen={f=>setSelectedId(f.id)}/></section>}
+        {list.data&&<section className="panel table-panel"><FreightTable freights={filtered} search={search} onEdit={f=>{setSelectedId(f.id);setEditing(true);setOpen(true);}} onOpen={f=>setSelectedId(f.id)}/></section>}
       </div>
     </>}
     {success&&<p role="status" className="success-banner">{success}</p>}

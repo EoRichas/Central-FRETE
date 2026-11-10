@@ -1711,6 +1711,10 @@ test('relatório do cliente usa criação, isola IDs e vendedores, não duplica 
  ('client-report-refund','client-report-commercial','ESTORNO','CONFIRMADO',2000,'2089-01-12T15:00:00Z','PIX','client-report-refund','admin'),
  ('client-report-pending','client-report-commercial','RECEBIMENTO','PENDENTE',50000,'2089-01-13','PIX','client-report-pending','admin'),
  ('client-report-cancelled','client-report-commercial','RECEBIMENTO','CANCELADO',50000,'2089-01-13','PIX','client-report-cancelled','admin');`);
+ await pg.exec(`update fleet_freights set cargo_vehicles='[{"model":"ONIX","plate":"BCD2K30"},{"model":"ARGO","plate":"AZX1J29"}]'
+  where id='client-report-start';
+  update fleet_freights set cargo_plate='AZX1J29' where id='client-report-end';
+  update freight_sales set plate='AZX1J29' where id in ('client-report-commercial','client-report-cegonha');`);
  const path='/api/fleet/client-report?clientId=client-report-a&from=2089-01-01&to=2089-01-01';
  assert.equal((await api.GET(await request(path,'missing'))).status,401);
  const response=await api.GET(await request(path)); assert.equal(response.status,200,await response.clone().text());
@@ -1722,6 +1726,55 @@ test('relatório do cliente usa criação, isola IDs e vendedores, não duplica 
  assert.equal(commercial.departureDate,null); assert.equal(report.rows.some((r:{id:string})=>r.id.includes('mirror')||r.id.includes('cegonha')),false);
  assert.equal(JSON.stringify(report).includes('commission'),false);
  const own=await (await api.GET(await request(path,'seller'))).json(); assert.equal(own.report.rows.length,2); assert.equal(own.report.totals.amountCents,40000);
+ const saleNumbers=Object.fromEntries(report.rows.map((row:{id:string;saleNumber:string})=>[row.id,row.saleNumber]));
+ const vehicles=await import('../../app/api/reports/vehicles/route.ts');
+ const plateOptions=await vehicles.GET(await request('/api/reports/vehicles?options=plates'));
+ assert.equal(plateOptions.status,200,plateOptions.ok?undefined:await plateOptions.text());
+ assert.ok((await plateOptions.json()).plates.includes('AZX1J29'));
+ assert.equal((await vehicles.GET(await request('/api/reports/vehicles?options=plates','seller'))).status,403);
+ const vehiclePath='/api/reports/vehicles?plate=azx-1j29&from=2089-01-01&to=2089-01-01';
+ const readVehicles=async (url:string)=>{
+  const response=await vehicles.GET(await request(url));assert.equal(response.status,200,response.ok?undefined:await response.text());return (await response.json()).report;
+ };
+ const vehicleAll=await readVehicles(vehiclePath);
+ assert.deepEqual(vehicleAll.rows.map((r:{id:string;paid:string})=>[r.id,r.paid]),[
+  ['sale:client-report-commercial','Parcial'],['freight:client-report-end','Não'],['freight:client-report-start','Sim'],
+ ]);
+ assert.deepEqual(vehicleAll.rows.at(-1).vehicles,[{model:'ARGO',plate:'AZX1J29'}]);
+ assert.equal(vehicleAll.totals.amountCents,60000);
+ assert.deepEqual((await readVehicles(vehiclePath+'&payment=CONFIRMADO')).rows.map((r:{id:string})=>r.id),['freight:client-report-start']);
+ assert.equal((await readVehicles(vehiclePath+'&payment=PENDENTE')).totals.amountCents,50000);
+ assert.equal((await readVehicles(vehiclePath.replace('azx-1j29','AAA1A11'))).rows.length,0); // Caminhão não é placa transportada.
+ assert.equal((await vehicles.GET(await request(vehiclePath+'&payment=INVALIDO'))).status,400);
+ const list=await import('../../app/api/fleet/freights/route.ts');
+ const listed=(await (await list.GET(await request('/api/fleet/freights?from=2088-03-10&to=2088-03-10','seller'))).json()).freights;
+ assert.equal(listed.find((f:{id:string})=>f.id==='client-report-start').cargoVehicles[1].plate,'AZX1J29');
+ const confirmed=(await (await api.GET(await request(path+'&payment=CONFIRMADO'))).json()).report;
+ assert.deepEqual(confirmed.rows.map((r:{id:string})=>r.id),['freight:client-report-start']);
+ assert.deepEqual([confirmed.totals.amountCents,confirmed.totals.receivedCents,confirmed.totals.balanceCents],[10000,10000,0]);
+ const pending=(await (await api.GET(await request(path+'&payment=PENDENTE'))).json()).report;
+ assert.deepEqual([pending.totals.amountCents,pending.totals.receivedCents,pending.totals.balanceCents],[50000,13000,37000]);
+ const {unzipSync,strFromU8}=await import('fflate');
+ const excel=await api.GET(await request(path+'&payment=PENDENTE&format=xlsx'));
+ assert.equal(excel.status,200,excel.ok?undefined:await excel.text());
+ const sheet=strFromU8(unzipSync(new Uint8Array(await excel.arrayBuffer()))['xl/worksheets/sheet1.xml']);
+ assert.ok(sheet.includes('Pagamento: Pendentes')&&sheet.includes('Pendente (parcial)'));
+ assert.ok(sheet.includes('>'+saleNumbers['sale:client-report-commercial']+'</t>')&&!sheet.includes('>'+saleNumbers['freight:client-report-start']+'</t>'));
+ assert.match(sheet,/<f>SUM\(J4:J5\)<\/f><v>370<\/v>/);
+ const {PDFPage}=await import('pdf-lib');
+ const drawn:string[]=[],draw=PDFPage.prototype.drawText;
+ PDFPage.prototype.drawText=function(value,options){drawn.push(value);return draw.call(this,value,options);};
+ try {
+  const filteredPdf=await api.POST(await request(path+'&payment=CONFIRMADO','admin','POST',{useOrderObservations:true}));
+  assert.equal(filteredPdf.status,200,filteredPdf.ok?undefined:await filteredPdf.text());
+  assert.ok(drawn.includes('CONFIRMAÇÃO DO PAGAMENTO: Confirmados')&&drawn.includes('CONFIRMADO'));
+  assert.ok(!drawn.includes('PENDENTE')&&!drawn.includes('Venda '+saleNumbers['sale:client-report-commercial']));
+  drawn.length=0;
+  const vehiclePdf=await vehicles.GET(await request(vehiclePath+'&payment=PENDENTE&format=pdf'));
+  assert.equal(vehiclePdf.status,200,vehiclePdf.ok?undefined:await vehiclePdf.text());
+  assert.ok(drawn.includes('AZX1J29')&&drawn.includes('Não pago')&&!drawn.includes('Pago'));
+  assert.ok(!drawn.includes(saleNumbers['freight:client-report-start']));
+ } finally {PDFPage.prototype.drawText=draw;}
  assert.equal((await api.GET(await request(path.replace('client-report-a','client-report-b'),'seller'))).status,404);
  assert.equal((await api.GET(await request(path.replace('from=2089-01-01','from=2089-02-30')))).status,400);
  assert.equal((await api.GET(await request(path.replace('to=2089-01-01','to=2088-12-31')))).status,400);
