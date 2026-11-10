@@ -10,7 +10,6 @@ import { useMemo, useState } from "react";
 import { FleetFinancialFilter, FleetOperationalFilter, FleetProviderFilter, type FinancialStatus } from "./fleet-list-filters";
 import { DatePeriodFields } from "./date-period-fields";
 import { currentDatePeriod } from "@/lib/domain/date-period";
-import { cargoVehiclesOrLegacy } from "@/lib/domain/cargo-vehicles";
 import { Icons } from "@/components/icons";
 import {
   ErrorState,
@@ -23,6 +22,7 @@ import {
   FLEET_OPERATIONAL_STATUSES,
   FLEET_OPERATIONAL_STATUS_LABELS,
   fleetFinancialStatus,
+  matchesFleetFreightSearch,
   type FleetData,
   type FleetDriver,
   type FleetFreight,
@@ -91,26 +91,9 @@ function FleetOperationsScreen() {
   }, [fleet]);
 
   const filteredFreights = useMemo(() => {
-    const normalized = search.trim().toLocaleUpperCase("pt-BR");
     return (fleet?.freights ?? []).filter((freight) => {
-      const matchesSearch =
-        !normalized ||
-        [
-          freight.saleNumber,
-          freight.driverName,
-          freight.clientName,
-          ...cargoVehiclesOrLegacy(
-            freight.cargoVehicles,
-            freight.cargoVehicleModel,
-            freight.cargoPlate,
-          ).map((vehicle) => vehicle.model),
-          freight.origin,
-          freight.destination,
-        ].some((value) =>
-          value?.toLocaleUpperCase("pt-BR").includes(normalized),
-        );
       return (
-        matchesSearch &&
+        matchesFleetFreightSearch(freight, search) &&
         (!status || freight.operationalStatus === status) &&
         (!financialStatuses.length || financialStatuses.includes(fleetFinancialStatus(freight))) &&
         (!providerId || freight.providerServices?.some(service => service.providerId === providerId)) &&
@@ -245,7 +228,7 @@ function FleetOperationsScreen() {
                     <input
                       value={search}
                       onChange={(event) => setSearch(event.target.value)}
-                      placeholder="Cliente, rota ou motorista"
+                      placeholder="Venda, cliente, placa, rota ou motorista"
                     />
                   </div>
                 </label>
@@ -272,6 +255,7 @@ function FleetOperationsScreen() {
               <section className="panel table-panel">
                 <FreightTable
                   freights={filteredFreights}
+                  search={search}
                   onEdit={fleet.canEditFreights||fleet.canEditFreightFinancials||fleet.canManagePayments?openEditFreight:undefined}
                   onOpen={f => setViewingId(f.id)}
                 />

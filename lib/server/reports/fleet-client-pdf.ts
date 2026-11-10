@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { PDFDocument, rgb, type PDFPage } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
-import type { FleetClientReport } from '@/lib/domain/fleet-client-report';
+import { FLEET_REPORT_PAYMENT_LABELS, type FleetClientReport } from '@/lib/domain/fleet-client-report';
 import { formatDate, formatMoney } from '@/lib/format';
 
 export type ClientReportObservation = {saleId: string; text: string};
@@ -61,9 +61,12 @@ export async function renderFleetClientPdf(report: FleetClientReport, observatio
     y = H - 133;
     const names = wrap(`CLIENTE: ${report.client.name}`, WIDTH, 9, true);
     names.forEach((name, i) => text(name, M, y - i * 13, 9, true)); y -= (names.length - 1) * 13 + 20;
-    text(`PERÍODO DE CRIAÇÃO: ${formatDate(report.from)} a ${formatDate(report.to)}`, M, y, 8, false, muted);
+    const period = `PERÍODO DE CRIAÇÃO: ${formatDate(report.from)} a ${formatDate(report.to)}`;
+    text(period, M, y, 8, false, muted);
     const issued = `EMISSÃO: ${new Date().toLocaleDateString('pt-BR', {timeZone: 'America/Sao_Paulo'})}`;
     text(issued, W - M - regular.widthOfTextAtSize(issued, 8), y, 8, false, muted);
+    if (!orderNumber) text(`CONFIRMAÇÃO DO PAGAMENTO: ${FLEET_REPORT_PAYMENT_LABELS[report.paymentFilter]}`,
+      M + regular.widthOfTextAtSize(period,8) + 18, y, 8, true, muted);
     y -= 20;
   };
   const columns = [

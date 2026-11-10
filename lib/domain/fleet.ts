@@ -1,6 +1,6 @@
 import { providerCostCents } from "./provider-services";
 import { commissionCents } from "./finance";
-import type { CargoVehicle } from "@/lib/domain/cargo-vehicles";
+import { cargoPlateKey, cargoVehiclesOrLegacy, type CargoVehicle } from "./cargo-vehicles";
 import type { TripCostShare } from "./trip-allocation.ts";
 import type { FleetTrip, TripResult } from "./fleet-results.ts";
 export const FLEET_OPERATIONAL_STATUSES = [
@@ -307,10 +307,24 @@ export type FleetBillingData = {
 };
 
 export type FleetFreightFormData = Pick<FleetData, "vehicles" | "drivers" | "parameters" | "canEditFreights" | "canEditFreightFinancials" | "canManagePayments" | "canDeleteFreights">;
-export type FleetFreightListRow = Pick<FleetFreight, "id" | "saleNumber" | "clientName" | "origin" | "destination" | "pickupDate" | "freightAmountCents" | "vehiclePlate" | "driverName" | "sellerId" | "sellerName" | "operationalStatus" | "paymentStatus" | "billingDate" | "priority">;
+export type FleetFreightListRow = Pick<FleetFreight, "id" | "saleNumber" | "clientName" | "origin" | "destination" | "pickupDate" | "freightAmountCents" | "vehiclePlate" | "driverName" | "sellerId" | "sellerName" | "operationalStatus" | "paymentStatus" | "billingDate" | "priority"> & Partial<Pick<FleetFreight, "cargoVehicles" | "cargoVehicleModel" | "cargoPlate">>;
 export type SellerFreightSummary = FleetFreightListRow & {
   providerServices?: Pick<import("./provider-services").ProviderService, "providerId" | "providerName">[];
 };
+
+export function freightCargoVehicles(freight: Pick<FleetFreightListRow, 'cargoVehicles' | 'cargoVehicleModel' | 'cargoPlate'>) {
+  return cargoVehiclesOrLegacy(freight.cargoVehicles, freight.cargoVehicleModel ?? null, freight.cargoPlate ?? null);
+}
+
+export function matchesFleetFreightSearch(freight: FleetFreightListRow, search: string) {
+  const term = search.trim().toLocaleUpperCase('pt-BR');
+  if (!term) return true;
+  const cargo = freightCargoVehicles(freight);
+  const plate = cargoPlateKey(term);
+  return [freight.saleNumber, freight.clientName, freight.driverName, freight.origin, freight.destination, ...cargo.map(v=>v.model)]
+    .some(value=>value?.toLocaleUpperCase('pt-BR').includes(term))
+    || (plate.length > 0 && cargo.some(v=>cargoPlateKey(v.plate).includes(plate)));
+}
 
 export const FLEET_FINANCIAL_STATUSES = ["EM_ABERTO", "PAGO", "FATURADO"] as const;
 export const FLEET_FINANCIAL_STATUS_LABELS = {EM_ABERTO:"Em aberto",PAGO:"Pago",FATURADO:"Faturado"};

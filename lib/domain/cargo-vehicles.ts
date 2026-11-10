@@ -4,3 +4,7 @@ export type CargoVehicle = { model: string | null; plate: string | null; identif
 export function cargoVehiclesOrLegacy(vehicles: CargoVehicle[] | null | undefined, model: string | null, plate: string | null): CargoVehicle[] {
   return vehicles?.length ? vehicles : [{ model, plate, identification: null }];
 }
+
+export function cargoPlateKey(value: string | null | undefined): string {
+  return (value ?? '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+}

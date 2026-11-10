@@ -2,18 +2,21 @@
 import { useEffect,useRef } from "react";
 import { Icons } from "@/components/icons";
 import { StatusBadge } from "@/components/ui";
+import { cargoPlateKey } from "@/lib/domain/cargo-vehicles";
 import {
   FLEET_OPERATIONAL_STATUS_LABELS,
   fleetFinancialStatus,
+  freightCargoVehicles,
   type FleetFreightListRow,
 } from "@/lib/domain/fleet";
 import { formatDate, formatMoney } from "@/lib/format";
 
 export function FreightTable<T extends FleetFreightListRow>({
-  freights,
+  freights, search = "",
   onOpen, onEdit,
 }: {
   freights: T[];
+  search?: string;
   onOpen: (freight: T) => void;
   onEdit?: (freight:T)=>void;
 }) {
@@ -32,16 +35,18 @@ export function FreightTable<T extends FleetFreightListRow>({
       </div>
     );
   }
+  const plateQuery = cargoPlateKey(search);
 
   return (
     <div className="responsive-table fleet-table-wrap">
       <table className="fleet-table fleet-table-compact">
-        <colgroup>{["12%","22%","22%","12%","12%","14%","6%"].map((width,index)=><col key={index} style={{width}}/>)}</colgroup>
+        <colgroup>{["11%","18%","16%","17%","11%","10%","13%","4%"].map((width,index)=><col key={index} style={{width}}/>)}</colgroup>
         <thead>
           <tr>
             <th>Venda</th>
             <th>Cliente / rota</th>
             <th>Frota / motorista</th>
+            <th>Veículos transportados</th>
             <th>Operação</th>
             <th>Frete</th>
             <th>Situação financeira</th>
@@ -49,7 +54,11 @@ export function FreightTable<T extends FleetFreightListRow>({
           </tr>
         </thead>
         <tbody>
-          {freights.map((freight) => (
+          {freights.map((freight) => {
+            const cargo = freightCargoVehicles(freight).filter(v=>v.model||v.plate||v.identification);
+            const matches = cargo.filter(v=>plateQuery && cargoPlateKey(v.plate).includes(plateQuery));
+            const shown = [...matches,...cargo.filter(v=>!matches.includes(v))].slice(0,2);
+            return (
             <tr key={freight.id} onDoubleClick={onEdit?event=>{if(!(event.target as HTMLElement).closest("button,a,input,select,textarea,summary"))onEdit(freight);}:undefined}>
               <td data-label="Venda">
                 <button type="button" className="text-button" onClick={event => openNumber(freight,event.detail===0)} onDoubleClick={onEdit?event=>{event.stopPropagation();cancelPendingOpen();onEdit(freight);}:undefined} aria-label={`Abrir venda ${freight.saleNumber}`}>
@@ -64,6 +73,14 @@ export function FreightTable<T extends FleetFreightListRow>({
               <td data-label="Frota / motorista">
                 <strong>{freight.vehiclePlate}</strong>
                 <small title={freight.driverName}>{freight.driverName}</small>
+              </td>
+              <td data-label="Veículos transportados">
+                {shown.map((v,i)=>{
+                  const text=[v.plate,v.model].filter(Boolean).join(' · ') || v.identification || '';
+                  return matches.includes(v)?<strong key={i} title={text}>{text}</strong>:<small key={i} title={text}>{text}</small>;
+                })}
+                {!shown.length && <small>Não informado</small>}
+                {cargo.length>shown.length && <small>+ {cargo.length-shown.length} veículo(s)</small>}
               </td>
               <td data-label="Operação">
                 <StatusBadge status={FLEET_OPERATIONAL_STATUS_LABELS[freight.operationalStatus]} />
@@ -88,7 +105,7 @@ export function FreightTable<T extends FleetFreightListRow>({
                   </div>
               </td>
             </tr>
-          ))}
+          );})}
         </tbody>
       </table>
     </div>

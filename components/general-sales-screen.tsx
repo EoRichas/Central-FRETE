@@ -4,6 +4,7 @@
 import { DriverCommissionsPanel } from "./driver-commissions-panel";
 import type { CurrentUser } from "@/lib/contracts";
 import { FleetClientReportPanel } from "./fleet-client-report";
+import { FleetVehicleReportPanel } from "./fleet-vehicle-report";
 import { ProviderReportPanel } from "./provider-report-panel";
 import { useState } from "react";
 import type { ReportSale } from "@/lib/domain/reports";
@@ -155,5 +156,17 @@ export function GeneralSalesScreen() {
   const [tab, setTab] = useState("existing");
   const me=useApi<{user:CurrentUser}>("/api/me");
   const canViewDrivers=['ADMIN','GERENCIA','FINANCEIRO','OPERACIONAL'].includes(me.data?.user.role??'');
-  return <><nav className="cegonha-tabs module-tabs no-print" aria-label="Relatórios">{[["existing", "Fechamento / resultado"], ["sales", "Relatório de vendas"], ["providers", "Relatório de prestadores"], ...(canViewDrivers?[["drivers","Relatório motorista"],["vehicles","Relatório veículo"]]:[])].map(([id, label]) => <button key={id} type="button" className={tab === id ? "active" : ""} aria-pressed={tab === id} onClick={() => setTab(id)}>{label}</button>)}</nav>{tab === "existing" ? <ExistingSalesReport /> : <><PageHeader title="Relatórios" description="Consulte e exporte os relatórios da operação." />{tab === "sales" ? <FleetClientReportPanel /> : <>{tab === "providers" ? <ProviderReportPanel /> : canViewDrivers ? <DriverCommissionsPanel reportBy={tab === "drivers" ? "driver" : "vehicle"}/> : null}</>}</>}</>;
+  const tabs = [["existing", "Fechamento / resultado"], ["sales", "Relatório de vendas"], ["providers", "Relatório de prestadores"],
+    ...(canViewDrivers?[["drivers","Relatório motorista"],["vehicles","Relatório de veículos"],["truck-commissions","Comissões por caminhão"]]:[])];
+  return <>
+    <nav className="cegonha-tabs module-tabs no-print" aria-label="Relatórios">
+      {tabs.map(([id, label]) => <button key={id} type="button" className={tab === id ? "active" : ""} aria-pressed={tab === id} onClick={() => setTab(id)}>{label}</button>)}
+    </nav>
+    {tab === "existing" ? <ExistingSalesReport /> : <>
+      <PageHeader title="Relatórios" description="Consulte e exporte os relatórios da operação." />
+      {tab === "sales" ? <FleetClientReportPanel /> : tab === "providers" ? <ProviderReportPanel /> : canViewDrivers && (
+        tab === "vehicles" ? <FleetVehicleReportPanel /> : <DriverCommissionsPanel reportBy={tab === "drivers" ? "driver" : "vehicle"}/>
+      )}
+    </>}
+  </>;
 }
