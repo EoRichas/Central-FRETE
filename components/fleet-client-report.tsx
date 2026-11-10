@@ -62,7 +62,10 @@ export function FleetClientReportPanel() {
     {api.error ? <ErrorState message={api.error} retry={api.refresh} /> : api.loading || (query&&!report) ? <LoadingState label="Consultando vendas do Frota…" /> : report ? <>
       <div className={styles.heading}>
         <div><h3>{report.client.name}</h3><p>{formatDate(report.from)} a {formatDate(report.to)} · {report.totals.sales} vendas · {report.totals.vehicles} veículos · Pagamento: {FLEET_REPORT_PAYMENT_LABELS[report.paymentFilter]}</p></div>
-        <div className="order-actions"><a className="button secondary" href={`/api/fleet/client-report?${query}&format=xlsx`}>Exportar Excel</a><button type="button" className="button secondary" disabled={generating || !report.rows.length} onClick={generateReport}>{generating ? 'Gerando…' : 'Gerar relatório de vendas'}</button></div>
+        <div className={styles.reportActions}>
+          <a className="button secondary" href={`/api/fleet/client-report?${query}&format=xlsx`}>Exportar Excel</a>
+          <button type="button" className="button secondary" disabled={generating || !report.rows.length} onClick={generateReport}>{generating ? 'Gerando…' : 'Gerar relatório de vendas'}</button>
+        </div>
       </div>
       {pdfError && <p className="form-error" role="alert">{pdfError}</p>}
       <section className="receivable-summary large"><div><span>Total dos serviços</span><strong>{formatMoney(report.totals.amountCents)}</strong></div><div><span>Total recebido</span><strong>{formatMoney(report.totals.receivedCents)}</strong></div><div><span>Valor pendente</span><strong>{formatMoney(report.totals.balanceCents)}</strong></div></section>
